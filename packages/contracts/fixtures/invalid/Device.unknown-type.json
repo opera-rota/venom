@@ -1,0 +1,17 @@
+{
+  "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "type": "fridge",
+  "name": "Kitchen",
+  "platform": "linux",
+  "capabilities": {
+    "screen_control": false,
+    "microphone": false,
+    "speaker": false,
+    "shortcuts": false,
+    "notifications": false,
+    "network": true
+  },
+  "status": "active",
+  "last_seen_at": null
+}

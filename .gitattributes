@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+packages/contracts/generated/** linguist-generated=true
+packages/contracts/python/venom_contracts/models.py linguist-generated=true
+packages/contracts/python/venom_contracts/prompts.json linguist-generated=true

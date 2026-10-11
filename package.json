@@ -1,0 +1,21 @@
+{
+  "name": "venom",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "scripts": {
+    "generate": "pnpm --filter @venom/contracts generate",
+    "typecheck": "pnpm -r typecheck && pyright",
+    "test": "pnpm -r test && uv run pytest",
+    "check": "pnpm generate && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "pyright": "1.1.414",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

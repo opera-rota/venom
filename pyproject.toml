@@ -1,0 +1,22 @@
+[tool.uv.workspace]
+members = ["packages/contracts", "services/orchestrator"]
+
+[dependency-groups]
+dev = [
+    "datamodel-code-generator==0.83.0",
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+required-version = ">=0.12"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/contracts/python/tests", "services/orchestrator/tests"]
+addopts = ["--strict-markers", "--import-mode=importlib"]
+
+[tool.pyright]
+include = ["packages/contracts/python", "services/orchestrator/src", "services/orchestrator/tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+typeCheckingMode = "strict"

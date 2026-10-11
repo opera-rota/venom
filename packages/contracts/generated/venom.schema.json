@@ -1,0 +1,1042 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:venom:contracts",
+  "title": "Contract",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Account"
+    },
+    {
+      "$ref": "#/$defs/AccountSettings"
+    },
+    {
+      "$ref": "#/$defs/AttachRequest"
+    },
+    {
+      "$ref": "#/$defs/Capabilities"
+    },
+    {
+      "$ref": "#/$defs/CapabilityReport"
+    },
+    {
+      "$ref": "#/$defs/ConfirmRequest"
+    },
+    {
+      "$ref": "#/$defs/Connector"
+    },
+    {
+      "$ref": "#/$defs/ConnectorTarget"
+    },
+    {
+      "$ref": "#/$defs/Device"
+    },
+    {
+      "$ref": "#/$defs/DeviceInfo"
+    },
+    {
+      "$ref": "#/$defs/DeviceTarget"
+    },
+    {
+      "$ref": "#/$defs/LiveEvent"
+    },
+    {
+      "$ref": "#/$defs/MemoryItem"
+    },
+    {
+      "$ref": "#/$defs/Message"
+    },
+    {
+      "$ref": "#/$defs/Prompt"
+    },
+    {
+      "$ref": "#/$defs/RouteDecision"
+    },
+    {
+      "$ref": "#/$defs/Skill"
+    },
+    {
+      "$ref": "#/$defs/Step"
+    },
+    {
+      "$ref": "#/$defs/StepTemplate"
+    },
+    {
+      "$ref": "#/$defs/StopAll"
+    },
+    {
+      "$ref": "#/$defs/StopDevice"
+    },
+    {
+      "$ref": "#/$defs/StopSignal"
+    },
+    {
+      "$ref": "#/$defs/StopTask"
+    },
+    {
+      "$ref": "#/$defs/Task"
+    }
+  ],
+  "$defs": {
+    "Account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "settings": {
+          "$ref": "#/$defs/AccountSettings"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "settings",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "AccountSettings": {
+      "type": "object",
+      "properties": {
+        "listening_mode": {
+          "$ref": "#/$defs/ListeningMode"
+        },
+        "confirmation_strictness": {
+          "$ref": "#/$defs/ConfirmationStrictness"
+        }
+      },
+      "required": [
+        "listening_mode",
+        "confirmation_strictness"
+      ],
+      "additionalProperties": false
+    },
+    "AttachRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "secret_word_proof": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device": {
+          "$ref": "#/$defs/DeviceInfo"
+        }
+      },
+      "required": [
+        "email",
+        "secret_word_proof",
+        "device"
+      ],
+      "additionalProperties": false
+    },
+    "Capabilities": {
+      "type": "object",
+      "properties": {
+        "screen_control": {
+          "type": "boolean"
+        },
+        "microphone": {
+          "type": "boolean"
+        },
+        "speaker": {
+          "type": "boolean"
+        },
+        "shortcuts": {
+          "type": "boolean"
+        },
+        "notifications": {
+          "type": "boolean"
+        },
+        "network": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "screen_control",
+        "microphone",
+        "speaker",
+        "shortcuts",
+        "notifications",
+        "network"
+      ],
+      "additionalProperties": false
+    },
+    "CapabilityReport": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        }
+      },
+      "required": [
+        "device_id",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmationStrictness": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "strict"
+      ]
+    },
+    "ConfirmRequest": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "plain_language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk"
+        }
+      },
+      "required": [
+        "task_id",
+        "step_id",
+        "plain_language",
+        "risk"
+      ],
+      "additionalProperties": false
+    },
+    "Connector": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "service": {
+          "$ref": "#/$defs/ConnectorService"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorScope"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/ConnectorStatus"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "service",
+        "scopes",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "ConnectorScope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ConnectorService": {
+      "type": "string",
+      "enum": [
+        "mail",
+        "calendar"
+      ]
+    },
+    "ConnectorStatus": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "expired",
+        "disconnected"
+      ]
+    },
+    "ConnectorTarget": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "connector"
+        },
+        "connector_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "connector_id"
+      ],
+      "additionalProperties": false
+    },
+    "Device": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "$ref": "#/$defs/DeviceType"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        },
+        "status": {
+          "$ref": "#/$defs/DeviceStatus"
+        },
+        "last_seen_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "type",
+        "name",
+        "platform",
+        "capabilities",
+        "status",
+        "last_seen_at"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceInfo": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/DeviceType"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "platform",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceStatus": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "active",
+        "offline",
+        "revoked"
+      ]
+    },
+    "DeviceTarget": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "device"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "device_id"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceType": {
+      "type": "string",
+      "enum": [
+        "computer",
+        "phone",
+        "tv",
+        "watch"
+      ]
+    },
+    "FailurePolicy": {
+      "type": "string",
+      "enum": [
+        "abort",
+        "retry",
+        "reroute"
+      ]
+    },
+    "ListeningMode": {
+      "type": "string",
+      "enum": [
+        "wake_word",
+        "press_to_talk"
+      ]
+    },
+    "LiveEvent": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/LiveEventKind"
+        },
+        "text": {
+          "type": "string"
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "request_id",
+        "task_id",
+        "step_id",
+        "kind",
+        "text",
+        "emitted_at"
+      ],
+      "additionalProperties": false
+    },
+    "LiveEventKind": {
+      "type": "string",
+      "enum": [
+        "started",
+        "output",
+        "awaiting_confirmation",
+        "done",
+        "failed",
+        "stopped"
+      ]
+    },
+    "MemoryItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "$ref": "#/$defs/MemoryType"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "$ref": "#/$defs/MemoryStatus"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "type",
+        "content",
+        "source",
+        "created_at",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "forgotten"
+      ]
+    },
+    "MemoryType": {
+      "type": "string",
+      "enum": [
+        "fact",
+        "preference",
+        "event"
+      ]
+    },
+    "Message": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "speaker": {
+          "$ref": "#/$defs/Speaker"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "device_id",
+        "speaker",
+        "text",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "Platform": {
+      "type": "string",
+      "enum": [
+        "windows",
+        "macos",
+        "linux",
+        "android",
+        "ios",
+        "android_tv",
+        "tvos",
+        "wear_os",
+        "watchos"
+      ]
+    },
+    "Prompt": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/PromptRole"
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "role",
+        "version",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "PromptRole": {
+      "type": "string",
+      "enum": [
+        "understand",
+        "plan",
+        "reply"
+      ]
+    },
+    "Risk": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "RouteDecision": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "method": {
+          "$ref": "#/$defs/RouteMethod"
+        },
+        "target": {
+          "$ref": "#/$defs/StepTarget"
+        }
+      },
+      "required": [
+        "task_id",
+        "step_id",
+        "method",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "RouteMethod": {
+      "type": "string",
+      "enum": [
+        "device_action",
+        "connector",
+        "script"
+      ]
+    },
+    "Skill": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StepTemplate"
+          }
+        },
+        "run_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "success_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "last_run_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/SkillStatus"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "name",
+        "trigger",
+        "steps",
+        "run_count",
+        "success_count",
+        "last_run_at",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "SkillStatus": {
+      "type": "string",
+      "enum": [
+        "taught",
+        "saved",
+        "active",
+        "updated",
+        "retired"
+      ]
+    },
+    "Speaker": {
+      "type": "string",
+      "enum": [
+        "user",
+        "venom"
+      ]
+    },
+    "Step": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "action": {
+          "$ref": "#/$defs/StepAction"
+        },
+        "target": {
+          "$ref": "#/$defs/StepTarget"
+        },
+        "requires_confirmation": {
+          "type": "boolean"
+        },
+        "reversible": {
+          "type": "boolean"
+        },
+        "on_failure": {
+          "$ref": "#/$defs/FailurePolicy"
+        },
+        "status": {
+          "$ref": "#/$defs/StepStatus"
+        },
+        "output": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "order",
+        "action",
+        "target",
+        "requires_confirmation",
+        "reversible",
+        "on_failure",
+        "status",
+        "output"
+      ],
+      "additionalProperties": false
+    },
+    "StepAction": {
+      "type": "string",
+      "enum": [
+        "open_app",
+        "type_text",
+        "click",
+        "run_script",
+        "take_screenshot",
+        "call_connector"
+      ]
+    },
+    "StepStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "done",
+        "failed",
+        "skipped"
+      ]
+    },
+    "StepTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DeviceTarget"
+        },
+        {
+          "$ref": "#/$defs/ConnectorTarget"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "StepTemplate": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/StepAction"
+        },
+        "target": {
+          "$ref": "#/$defs/StepTarget"
+        },
+        "requires_confirmation": {
+          "type": "boolean"
+        },
+        "reversible": {
+          "type": "boolean"
+        },
+        "on_failure": {
+          "$ref": "#/$defs/FailurePolicy"
+        }
+      },
+      "required": [
+        "action",
+        "target",
+        "requires_confirmation",
+        "reversible",
+        "on_failure"
+      ],
+      "additionalProperties": false
+    },
+    "StopAll": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "all"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "StopDevice": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "device"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "device_id"
+      ],
+      "additionalProperties": false
+    },
+    "StopScope": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StopAll"
+        },
+        {
+          "$ref": "#/$defs/StopTask"
+        },
+        {
+          "$ref": "#/$defs/StopDevice"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "StopSignal": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "#/$defs/StopScope"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "account_id",
+        "scope",
+        "issued_at"
+      ],
+      "additionalProperties": false
+    },
+    "StopTask": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "task"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id"
+      ],
+      "additionalProperties": false
+    },
+    "Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "origin_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "target_device_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Step"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "origin_device_id",
+        "target_device_id",
+        "request_text",
+        "plan",
+        "status",
+        "result",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "TaskStatus": {
+      "type": "string",
+      "enum": [
+        "created",
+        "planned",
+        "running",
+        "awaiting_confirmation",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "type": "computer",
+  "name": "Work laptop",
+  "platform": "windows",
+  "capabilities": {
+    "screen_control": true,
+    "microphone": true,
+    "speaker": true,
+    "shortcuts": false,
+    "notifications": true,
+    "network": true
+  },
+  "status": "active",
+  "last_seen_at": "2026-10-11T09:30:00Z"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e04",
+  "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+  "order": 0,
+  "action": "shell",
+  "target": { "kind": "device", "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02" },
+  "requires_confirmation": false,
+  "reversible": false,
+  "on_failure": "abort",
+  "status": "pending",
+  "output": null
+}

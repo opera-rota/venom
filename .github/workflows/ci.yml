@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: uv sync --all-packages --frozen
+
+      - run: pnpm check
+
+      - name: generated contracts are committed and current
+        run: git diff --exit-code
