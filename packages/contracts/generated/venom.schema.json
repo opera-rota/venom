@@ -46,10 +46,25 @@
       "$ref": "#/$defs/Message"
     },
     {
+      "$ref": "#/$defs/MessageEvent"
+    },
+    {
+      "$ref": "#/$defs/MessageHistory"
+    },
+    {
       "$ref": "#/$defs/Prompt"
     },
     {
+      "$ref": "#/$defs/RequestEvent"
+    },
+    {
       "$ref": "#/$defs/RouteDecision"
+    },
+    {
+      "$ref": "#/$defs/SendMessage"
+    },
+    {
+      "$ref": "#/$defs/SendMessageAccepted"
     },
     {
       "$ref": "#/$defs/Skill"
@@ -423,6 +438,19 @@
         "reroute"
       ]
     },
+    "GatewayEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MessageEvent"
+        },
+        {
+          "$ref": "#/$defs/RequestEvent"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      }
+    },
     "ListeningMode": {
       "type": "string",
       "enum": [
@@ -585,6 +613,60 @@
       ],
       "additionalProperties": false
     },
+    "MessageEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "message"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "message": {
+          "$ref": "#/$defs/Message"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "MessageHistory": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Message"
+          }
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "additionalProperties": false
+    },
+    "MessageText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "\\S"
+    },
     "Platform": {
       "type": "string",
       "enum": [
@@ -630,6 +712,54 @@
         "reply"
       ]
     },
+    "RequestEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "request"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "state": {
+          "$ref": "#/$defs/RequestState"
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "state",
+        "detail"
+      ],
+      "additionalProperties": false
+    },
+    "RequestState": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "completed",
+        "failed"
+      ]
+    },
     "Risk": {
       "type": "string",
       "enum": [
@@ -671,6 +801,36 @@
         "connector",
         "script"
       ]
+    },
+    "SendMessage": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text": {
+          "$ref": "#/$defs/MessageText"
+        }
+      },
+      "required": [
+        "device_id",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "SendMessageAccepted": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "request_id"
+      ],
+      "additionalProperties": false
     },
     "Skill": {
       "type": "object",

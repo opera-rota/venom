@@ -12,6 +12,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v7
 
@@ -29,6 +31,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: uv sync --all-packages --frozen
+
+      - run: docker compose up --detach --wait db
+
+      - run: pnpm db:setup
 
       - run: pnpm check
 

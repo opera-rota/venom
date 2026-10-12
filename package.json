@@ -7,6 +7,12 @@
     "node": ">=24.11.0"
   },
   "scripts": {
+    "db:up": "docker compose up --detach --wait db",
+    "db:down": "docker compose down",
+    "db:setup": "pnpm --filter @venom/db run setup",
+    "db:status": "pnpm --filter @venom/db run status",
+    "gateway": "pnpm --filter @venom/gateway run dev",
+    "desktop": "pnpm --filter @venom/desktop run dev",
     "generate": "pnpm --filter @venom/contracts generate",
     "typecheck": "pnpm -r typecheck && pyright",
     "test": "pnpm -r test && uv run pytest",

@@ -76,16 +76,37 @@ type MemoryStatus = Literal["active", "archived", "forgotten"]
 type MemoryType = Literal["fact", "preference", "event"]
 
 
+type MessageText = Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
+
+
 type Platform = Literal["windows", "macos", "linux", "android", "ios", "android_tv", "tvos", "wear_os", "watchos"]
 
 
 type PromptRole = Literal["understand", "plan", "reply"]
 
 
+type RequestState = Literal["accepted", "completed", "failed"]
+
+
 type Risk = Literal["low", "medium", "high"]
 
 
 type RouteMethod = Literal["device_action", "connector", "script"]
+
+
+class SendMessage(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device_id: UUID
+    text: MessageText
+
+
+class SendMessageAccepted(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
 
 
 type SkillStatus = Literal["taught", "saved", "active", "updated", "retired"]
@@ -230,6 +251,24 @@ class Message(BaseModel):
     created_at: AwareDatetime
 
 
+class MessageEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["message"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    message: Message
+
+
+class MessageHistory(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    messages: list[Message]
+
+
 class Prompt(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -237,6 +276,18 @@ class Prompt(BaseModel):
     role: PromptRole
     version: Annotated[int, Field(gt=0, le=9007199254740991)]
     text: Annotated[str, Field(min_length=1)]
+
+
+class RequestEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["request"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    state: RequestState
+    detail: str | None
 
 
 class RouteDecision(BaseModel):
@@ -328,7 +379,10 @@ class AttachRequest(BaseModel):
     device: DeviceInfo
 
 
+type GatewayEvent = Annotated[MessageEvent | RequestEvent, Field(discriminator="type")]
+
+
 type Contract = Annotated[
-    Account | AccountSettings | AttachRequest | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | Device | DeviceInfo | DeviceTarget | LiveEvent | MemoryItem | Message | Prompt | RouteDecision | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | Task,
+    Account | AccountSettings | AttachRequest | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | Device | DeviceInfo | DeviceTarget | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | RequestEvent | RouteDecision | SendMessage | SendMessageAccepted | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | Task,
     Field(title="Contract"),
 ]

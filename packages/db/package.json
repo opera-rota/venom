@@ -1,0 +1,24 @@
+{
+  "name": "@venom/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "migrate": "node src/cli.ts migrate",
+    "status": "node src/cli.ts status",
+    "setup": "node src/cli.ts setup",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@venom/contracts": "workspace:*",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "uuid": "14.0.2"
+  }
+}

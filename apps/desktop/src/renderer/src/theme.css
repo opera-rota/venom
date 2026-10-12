@@ -1,0 +1,118 @@
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+
+@theme {
+  --color-base: #050806;
+  --color-sunken: #030503;
+  --color-surface-1: #0c110e;
+  --color-surface-2: #121914;
+  --color-surface-3: #19221c;
+
+  --color-line-subtle: #1a231d;
+  --color-line: #243029;
+  --color-line-strong: #324238;
+
+  --color-ink: #f2f5f3;
+  --color-ink-muted: #9aa39d;
+  --color-ink-faint: #6a726d;
+  --color-on-accent: #030503;
+
+  --color-green-300: #7dff92;
+  --color-green-400: #3bf05a;
+  --color-green-500: #12e02e;
+  --color-green-600: #0bb522;
+  --color-green-700: #0a7a1a;
+  --color-mint-200: #b8ffe0;
+
+  --color-red-400: #ff4457;
+  --color-red-500: #e8283a;
+  --color-red-700: #8e1622;
+
+  --color-status-ok: #b8ffe0;
+  --color-status-wait: #d8a24a;
+  --color-status-fail: #ff4457;
+  --color-status-idle: #566058;
+
+  --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "Cascadia Mono", ui-monospace, monospace;
+
+  --radius-tag: 4px;
+  --radius-control: 8px;
+  --radius-overlay: 12px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.75);
+  --shadow-accent: 0 0 0 1px rgba(18, 224, 46, 0.45), 0 10px 28px -8px rgba(18, 224, 46, 0.45);
+  --shadow-mark: 0 0 24px 2px rgba(18, 224, 46, 0.45);
+
+  --ease-ui: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --tint-accent: rgba(18, 224, 46, 0.1);
+    --line-accent: rgba(18, 224, 46, 0.35);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-base);
+    background-image:
+      radial-gradient(75% 55% at 50% -12%, rgba(18, 224, 46, 0.11), transparent 65%),
+      radial-gradient(85% 70% at 104% 108%, rgba(10, 122, 26, 0.08), transparent 70%);
+    background-attachment: fixed;
+    color: var(--color-ink-muted);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    font-optical-sizing: auto;
+    font-feature-settings: "cv05", "ss03";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    color: var(--color-ink);
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  code,
+  pre,
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--color-base),
+      0 0 0 4px var(--color-green-500);
+    border-radius: var(--radius-control);
+  }
+
+  ::selection {
+    background: rgba(18, 224, 46, 0.28);
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -3,11 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
   "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@venom/contracts": "workspace:*"
+    "@fastify/websocket": "11.3.4",
+    "@venom/contracts": "workspace:*",
+    "@venom/db": "workspace:*",
+    "fastify": "5.12.5",
+    "uuid": "14.0.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "pino-pretty": "13.2.0"
   }
 }
