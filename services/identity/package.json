@@ -1,0 +1,27 @@
+{
+  "name": "@venom/identity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@serenity-kit/opaque": "1.1.0",
+    "@venom/contracts": "workspace:*",
+    "@venom/db": "workspace:*",
+    "nodemailer": "10.1.1",
+    "postgres": "3.4.9",
+    "uuid": "14.0.2"
+  },
+  "devDependencies": {
+    "@types/smtp-server": "3.5.13",
+    "smtp-server": "3.19.22"
+  }
+}

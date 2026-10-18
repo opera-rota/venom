@@ -1,4 +1,5 @@
 export * from "./gateway.ts";
+export * from "./identity.ts";
 export * from "./messages.ts";
 export * from "./primitives.ts";
 export * from "./prompts.ts";

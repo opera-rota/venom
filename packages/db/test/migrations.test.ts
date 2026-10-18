@@ -48,3 +48,40 @@ describe("versioned migrations", () => {
     expect(() => loadMigrations(folder)).toThrow(MigrationError);
   });
 });
+
+describe("upgrading a database that already holds Phase 2 data", () => {
+  it("keeps old accounts, devices and messages when the identity migration runs", async () => {
+    const legacy = await createTestDatabase();
+    const sql = connect(legacy.migratorUrl, { max: 1 });
+    try {
+      await sql.unsafe("drop table account_secrets, signups, attach_attempts");
+      await sql.unsafe("alter table devices drop column credential_hash, drop column revoked_at");
+      await sql.unsafe("alter table accounts drop column email_verified_at");
+      await sql`delete from schema_migrations where version > 1`;
+
+      const [account] = await sql<{ id: string }[]>`
+        insert into accounts (name, email) values ('Old owner', 'old@venom.local') returning id
+      `;
+      const [device] = await sql<{ id: string }[]>`
+        insert into devices (account_id, type, name, platform, capabilities, status)
+        values (${account?.id ?? null}, 'computer', 'Old computer', 'windows', '{}', 'active')
+        returning id
+      `;
+      await sql`
+        insert into messages (account_id, device_id, request_id, speaker, text)
+        values (${account?.id ?? null}, ${device?.id ?? null}, uuidv7(), 'user', 'still here')
+      `;
+
+      const applied = await migrate(sql);
+      expect(applied.map((migration) => migration.name)).toEqual(loadMigrations().slice(1).map((m) => m.name));
+
+      const [kept] = await sql<{ text: string; credential_hash: Buffer | null }[]>`
+        select m.text, d.credential_hash from messages m join devices d on d.id = m.device_id
+      `;
+      expect(kept).toEqual({ text: "still here", credential_hash: null });
+    } finally {
+      await sql.end();
+      await legacy.drop();
+    }
+  });
+});

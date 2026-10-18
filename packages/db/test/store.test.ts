@@ -1,17 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
-import { connect, createStore, developmentAccount, developmentDevice, seedDevelopment, type Store } from "../src/index.ts";
-import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { connect, createStore, type DeviceRef, type Store } from "../src/index.ts";
+import { createTestDatabase, insertAccountWithDevice, type TestDatabase } from "../src/testing.ts";
 
 let database: TestDatabase;
 let store: Store;
+let device: DeviceRef;
 
 beforeAll(async () => {
   database = await createTestDatabase();
   const owner = connect(database.migratorUrl, { max: 1 });
-  expect(await seedDevelopment(owner)).toBe(true);
-  expect(await seedDevelopment(owner)).toBe(false);
+  const account = await insertAccountWithDevice(owner);
   await owner.end();
+  device = { id: account.deviceId, account_id: account.accountId };
   store = createStore(database.appUrl);
 });
 
@@ -21,16 +22,7 @@ afterAll(async () => {
 });
 
 describe("message store", () => {
-  it("finds a seeded device and ignores unknown ones", async () => {
-    expect(await store.findDevice(developmentDevice.id)).toEqual({
-      id: developmentDevice.id,
-      account_id: developmentAccount.id,
-    });
-    expect(await store.findDevice(uuidv7())).toBeNull();
-  });
-
   it("records messages with an audit entry and returns them in order", async () => {
-    const device = { id: developmentDevice.id, account_id: developmentAccount.id };
     const requestId = uuidv7();
     const first = await store.recordMessage({ device, requestId, speaker: "user", text: "first" });
     const second = await store.recordMessage({ device, requestId, speaker: "venom", text: "second" });
@@ -48,5 +40,14 @@ describe("message store", () => {
       { action: "message.recorded", subject_id: first.id, detail: { speaker: "user", characters: 5 } },
       { action: "message.recorded", subject_id: second.id, detail: { speaker: "venom", characters: 6 } },
     ]);
+  });
+
+  it("refuses a message for a device that belongs to another account", async () => {
+    const owner = connect(database.migratorUrl, { max: 1 });
+    const other = await insertAccountWithDevice(owner);
+    await owner.end();
+    await expect(
+      store.recordMessage({ device: { id: other.deviceId, account_id: device.account_id }, requestId: uuidv7(), speaker: "user", text: "x" }),
+    ).rejects.toMatchObject({ code: "23503" });
   });
 });

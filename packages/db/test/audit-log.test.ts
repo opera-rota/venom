@@ -1,17 +1,18 @@
 import type { Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { connect, developmentAccount, seedDevelopment } from "../src/index.ts";
-import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { connect } from "../src/index.ts";
+import { createTestDatabase, insertAccountWithDevice, type TestDatabase } from "../src/testing.ts";
 
 let database: TestDatabase;
 let owner: Sql;
 let app: Sql;
+let accountId: string;
 
 beforeAll(async () => {
   database = await createTestDatabase();
   owner = connect(database.migratorUrl, { max: 1 });
   app = connect(database.appUrl, { max: 1 });
-  await seedDevelopment(owner);
+  accountId = (await insertAccountWithDevice(owner)).accountId;
 });
 
 afterAll(async () => {
@@ -22,7 +23,7 @@ afterAll(async () => {
 describe("audit log is append-only, enforced by the database", () => {
   it("lets the app add an audit record", async () => {
     const [row] = await app`
-      insert into audit_log (account_id, actor, action) values (${developmentAccount.id}, 'system', 'test.appended')
+      insert into audit_log (account_id, actor, action) values (${accountId}, 'system', 'test.appended')
       returning id
     `;
     expect(row?.["id"]).toBeDefined();
@@ -46,7 +47,7 @@ describe("audit log is append-only, enforced by the database", () => {
 
   it("keeps every record after the refused attempts", async () => {
     const [row] = await owner`select count(*)::int as total from audit_log`;
-    expect(row?.["total"]).toBe(2);
+    expect(row?.["total"]).toBe(1);
   });
 
   it("does not let the app role change accounts", async () => {

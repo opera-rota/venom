@@ -1,0 +1,25 @@
+{
+  "type": "devices",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e10",
+  "sequence": 0,
+  "emitted_at": "2026-10-18T09:00:06.000Z",
+  "devices": [
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+      "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+      "type": "computer",
+      "name": "Work laptop",
+      "platform": "windows",
+      "capabilities": {
+        "screen_control": false,
+        "microphone": false,
+        "speaker": false,
+        "shortcuts": false,
+        "notifications": false,
+        "network": true
+      },
+      "status": "active",
+      "last_seen_at": "2026-10-18T09:00:05.000Z"
+    }
+  ]
+}

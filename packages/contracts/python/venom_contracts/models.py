@@ -6,6 +6,24 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field
 
+type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "internal"]
+
+
+class ApiIssue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    path: str
+    message: str
+
+
+class AttachProven(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    attach_id: UUID
+    expires_at: AwareDatetime
+
 
 class Capabilities(BaseModel):
     model_config = ConfigDict(
@@ -58,6 +76,9 @@ class DeviceTarget(BaseModel):
     device_id: UUID
 
 
+type DeviceToken = Annotated[str, Field(pattern="^vnm_[A-Za-z0-9_-]{43}$")]
+
+
 type DeviceType = Literal["computer", "phone", "tv", "watch"]
 
 
@@ -79,6 +100,14 @@ type MemoryType = Literal["fact", "preference", "event"]
 type MessageText = Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
 
 
+type OpaqueMessage = Annotated[
+    str, Field(max_length=8192, min_length=16, pattern="^[A-Za-z0-9_-]+$")
+]
+
+
+type PersonName = Annotated[str, Field(max_length=120, min_length=1, pattern="\\S")]
+
+
 type Platform = Literal["windows", "macos", "linux", "android", "ios", "android_tv", "tvos", "wear_os", "watchos"]
 
 
@@ -94,11 +123,28 @@ type Risk = Literal["low", "medium", "high"]
 type RouteMethod = Literal["device_action", "connector", "script"]
 
 
+type SecretWord = Annotated[str, Field(max_length=128, min_length=8, pattern="\\S")]
+
+
+class SecretWordRegistration(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    signup_id: UUID
+    registration_request: OpaqueMessage
+
+
+class SecretWordRegistrationResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    registration_response: OpaqueMessage
+
+
 class SendMessage(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    device_id: UUID
     text: MessageText
 
 
@@ -107,6 +153,22 @@ class SendMessageAccepted(BaseModel):
         extra="forbid",
     )
     request_id: UUID
+
+
+class SignupStart(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: PersonName
+    email: EmailStr
+
+
+class SignupStarted(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    signup_id: UUID
+    expires_at: AwareDatetime
 
 
 type SkillStatus = Literal["taught", "saved", "active", "updated", "retired"]
@@ -161,12 +223,49 @@ class StopTask(BaseModel):
 type TaskStatus = Literal["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled"]
 
 
+type VerificationCode = Annotated[str, Field(pattern="^\\d{6}$")]
+
+
 class AccountSettings(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     listening_mode: ListeningMode
     confirmation_strictness: ConfirmationStrictness
+
+
+class ApiError(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    error: ApiErrorCode
+    message: Annotated[str, Field(min_length=1)]
+    issues: list[ApiIssue] | None = None
+
+
+class AttachChallenge(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    attach_id: UUID
+    login_response: OpaqueMessage
+    expires_at: AwareDatetime
+
+
+class AttachProve(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    attach_id: UUID
+    secret_word_proof: OpaqueMessage
+
+
+class AttachStart(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    email: EmailStr
+    start_login_request: OpaqueMessage
 
 
 class ConfirmRequest(BaseModel):
@@ -212,6 +311,25 @@ class DeviceInfo(BaseModel):
     name: Annotated[str, Field(max_length=80, min_length=1)]
     platform: Platform
     capabilities: Capabilities
+
+
+class DeviceList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    current_device_id: UUID
+    devices: list[Device]
+
+
+class DevicesEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["devices"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    devices: list[Device]
 
 
 class LiveEvent(BaseModel):
@@ -300,6 +418,23 @@ class RouteDecision(BaseModel):
     target: StepTarget
 
 
+class SignupFinish(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    signup_id: UUID
+    registration_record: OpaqueMessage
+    device: DeviceInfo
+
+
+class SignupVerify(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    signup_id: UUID
+    code: VerificationCode
+
+
 class Skill(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -370,19 +505,38 @@ class Account(BaseModel):
     created_at: AwareDatetime
 
 
-class AttachRequest(BaseModel):
+class AttachConfirm(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    email: EmailStr
-    secret_word_proof: Annotated[str, Field(min_length=1)]
+    attach_id: UUID
+    code: VerificationCode
     device: DeviceInfo
 
 
-type GatewayEvent = Annotated[MessageEvent | RequestEvent, Field(discriminator="type")]
+class DeviceSession(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    account: Account
+    device: Device
+    device_token: DeviceToken
+
+
+type GatewayEvent = Annotated[
+    MessageEvent | RequestEvent | DevicesEvent, Field(discriminator="type")
+]
+
+
+class Session(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    account: Account
+    device: Device
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AttachRequest | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | Device | DeviceInfo | DeviceTarget | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | RequestEvent | RouteDecision | SendMessage | SendMessageAccepted | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | Task,
+    Account | AccountSettings | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | RequestEvent | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | Task,
     Field(title="Contract"),
 ]

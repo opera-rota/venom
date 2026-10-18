@@ -1,32 +1,82 @@
-import { GatewayEvent, type Message, type RequestState } from "@venom/contracts";
+import { GatewayEvent, type Device, type Message, type RequestState } from "@venom/contracts";
 
-export type Listener = (event: GatewayEvent) => void;
+export interface LiveConnection {
+  readonly deviceId: string;
+  readonly accountId: string;
+  send(event: GatewayEvent): void;
+  close(code: number, reason: string): void;
+}
+
+export interface Attachment {
+  readonly first: boolean;
+  detach(): { readonly last: boolean };
+}
 
 export class LiveHub {
-  readonly #listeners = new Map<string, Set<Listener>>();
+  readonly #byDevice = new Map<string, Set<LiveConnection>>();
+  readonly #byAccount = new Map<string, Set<string>>();
 
-  subscribe(deviceId: string, listener: Listener): () => void {
-    const listeners = this.#listeners.get(deviceId) ?? new Set<Listener>();
-    listeners.add(listener);
-    this.#listeners.set(deviceId, listeners);
+  attach(connection: LiveConnection): Attachment {
+    const connections = this.#byDevice.get(connection.deviceId) ?? new Set<LiveConnection>();
+    const first = connections.size === 0;
+    connections.add(connection);
+    this.#byDevice.set(connection.deviceId, connections);
 
-    return () => {
-      listeners.delete(listener);
-      if (listeners.size === 0) {
-        this.#listeners.delete(deviceId);
-      }
+    const devices = this.#byAccount.get(connection.accountId) ?? new Set<string>();
+    devices.add(connection.deviceId);
+    this.#byAccount.set(connection.accountId, devices);
+
+    let attached = true;
+    return {
+      first,
+      detach: () => {
+        if (!attached) {
+          return { last: false };
+        }
+        attached = false;
+        connections.delete(connection);
+        if (connections.size > 0) {
+          return { last: false };
+        }
+        this.#byDevice.delete(connection.deviceId);
+        devices.delete(connection.deviceId);
+        if (devices.size === 0) {
+          this.#byAccount.delete(connection.accountId);
+        }
+        return { last: true };
+      },
     };
   }
 
-  publish(deviceId: string, event: GatewayEvent): void {
-    for (const listener of this.#listeners.get(deviceId) ?? []) {
-      listener(event);
+  publishToDevice(deviceId: string, event: GatewayEvent): void {
+    for (const connection of this.#byDevice.get(deviceId) ?? []) {
+      connection.send(event);
+    }
+  }
+
+  publishToAccount(accountId: string, event: GatewayEvent): void {
+    for (const deviceId of this.#byAccount.get(accountId) ?? []) {
+      this.publishToDevice(deviceId, event);
+    }
+  }
+
+  disconnectDevice(deviceId: string, code: number, reason: string): void {
+    for (const connection of [...(this.#byDevice.get(deviceId) ?? [])]) {
+      connection.close(code, reason);
     }
   }
 
   get connectedDevices(): number {
-    return this.#listeners.size;
+    return this.#byDevice.size;
   }
+}
+
+function stamp(requestId: string, sequence: number) {
+  return { request_id: requestId, sequence, emitted_at: new Date().toISOString() };
+}
+
+export function devicesEvent(requestId: string, devices: readonly Device[]): GatewayEvent {
+  return GatewayEvent.parse({ type: "devices", ...stamp(requestId, 0), devices });
 }
 
 export class RequestTrace {
@@ -42,22 +92,14 @@ export class RequestTrace {
   }
 
   state(state: RequestState, detail: string | null = null): void {
-    this.#emit({ type: "request", ...this.#stamp(), state, detail });
+    this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state, detail });
   }
 
   message(message: Message): void {
-    this.#emit({ type: "message", ...this.#stamp(), message });
-  }
-
-  #stamp() {
-    return {
-      request_id: this.requestId,
-      sequence: this.#sequence++,
-      emitted_at: new Date().toISOString(),
-    };
+    this.#emit({ type: "message", ...stamp(this.requestId, this.#sequence++), message });
   }
 
   #emit(event: GatewayEvent): void {
-    this.#hub.publish(this.#deviceId, GatewayEvent.parse(event));
+    this.#hub.publishToDevice(this.#deviceId, GatewayEvent.parse(event));
   }
 }

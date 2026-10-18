@@ -10,7 +10,25 @@
       "$ref": "#/$defs/AccountSettings"
     },
     {
-      "$ref": "#/$defs/AttachRequest"
+      "$ref": "#/$defs/ApiError"
+    },
+    {
+      "$ref": "#/$defs/ApiIssue"
+    },
+    {
+      "$ref": "#/$defs/AttachChallenge"
+    },
+    {
+      "$ref": "#/$defs/AttachConfirm"
+    },
+    {
+      "$ref": "#/$defs/AttachProve"
+    },
+    {
+      "$ref": "#/$defs/AttachProven"
+    },
+    {
+      "$ref": "#/$defs/AttachStart"
     },
     {
       "$ref": "#/$defs/Capabilities"
@@ -32,6 +50,15 @@
     },
     {
       "$ref": "#/$defs/DeviceInfo"
+    },
+    {
+      "$ref": "#/$defs/DeviceList"
+    },
+    {
+      "$ref": "#/$defs/DeviceSession"
+    },
+    {
+      "$ref": "#/$defs/DevicesEvent"
     },
     {
       "$ref": "#/$defs/DeviceTarget"
@@ -61,10 +88,31 @@
       "$ref": "#/$defs/RouteDecision"
     },
     {
+      "$ref": "#/$defs/SecretWordRegistration"
+    },
+    {
+      "$ref": "#/$defs/SecretWordRegistrationResponse"
+    },
+    {
       "$ref": "#/$defs/SendMessage"
     },
     {
       "$ref": "#/$defs/SendMessageAccepted"
+    },
+    {
+      "$ref": "#/$defs/Session"
+    },
+    {
+      "$ref": "#/$defs/SignupFinish"
+    },
+    {
+      "$ref": "#/$defs/SignupStart"
+    },
+    {
+      "$ref": "#/$defs/SignupStarted"
+    },
+    {
+      "$ref": "#/$defs/SignupVerify"
     },
     {
       "$ref": "#/$defs/Skill"
@@ -141,25 +189,155 @@
       ],
       "additionalProperties": false
     },
-    "AttachRequest": {
+    "ApiError": {
       "type": "object",
       "properties": {
-        "email": {
-          "type": "string",
-          "format": "email"
+        "error": {
+          "$ref": "#/$defs/ApiErrorCode"
         },
-        "secret_word_proof": {
+        "message": {
           "type": "string",
           "minLength": 1
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApiIssue"
+          }
+        }
+      },
+      "required": [
+        "error",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "ApiErrorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "code_incorrect",
+        "challenge_expired",
+        "too_many_attempts",
+        "secret_word_incorrect",
+        "email_not_verified",
+        "account_exists",
+        "device_limit_reached",
+        "mail_unavailable",
+        "internal"
+      ]
+    },
+    "ApiIssue": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "AttachChallenge": {
+      "type": "object",
+      "properties": {
+        "attach_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "login_response": {
+          "$ref": "#/$defs/OpaqueMessage"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "attach_id",
+        "login_response",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "AttachConfirm": {
+      "type": "object",
+      "properties": {
+        "attach_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "$ref": "#/$defs/VerificationCode"
         },
         "device": {
           "$ref": "#/$defs/DeviceInfo"
         }
       },
       "required": [
-        "email",
-        "secret_word_proof",
+        "attach_id",
+        "code",
         "device"
+      ],
+      "additionalProperties": false
+    },
+    "AttachProve": {
+      "type": "object",
+      "properties": {
+        "attach_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "secret_word_proof": {
+          "$ref": "#/$defs/OpaqueMessage"
+        }
+      },
+      "required": [
+        "attach_id",
+        "secret_word_proof"
+      ],
+      "additionalProperties": false
+    },
+    "AttachProven": {
+      "type": "object",
+      "properties": {
+        "attach_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "attach_id",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "AttachStart": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "start_login_request": {
+          "$ref": "#/$defs/OpaqueMessage"
+        }
+      },
+      "required": [
+        "email",
+        "start_login_request"
       ],
       "additionalProperties": false
     },
@@ -394,6 +572,82 @@
       ],
       "additionalProperties": false
     },
+    "DeviceList": {
+      "type": "object",
+      "properties": {
+        "current_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Device"
+          }
+        }
+      },
+      "required": [
+        "current_device_id",
+        "devices"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceSession": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/$defs/Account"
+        },
+        "device": {
+          "$ref": "#/$defs/Device"
+        },
+        "device_token": {
+          "$ref": "#/$defs/DeviceToken"
+        }
+      },
+      "required": [
+        "account",
+        "device",
+        "device_token"
+      ],
+      "additionalProperties": false
+    },
+    "DevicesEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "devices"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Device"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "devices"
+      ],
+      "additionalProperties": false
+    },
     "DeviceStatus": {
       "type": "string",
       "enum": [
@@ -421,6 +675,10 @@
       ],
       "additionalProperties": false
     },
+    "DeviceToken": {
+      "type": "string",
+      "pattern": "^vnm_[A-Za-z0-9_-]{43}$"
+    },
     "DeviceType": {
       "type": "string",
       "enum": [
@@ -445,6 +703,9 @@
         },
         {
           "$ref": "#/$defs/RequestEvent"
+        },
+        {
+          "$ref": "#/$defs/DevicesEvent"
         }
       ],
       "discriminator": {
@@ -667,6 +928,18 @@
       "maxLength": 4000,
       "pattern": "\\S"
     },
+    "OpaqueMessage": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 8192,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "PersonName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "\\S"
+    },
     "Platform": {
       "type": "string",
       "enum": [
@@ -802,19 +1075,49 @@
         "script"
       ]
     },
-    "SendMessage": {
+    "SecretWord": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "\\S"
+    },
+    "SecretWordRegistration": {
       "type": "object",
       "properties": {
-        "device_id": {
+        "signup_id": {
           "type": "string",
           "format": "uuid"
         },
+        "registration_request": {
+          "$ref": "#/$defs/OpaqueMessage"
+        }
+      },
+      "required": [
+        "signup_id",
+        "registration_request"
+      ],
+      "additionalProperties": false
+    },
+    "SecretWordRegistrationResponse": {
+      "type": "object",
+      "properties": {
+        "registration_response": {
+          "$ref": "#/$defs/OpaqueMessage"
+        }
+      },
+      "required": [
+        "registration_response"
+      ],
+      "additionalProperties": false
+    },
+    "SendMessage": {
+      "type": "object",
+      "properties": {
         "text": {
           "$ref": "#/$defs/MessageText"
         }
       },
       "required": [
-        "device_id",
         "text"
       ],
       "additionalProperties": false
@@ -829,6 +1132,95 @@
       },
       "required": [
         "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "Session": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/$defs/Account"
+        },
+        "device": {
+          "$ref": "#/$defs/Device"
+        }
+      },
+      "required": [
+        "account",
+        "device"
+      ],
+      "additionalProperties": false
+    },
+    "SignupFinish": {
+      "type": "object",
+      "properties": {
+        "signup_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "registration_record": {
+          "$ref": "#/$defs/OpaqueMessage"
+        },
+        "device": {
+          "$ref": "#/$defs/DeviceInfo"
+        }
+      },
+      "required": [
+        "signup_id",
+        "registration_record",
+        "device"
+      ],
+      "additionalProperties": false
+    },
+    "SignupStart": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/PersonName"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      },
+      "required": [
+        "name",
+        "email"
+      ],
+      "additionalProperties": false
+    },
+    "SignupStarted": {
+      "type": "object",
+      "properties": {
+        "signup_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "signup_id",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "SignupVerify": {
+      "type": "object",
+      "properties": {
+        "signup_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "$ref": "#/$defs/VerificationCode"
+        }
+      },
+      "required": [
+        "signup_id",
+        "code"
       ],
       "additionalProperties": false
     },
@@ -1197,6 +1589,10 @@
         "failed",
         "cancelled"
       ]
+    },
+    "VerificationCode": {
+      "type": "string",
+      "pattern": "^\\d{6}$"
     }
   }
 }

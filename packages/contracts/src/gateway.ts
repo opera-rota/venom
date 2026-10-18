@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Id, Timestamp } from "./primitives.ts";
-import { Message } from "./records.ts";
+import { Device, Message } from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const MessageText = z
@@ -12,7 +12,6 @@ export const MessageText = z
 
 export const SendMessage = z
   .strictObject({
-    device_id: Id,
     text: MessageText,
   })
   .register(contracts, { id: "SendMessage" });
@@ -56,8 +55,16 @@ export const RequestEvent = z
   })
   .register(contracts, { id: "RequestEvent" });
 
+export const DevicesEvent = z
+  .strictObject({
+    type: z.literal("devices"),
+    ...eventFields,
+    devices: z.array(Device),
+  })
+  .register(contracts, { id: "DevicesEvent" });
+
 export const GatewayEvent = z
-  .discriminatedUnion("type", [MessageEvent, RequestEvent])
+  .discriminatedUnion("type", [MessageEvent, RequestEvent, DevicesEvent])
   .register(contracts, { id: "GatewayEvent" });
 
 export type MessageText = z.infer<typeof MessageText>;
@@ -67,4 +74,5 @@ export type MessageHistory = z.infer<typeof MessageHistory>;
 export type RequestState = z.infer<typeof RequestState>;
 export type MessageEvent = z.infer<typeof MessageEvent>;
 export type RequestEvent = z.infer<typeof RequestEvent>;
+export type DevicesEvent = z.infer<typeof DevicesEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

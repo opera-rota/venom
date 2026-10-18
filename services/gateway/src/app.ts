@@ -1,45 +1,27 @@
 import websocket from "@fastify/websocket";
-import { Id, MessageHistory, SendMessage, SendMessageAccepted } from "@venom/contracts";
-import type { DeviceRef, Store } from "@venom/db";
-import Fastify, { LogController, type FastifyError, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
+import type { Store } from "@venom/db";
+import type { Identity } from "@venom/identity";
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
 import { v7 as uuidv7 } from "uuid";
-import { z } from "zod";
-import { echoMessage } from "./echo.ts";
-import { LiveHub, RequestTrace } from "./live-hub.ts";
+import { identify } from "./auth.ts";
+import type { GatewayContext } from "./context.ts";
+import { installErrorHandling } from "./errors.ts";
+import { devicesEvent, LiveHub } from "./live-hub.ts";
+import { deviceRoutes } from "./routes/devices.ts";
+import { identityRoutes } from "./routes/identity.ts";
+import { liveRoute } from "./routes/live.ts";
+import { messageRoutes } from "./routes/messages.ts";
+
+export { closeCodes } from "./context.ts";
 
 export interface GatewayOptions {
   readonly store: Store;
+  readonly identity: Identity;
   readonly logger: NonNullable<FastifyServerOptions<RawServerDefault>["logger"]>;
   readonly heartbeatMs?: number;
 }
 
-export class GatewayError extends Error {
-  override readonly name = "GatewayError";
-  readonly statusCode: number;
-  readonly code: string;
-
-  constructor(statusCode: number, code: string, message: string) {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-  }
-}
-
-const HistoryQuery = z.strictObject({
-  device_id: Id,
-  limit: z.coerce.number().int().min(1).max(500).default(200),
-});
-
-const LiveQuery = z.strictObject({
-  device_id: Id,
-});
-
-export const closeCodes = {
-  unknownDevice: 4404,
-  invalidQuery: 4400,
-} as const;
-
-export async function buildGateway({ store, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
+export async function buildGateway({ store, identity, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     bodyLimit: 64 * 1024,
@@ -47,40 +29,29 @@ export async function buildGateway({ store, logger, heartbeatMs = 30_000 }: Gate
     logController: new LogController({ requestIdLogLabel: "request_id" }),
   });
   const hub = new LiveHub();
-  const inflight = new Set<Promise<void>>();
+  const inflight = new Set<Promise<unknown>>();
+  let closing = false;
 
-  async function requireDevice(deviceId: string): Promise<DeviceRef> {
-    const device = await store.findDevice(deviceId);
-    if (device === null) {
-      throw new GatewayError(404, "unknown_device", "This device is not registered with VENOM.");
-    }
-    return device;
-  }
+  const context: GatewayContext = {
+    store,
+    identity,
+    hub,
+    heartbeatMs,
+    track(work) {
+      inflight.add(work);
+      void work.finally(() => inflight.delete(work));
+    },
+    isClosing: () => closing,
+    async broadcastDevices(accountId, requestId) {
+      hub.publishToAccount(accountId, devicesEvent(requestId, await identity.devices(accountId)));
+    },
+  };
 
-  function track(work: Promise<void>): void {
-    inflight.add(work);
-    void work.finally(() => inflight.delete(work));
-  }
-
-  app.setErrorHandler<FastifyError | z.ZodError | GatewayError>((error, request, reply) => {
-    if (error instanceof z.ZodError) {
-      return reply.code(400).send({
-        error: "invalid_request",
-        issues: error.issues.map(({ path, message }) => ({ path: path.join("."), message })),
-      });
-    }
-    if (error instanceof GatewayError) {
-      return reply.code(error.statusCode).send({ error: error.code, message: error.message });
-    }
-    const statusCode = error.statusCode ?? 500;
-    if (statusCode < 500) {
-      return reply.code(statusCode).send({ error: "invalid_request", message: error.message });
-    }
-    request.log.error({ err: error }, "request failed");
-    return reply.code(500).send({ error: "internal", message: "VENOM hit an unexpected problem." });
-  });
-
+  app.decorateRequest("device", null);
+  installErrorHandling(app);
+  app.addHook("onRequest", identify(identity));
   app.addHook("onClose", async () => {
+    closing = true;
     await Promise.allSettled(inflight);
   });
 
@@ -91,66 +62,10 @@ export async function buildGateway({ store, logger, heartbeatMs = 30_000 }: Gate
     return { status: "ok" };
   });
 
-  app.get("/v1/messages", async (request) => {
-    const query = HistoryQuery.parse(request.query);
-    const device = await requireDevice(query.device_id);
-    return MessageHistory.parse({ messages: await store.listMessages(device.account_id, query.limit) });
-  });
-
-  app.post("/v1/messages", async (request, reply) => {
-    const body = SendMessage.parse(request.body);
-    const device = await requireDevice(body.device_id);
-    const trace = new RequestTrace(hub, device.id, request.id);
-
-    trace.state("accepted");
-    track(
-      echoMessage(store, trace, device, body.text).catch((error: unknown) => {
-        request.log.error({ err: error }, "message pipeline failed");
-      }),
-    );
-
-    return reply.code(202).send(SendMessageAccepted.parse({ request_id: trace.requestId }));
-  });
-
-  app.get("/v1/live", { websocket: true }, (socket, request) => {
-    const query = LiveQuery.safeParse(request.query);
-    if (!query.success) {
-      socket.close(closeCodes.invalidQuery, "device_id is required");
-      return;
-    }
-
-    const deviceId = query.data.device_id;
-    let alive = true;
-    const unsubscribe = hub.subscribe(deviceId, (event) => socket.send(JSON.stringify(event)));
-    const heartbeat = setInterval(() => {
-      if (!alive) {
-        socket.terminate();
-        return;
-      }
-      alive = false;
-      socket.ping();
-    }, heartbeatMs);
-
-    socket.on("pong", () => {
-      alive = true;
-    });
-    socket.on("close", () => {
-      clearInterval(heartbeat);
-      unsubscribe();
-    });
-
-    store.findDevice(deviceId).then(
-      (device) => {
-        if (device === null) {
-          socket.close(closeCodes.unknownDevice, "unknown device");
-        }
-      },
-      (error: unknown) => {
-        request.log.error({ err: error }, "live connection check failed");
-        socket.close(1011, "device check failed");
-      },
-    );
-  });
+  identityRoutes(app, context);
+  deviceRoutes(app, context);
+  messageRoutes(app, context);
+  liveRoute(app, context);
 
   return app;
 }

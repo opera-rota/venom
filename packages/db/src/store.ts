@@ -14,7 +14,6 @@ export interface RecordMessage {
 }
 
 export interface Store {
-  findDevice(deviceId: string): Promise<DeviceRef | null>;
   recordMessage(input: RecordMessage): Promise<Message>;
   listMessages(accountId: string, limit: number): Promise<Message[]>;
   ping(): Promise<void>;
@@ -48,13 +47,6 @@ export function createStore(url: string): Store {
   const sql = connect(url);
 
   return {
-    async findDevice(deviceId) {
-      const [device] = await sql<DeviceRef[]>`
-        select id, account_id from devices where id = ${deviceId} and status <> 'revoked'
-      `;
-      return device ?? null;
-    },
-
     async recordMessage({ device, requestId, speaker, text }) {
       return sql.begin(async (tx) => {
         const [row] = await tx<MessageRow[]>`

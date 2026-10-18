@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { databaseUrls } from "@venom/db";
 import { z } from "zod";
 
@@ -5,6 +7,9 @@ const Environment = z.object({
   VENOM_GATEWAY_HOST: z.string().min(1).default("127.0.0.1"),
   VENOM_GATEWAY_PORT: z.coerce.number().int().min(1).max(65_535).default(4100),
   VENOM_LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  VENOM_SMTP_URL: z.url().default("smtp://127.0.0.1:2525"),
+  VENOM_MAIL_FROM: z.string().min(3).default("VENOM <no-reply@venom.local>"),
+  VENOM_IDENTITY_KEY_FILE: z.string().min(1).default(join(homedir(), ".venom", "identity-server-setup")),
 });
 
 export interface GatewayConfig {
@@ -12,6 +17,9 @@ export interface GatewayConfig {
   readonly port: number;
   readonly logLevel: z.infer<typeof Environment>["VENOM_LOG_LEVEL"];
   readonly databaseUrl: string;
+  readonly smtpUrl: string;
+  readonly mailFrom: string;
+  readonly identityKeyFile: string;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): GatewayConfig {
@@ -21,5 +29,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Gatewa
     port: parsed.VENOM_GATEWAY_PORT,
     logLevel: parsed.VENOM_LOG_LEVEL,
     databaseUrl: databaseUrls.app,
+    smtpUrl: parsed.VENOM_SMTP_URL,
+    mailFrom: parsed.VENOM_MAIL_FROM,
+    identityKeyFile: parsed.VENOM_IDENTITY_KEY_FILE,
   };
 }

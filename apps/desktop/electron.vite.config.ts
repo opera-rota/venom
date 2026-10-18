@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
 import type { Rollup } from "vite";
 
-const bundled = { exclude: ["@venom/contracts", "zod"] };
+const bundled = { exclude: ["@venom/contracts", "@venom/identity", "zod"] };
 
 function quietAnnotations(warning: Rollup.RollupLog, warn: (warning: Rollup.RollupLog) => void): void {
   if (warning.code !== "INVALID_ANNOTATION") {

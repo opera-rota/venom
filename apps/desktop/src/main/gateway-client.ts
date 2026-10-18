@@ -1,18 +1,19 @@
-import { GatewayEvent, MessageHistory, MessageText, SendMessageAccepted, type Message } from "@venom/contracts";
-import { z } from "zod";
-import type { ConnectionState, SendResult } from "../shared/bridge.ts";
+import { DeviceList, GatewayEvent, MessageHistory, MessageText, SendMessageAccepted, type Capabilities, type Message } from "@venom/contracts";
+import type { ConnectionState, DevicesResult, SendResult, StepResult } from "../shared/bridge.ts";
+import type { Api } from "./api.ts";
 
 export interface GatewayClientOptions {
-  readonly gatewayUrl: string;
-  readonly deviceId: string;
-  readonly requestTimeoutMs?: number;
+  readonly api: Api;
   readonly retryBaseMs?: number;
   readonly retryMaxMs?: number;
 }
 
-const ErrorBody = z.object({ message: z.string().optional(), error: z.string().optional() });
+export type Revocation = "removed" | "unauthorized";
 
-const unknownDeviceCode = 4404;
+const closeReasons: ReadonlyMap<number, Revocation> = new Map([
+  [4401, "unauthorized"],
+  [4403, "removed"],
+]);
 
 function decodeEvent(data: unknown): GatewayEvent | null {
   try {
@@ -24,23 +25,20 @@ function decodeEvent(data: unknown): GatewayEvent | null {
 }
 
 export class GatewayClient {
-  readonly #base: URL;
-  readonly #deviceId: string;
-  readonly #requestTimeoutMs: number;
+  readonly #api: Api;
   readonly #retryBaseMs: number;
   readonly #retryMaxMs: number;
   readonly #eventListeners = new Set<(event: GatewayEvent) => void>();
   readonly #stateListeners = new Set<(state: ConnectionState) => void>();
-  #state: ConnectionState = "connecting";
+  readonly #revokedListeners = new Set<(reason: Revocation) => void>();
+  #state: ConnectionState = "offline";
+  #token: string | null = null;
   #socket: WebSocket | null = null;
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #attempt = 0;
-  #running = false;
 
-  constructor({ gatewayUrl, deviceId, requestTimeoutMs = 5_000, retryBaseMs = 500, retryMaxMs = 10_000 }: GatewayClientOptions) {
-    this.#base = new URL(gatewayUrl);
-    this.#deviceId = deviceId;
-    this.#requestTimeoutMs = requestTimeoutMs;
+  constructor({ api, retryBaseMs = 500, retryMaxMs = 10_000 }: GatewayClientOptions) {
+    this.#api = api;
     this.#retryBaseMs = retryBaseMs;
     this.#retryMaxMs = retryMaxMs;
   }
@@ -49,22 +47,31 @@ export class GatewayClient {
     return this.#state;
   }
 
-  start(): void {
-    if (this.#running) {
+  get running(): boolean {
+    return this.#token !== null;
+  }
+
+  start(token: string): void {
+    if (this.#token === token) {
       return;
     }
-    this.#running = true;
+    this.stop();
+    this.#token = token;
+    this.#attempt = 0;
+    this.#setState("connecting");
     this.#connect();
   }
 
   stop(): void {
-    this.#running = false;
+    this.#token = null;
     if (this.#retryTimer !== null) {
       clearTimeout(this.#retryTimer);
       this.#retryTimer = null;
     }
-    this.#socket?.close(1000, "client stopping");
+    const socket = this.#socket;
     this.#socket = null;
+    socket?.close(1000, "client stopping");
+    this.#setState("offline");
   }
 
   onEvent(listener: (event: GatewayEvent) => void): () => void {
@@ -77,46 +84,79 @@ export class GatewayClient {
     return () => this.#stateListeners.delete(listener);
   }
 
+  onRevoked(listener: (reason: Revocation) => void): () => void {
+    this.#revokedListeners.add(listener);
+    return () => this.#revokedListeners.delete(listener);
+  }
+
   async history(limit = 200): Promise<Message[]> {
-    const url = this.#url("/v1/messages");
-    url.searchParams.set("device_id", this.#deviceId);
-    url.searchParams.set("limit", String(limit));
-    const response = await fetch(url, { signal: AbortSignal.timeout(this.#requestTimeoutMs) });
-    if (!response.ok) {
-      throw new Error(await this.#describeFailure(response));
+    const result = await this.#api.request("GET", `/v1/messages?limit=${limit}`, { schema: MessageHistory, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      throw new Error(result.reason);
     }
-    return MessageHistory.parse(await response.json()).messages;
+    return result.value.messages;
   }
 
   async send(text: unknown): Promise<SendResult> {
     const parsed = MessageText.safeParse(text);
     if (!parsed.success) {
-      return { ok: false, reason: "Write something before sending." };
+      return { ok: false, code: "invalid_request", reason: "Write something before sending." };
     }
+    const result = await this.#api.request("POST", "/v1/messages", {
+      schema: SendMessageAccepted,
+      body: { text: parsed.data },
+      token: this.#token,
+    });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result.code === "network" ? { ...result, reason: "VENOM's gateway is not reachable. Your message was not sent." } : result;
+    }
+    return { ok: true, requestId: result.value.request_id };
+  }
 
-    try {
-      const response = await fetch(this.#url("/v1/messages"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ device_id: this.#deviceId, text: parsed.data }),
-        signal: AbortSignal.timeout(this.#requestTimeoutMs),
-      });
-      if (response.status !== 202) {
-        return { ok: false, reason: await this.#describeFailure(response) };
-      }
-      return { ok: true, requestId: SendMessageAccepted.parse(await response.json()).request_id };
-    } catch {
-      return { ok: false, reason: "VENOM's gateway is not reachable. Your message was not sent." };
+  async devices(): Promise<DevicesResult> {
+    const result = await this.#api.request("GET", "/v1/devices", { schema: DeviceList, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, list: result.value };
+  }
+
+  async removeDevice(deviceId: string): Promise<StepResult> {
+    const result = await this.#api.request("DELETE", `/v1/devices/${encodeURIComponent(deviceId)}`, { token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+    }
+    return result.ok ? { ok: true } : result;
+  }
+
+  async reportCapabilities(deviceId: string, capabilities: Capabilities): Promise<StepResult> {
+    const result = await this.#api.request("PUT", "/v1/devices/current/capabilities", {
+      body: { device_id: deviceId, capabilities },
+      token: this.#token,
+    });
+    if (!result.ok) {
+      this.#watch(result.code);
+    }
+    return result.ok ? { ok: true } : result;
+  }
+
+  #watch(code: string): void {
+    if (code === "unauthorized") {
+      this.#revoke("unauthorized");
     }
   }
 
-  #url(path: string): URL {
-    return new URL(path, this.#base);
-  }
-
-  async #describeFailure(response: Response): Promise<string> {
-    const body = ErrorBody.safeParse(await response.json().catch(() => ({})));
-    return (body.success ? body.data.message : undefined) ?? `The gateway answered with status ${response.status}.`;
+  #revoke(reason: Revocation): void {
+    if (this.#token === null) {
+      return;
+    }
+    this.stop();
+    for (const listener of this.#revokedListeners) {
+      listener(reason);
+    }
   }
 
   #setState(state: ConnectionState): void {
@@ -130,21 +170,26 @@ export class GatewayClient {
   }
 
   #connect(): void {
-    const url = this.#url("/v1/live");
+    const token = this.#token;
+    if (token === null) {
+      return;
+    }
+    const url = this.#api.url("/v1/live");
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.searchParams.set("device_id", this.#deviceId);
 
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(url, { headers: { authorization: `Bearer ${token}` } });
     this.#socket = socket;
 
     socket.addEventListener("open", () => {
-      this.#attempt = 0;
-      this.#setState("online");
+      if (this.#socket === socket) {
+        this.#attempt = 0;
+        this.#setState("online");
+      }
     });
 
     socket.addEventListener("message", ({ data }) => {
       const event = decodeEvent(data);
-      if (event === null) {
+      if (event === null || this.#socket !== socket) {
         return;
       }
       for (const listener of this.#eventListeners) {
@@ -164,8 +209,13 @@ export class GatewayClient {
     if (socket.readyState !== WebSocket.CLOSED) {
       socket.close();
     }
+    const revocation = code === null ? undefined : closeReasons.get(code);
+    if (revocation !== undefined) {
+      this.#revoke(revocation);
+      return;
+    }
     this.#setState("offline");
-    if (this.#running && code !== unknownDeviceCode) {
+    if (this.#token !== null) {
       this.#scheduleReconnect();
     }
   }
@@ -176,9 +226,7 @@ export class GatewayClient {
     this.#attempt += 1;
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;
-      if (this.#running) {
-        this.#connect();
-      }
+      this.#connect();
     }, delay);
   }
 }

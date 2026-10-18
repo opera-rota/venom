@@ -1,5 +1,4 @@
 import type { Sql } from "postgres";
-import { seedDevelopment } from "./development.ts";
 import { migrate, migrationStatus } from "./migrator.ts";
 import { connect } from "./store.ts";
 import { databaseUrls } from "./urls.ts";
@@ -25,16 +24,10 @@ async function showStatus(sql: Sql): Promise<void> {
   }
 }
 
-async function setUp(sql: Sql): Promise<void> {
-  await runMigrations(sql);
-  const created = await seedDevelopment(sql);
-  console.log(created ? "Development account and device created." : "Development account and device already exist.");
-}
-
 const commands: Record<string, (sql: Sql) => Promise<void>> = {
   migrate: runMigrations,
   status: showStatus,
-  setup: setUp,
+  setup: runMigrations,
 };
 
 const command = commands[process.argv[2] ?? ""];

@@ -1,22 +1,21 @@
-import { Composer } from "./components/Composer.tsx";
-import { Header } from "./components/Header.tsx";
-import { MessageList } from "./components/MessageList.tsx";
-import { useConversation } from "./use-conversation.ts";
+import { LogoMark } from "./components/Header.tsx";
+import { Onboarding } from "./components/Onboarding.tsx";
+import { Workspace } from "./components/Workspace.tsx";
+import { useAuth } from "./use-auth.ts";
 
 export function App() {
-  const conversation = useConversation(window.venom);
+  const auth = useAuth(window.venom);
 
-  return (
-    <main className="flex h-full flex-col">
-      <Header connection={conversation.connection} />
-      <MessageList messages={conversation.messages} />
-      <Composer
-        connection={conversation.connection}
-        saving={conversation.pending.size > 0}
-        failure={conversation.failure}
-        onSend={conversation.send}
-        onDismiss={conversation.dismiss}
-      />
-    </main>
-  );
+  switch (auth.kind) {
+    case "loading":
+      return (
+        <main className="flex h-full items-center justify-center" aria-busy="true">
+          <LogoMark size={48} />
+        </main>
+      );
+    case "signed_out":
+      return <Onboarding bridge={window.venom} notice={auth.notice} />;
+    case "signed_in":
+      return <Workspace key={auth.device.id} bridge={window.venom} account={auth.account} device={auth.device} />;
+  }
 }

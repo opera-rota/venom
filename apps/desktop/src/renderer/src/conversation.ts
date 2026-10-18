@@ -42,6 +42,9 @@ function applyEvent(state: ConversationState, event: GatewayEvent): Conversation
   if (event.type === "message") {
     return { ...state, messages: mergeMessages(state.messages, [event.message]) };
   }
+  if (event.type === "devices") {
+    return state;
+  }
   switch (event.state) {
     case "accepted":
       return { ...state, pending: withPending(state.pending, event.request_id, true) };

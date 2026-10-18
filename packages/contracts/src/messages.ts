@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Email, Id, Timestamp } from "./primitives.ts";
+import { Id, Timestamp } from "./primitives.ts";
 import { Capabilities, DeviceType, Platform, StepTarget } from "./records.ts";
 import { contracts } from "./registry.ts";
 
@@ -11,14 +11,6 @@ export const DeviceInfo = z
     capabilities: Capabilities,
   })
   .register(contracts, { id: "DeviceInfo" });
-
-export const AttachRequest = z
-  .strictObject({
-    email: Email,
-    secret_word_proof: z.string().min(1),
-    device: DeviceInfo,
-  })
-  .register(contracts, { id: "AttachRequest" });
 
 export const RouteMethod = z
   .enum(["device_action", "connector", "script"])
@@ -93,7 +85,6 @@ export const LiveEvent = z
   .register(contracts, { id: "LiveEvent" });
 
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
-export type AttachRequest = z.infer<typeof AttachRequest>;
 export type RouteMethod = z.infer<typeof RouteMethod>;
 export type RouteDecision = z.infer<typeof RouteDecision>;
 export type Risk = z.infer<typeof Risk>;
