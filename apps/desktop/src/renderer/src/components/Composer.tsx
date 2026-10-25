@@ -7,13 +7,13 @@ const limit = 4000;
 
 export interface ComposerProps {
   readonly connection: ConnectionState;
-  readonly saving: boolean;
-  readonly failure: string | null;
+  readonly answering: boolean;
+  readonly notice: string | null;
   readonly onSend: (text: string) => Promise<boolean>;
   readonly onDismiss: () => void;
 }
 
-export function Composer({ connection, saving, failure, onSend, onDismiss }: ComposerProps) {
+export function Composer({ connection, answering, notice, onSend, onDismiss }: ComposerProps) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const online = connection === "online";
@@ -64,12 +64,12 @@ export function Composer({ connection, saving, failure, onSend, onDismiss }: Com
           </button>
         </div>
         <div className={`flex min-h-5 items-center justify-between gap-3 ${text.detail}`}>
-          {failure === null ? (
-            <span className="text-ink-faint">{saving ? "Saving" : hint}</span>
+          {notice === null ? (
+            <span className="text-ink-faint">{answering && online ? "VENOM is answering. You can keep writing." : hint}</span>
           ) : (
             <span role="alert" className="flex items-center gap-1.5 text-red-400">
               <Icon name="cross" />
-              <span>{failure}</span>
+              <span>{notice}</span>
               <button type="button" onClick={onDismiss} className={`${button.ghost} px-1.5 py-0 text-[11.5px]`}>
                 Dismiss
               </button>

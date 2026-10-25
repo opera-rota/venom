@@ -144,6 +144,7 @@ export const ApiErrorCode = z
     "unauthorized",
     "forbidden",
     "not_found",
+    "conflict",
     "code_incorrect",
     "challenge_expired",
     "too_many_attempts",

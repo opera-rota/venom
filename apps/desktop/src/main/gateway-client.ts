@@ -1,4 +1,4 @@
-import { DeviceList, GatewayEvent, MessageHistory, MessageText, SendMessageAccepted, type Capabilities, type Message } from "@venom/contracts";
+import { DeviceList, GatewayEvent, Id, MessageHistory, MessageText, SendMessageAccepted, type Capabilities, type Message } from "@venom/contracts";
 import type { ConnectionState, DevicesResult, SendResult, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
 
@@ -111,6 +111,23 @@ export class GatewayClient {
     if (!result.ok) {
       this.#watch(result.code);
       return result.code === "network" ? { ...result, reason: "VENOM's gateway is not reachable. Your message was not sent." } : result;
+    }
+    return { ok: true, requestId: result.value.request_id };
+  }
+
+  async retry(requestId: unknown): Promise<SendResult> {
+    const parsed = Id.safeParse(requestId);
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: "There is no answer to try again." };
+    }
+    const result = await this.#api.request("POST", "/v1/messages/retry", {
+      schema: SendMessageAccepted,
+      body: { request_id: parsed.data },
+      token: this.#token,
+    });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result.code === "network" ? { ...result, reason: "VENOM's gateway is not reachable. Try again in a moment." } : result;
     }
     return { ok: true, requestId: result.value.request_id };
   }

@@ -7,6 +7,7 @@ import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identi
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { buildGateway } from "../src/app.ts";
+import { scriptedBrain, type ScriptedBrain } from "../src/testing.ts";
 
 export interface Environment {
   readonly database: TestDatabase;
@@ -19,6 +20,7 @@ export interface RunningGateway {
   readonly base: string;
   readonly app: FastifyInstance;
   readonly identity: Identity;
+  readonly brain: ScriptedBrain;
   stop(): Promise<void>;
 }
 
@@ -37,17 +39,23 @@ export async function destroyEnvironment(environment: Environment | undefined): 
   await environment?.database.drop();
 }
 
-export async function startGateway(environment: Environment, heartbeatMs?: number): Promise<RunningGateway> {
+export interface GatewayStart {
+  readonly heartbeatMs?: number;
+  readonly brain?: ScriptedBrain;
+}
+
+export async function startGateway(environment: Environment, { heartbeatMs, brain = scriptedBrain() }: GatewayStart = {}): Promise<RunningGateway> {
   const store: Store = createStore(environment.database.appUrl);
   const sql = connect(environment.database.appUrl);
   const identity = createIdentity({ sql, mailer: environment.mailer, serverSetup: environment.serverSetup });
-  const app = await buildGateway({ store, identity, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
+  const app = await buildGateway({ store, identity, brain, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 
   return {
     base,
     app,
     identity,
+    brain,
     async stop() {
       await app.close();
       await Promise.all([store.close(), sql.end()]);

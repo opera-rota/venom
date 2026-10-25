@@ -6,7 +6,19 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field
 
-type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "internal"]
+
+class AnswerEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["answer"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    delta: Annotated[str, Field(min_length=1)]
+
+
+type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "conflict", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "internal"]
 
 
 class ApiIssue(BaseModel):
@@ -85,6 +97,9 @@ type DeviceType = Literal["computer", "phone", "tv", "watch"]
 type FailurePolicy = Literal["abort", "retry", "reroute"]
 
 
+type IntentKind = Literal["question", "task"]
+
+
 type ListeningMode = Literal["wake_word", "press_to_talk"]
 
 
@@ -98,6 +113,9 @@ type MemoryType = Literal["fact", "preference", "event"]
 
 
 type MessageText = Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
+
+
+type ModelName = Annotated[str, Field(max_length=100, min_length=1)]
 
 
 type OpaqueMessage = Annotated[
@@ -114,7 +132,25 @@ type Platform = Literal["windows", "macos", "linux", "android", "ios", "android_
 type PromptRole = Literal["understand", "plan", "reply"]
 
 
+class ReasoningDelta(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["delta"]
+    text: Annotated[str, Field(min_length=1)]
+
+
+type ReasoningFailure = Literal["not_configured", "refused", "rate_limited", "unavailable", "timeout", "invalid_output", "internal"]
+
+
 type RequestState = Literal["accepted", "completed", "failed"]
+
+
+class RetryAnswer(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
 
 
 type Risk = Literal["low", "medium", "high"]
@@ -220,7 +256,57 @@ class StopTask(BaseModel):
     task_id: UUID
 
 
+class StructuredOutput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["structured"]
+    contract: Literal["Intent"]
+
+
 type TaskStatus = Literal["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled"]
+
+
+class TextOutput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["text"]
+
+
+class TokenUsage(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input_tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
+    output_tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class TurnDelta(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["delta"]
+    text: Annotated[str, Field(min_length=1)]
+
+
+class TurnDone(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["done"]
+    intent: IntentKind
+    text: Annotated[str, Field(max_length=16000, min_length=1)]
+    model: ModelName | None
+
+
+class TurnFailed(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["failed"]
+    reason: ReasoningFailure
+    detail: Annotated[str, Field(min_length=1)]
 
 
 type VerificationCode = Annotated[str, Field(pattern="^\\d{6}$")]
@@ -289,6 +375,14 @@ class Connector(BaseModel):
     status: ConnectorStatus
 
 
+class ConversationEntry(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker: Speaker
+    text: Annotated[str, Field(max_length=16000, min_length=1)]
+
+
 class Device(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -330,6 +424,13 @@ class DevicesEvent(BaseModel):
     sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
     emitted_at: AwareDatetime
     devices: list[Device]
+
+
+class Intent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: IntentKind
 
 
 class LiveEvent(BaseModel):
@@ -394,6 +495,43 @@ class Prompt(BaseModel):
     role: PromptRole
     version: Annotated[int, Field(gt=0, le=9007199254740991)]
     text: Annotated[str, Field(min_length=1)]
+
+
+class ReasoningDone(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["done"]
+    text: str
+    model: ModelName
+    stop_reason: str | None
+    usage: TokenUsage
+
+
+class ReasoningFailed(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["failed"]
+    reason: ReasoningFailure
+    detail: Annotated[str, Field(min_length=1)]
+
+
+type ReasoningOutput = Annotated[
+    TextOutput | StructuredOutput, Field(discriminator="kind")
+]
+
+
+class ReasoningRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
+    role: PromptRole
+    prompt_version: Annotated[int, Field(gt=0, le=9007199254740991)]
+    messages: Annotated[list[ConversationEntry], Field(max_length=41, min_length=1)]
+    output: ReasoningOutput
+    max_output_tokens: Annotated[int, Field(ge=1, le=8192)]
 
 
 class RequestEvent(BaseModel):
@@ -494,6 +632,22 @@ class Task(BaseModel):
     updated_at: AwareDatetime
 
 
+type TurnEvent = Annotated[
+    TurnDelta | TurnDone | TurnFailed, Field(discriminator="type")
+]
+
+
+class TurnRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
+    account_id: UUID
+    device_id: UUID
+    history: Annotated[list[ConversationEntry], Field(max_length=40)]
+    text: MessageText
+
+
 class Account(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -524,7 +678,13 @@ class DeviceSession(BaseModel):
 
 
 type GatewayEvent = Annotated[
-    MessageEvent | RequestEvent | DevicesEvent, Field(discriminator="type")
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent,
+    Field(discriminator="type"),
+]
+
+
+type ReasoningEvent = Annotated[
+    ReasoningDelta | ReasoningDone | ReasoningFailed, Field(discriminator="type")
 ]
 
 
@@ -537,6 +697,6 @@ class Session(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | RequestEvent | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | Task,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | Intent | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
     Field(title="Contract"),
 ]

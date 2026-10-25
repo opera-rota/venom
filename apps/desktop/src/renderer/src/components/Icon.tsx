@@ -10,6 +10,9 @@ const paths = {
   mail: "M2 4h12v8H2zM2 4.5l6 4.5 6-4.5",
   plus: "M8 3.5v9M3.5 8h9",
   warning: "M8 2.5l6 11H2zM8 6.5v3M8 11.5v.01",
+  copy: "M5.5 5.5h7v7h-7zM3.5 10.5v-7h7",
+  retry: "M12.5 8a4.5 4.5 0 1 1-1.3-3.2M12.5 2.5v3h-3",
+  down: "M8 3.5v9M4.5 9L8 12.5 11.5 9",
 } as const;
 
 export type IconName = keyof typeof paths;

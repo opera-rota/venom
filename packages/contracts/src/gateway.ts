@@ -22,6 +22,12 @@ export const SendMessageAccepted = z
   })
   .register(contracts, { id: "SendMessageAccepted" });
 
+export const RetryAnswer = z
+  .strictObject({
+    request_id: Id,
+  })
+  .register(contracts, { id: "RetryAnswer" });
+
 export const MessageHistory = z
   .strictObject({
     messages: z.array(Message),
@@ -55,6 +61,14 @@ export const RequestEvent = z
   })
   .register(contracts, { id: "RequestEvent" });
 
+export const AnswerEvent = z
+  .strictObject({
+    type: z.literal("answer"),
+    ...eventFields,
+    delta: z.string().min(1),
+  })
+  .register(contracts, { id: "AnswerEvent" });
+
 export const DevicesEvent = z
   .strictObject({
     type: z.literal("devices"),
@@ -64,15 +78,17 @@ export const DevicesEvent = z
   .register(contracts, { id: "DevicesEvent" });
 
 export const GatewayEvent = z
-  .discriminatedUnion("type", [MessageEvent, RequestEvent, DevicesEvent])
+  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent])
   .register(contracts, { id: "GatewayEvent" });
 
 export type MessageText = z.infer<typeof MessageText>;
 export type SendMessage = z.infer<typeof SendMessage>;
 export type SendMessageAccepted = z.infer<typeof SendMessageAccepted>;
+export type RetryAnswer = z.infer<typeof RetryAnswer>;
 export type MessageHistory = z.infer<typeof MessageHistory>;
 export type RequestState = z.infer<typeof RequestState>;
 export type MessageEvent = z.infer<typeof MessageEvent>;
 export type RequestEvent = z.infer<typeof RequestEvent>;
+export type AnswerEvent = z.infer<typeof AnswerEvent>;
 export type DevicesEvent = z.infer<typeof DevicesEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

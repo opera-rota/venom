@@ -9,6 +9,7 @@ const Environment = z.object({
   VENOM_LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   VENOM_SMTP_URL: z.url().default("smtp://127.0.0.1:2525"),
   VENOM_MAIL_FROM: z.string().min(3).default("VENOM <no-reply@venom.local>"),
+  VENOM_BRAIN_URL: z.url().default("http://127.0.0.1:4200"),
   VENOM_IDENTITY_KEY_FILE: z.string().min(1).default(join(homedir(), ".venom", "identity-server-setup")),
 });
 
@@ -20,6 +21,7 @@ export interface GatewayConfig {
   readonly smtpUrl: string;
   readonly mailFrom: string;
   readonly identityKeyFile: string;
+  readonly brainUrl: string;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): GatewayConfig {
@@ -32,5 +34,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Gatewa
     smtpUrl: parsed.VENOM_SMTP_URL,
     mailFrom: parsed.VENOM_MAIL_FROM,
     identityKeyFile: parsed.VENOM_IDENTITY_KEY_FILE,
+    brainUrl: parsed.VENOM_BRAIN_URL,
   };
 }

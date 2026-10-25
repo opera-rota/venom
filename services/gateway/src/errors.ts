@@ -19,6 +19,10 @@ export const unauthorized = () => new GatewayError(401, "unauthorized", "This de
 
 export const forbidden = () => new GatewayError(403, "forbidden", "A device can only report its own capabilities.");
 
+export const notFound = (message: string) => new GatewayError(404, "not_found", message);
+
+export const conflict = (message: string) => new GatewayError(409, "conflict", message);
+
 export function installErrorHandling(app: FastifyInstance): void {
   app.setNotFoundHandler((_request, reply) => {
     return reply.code(404).send(ApiError.parse({ error: "not_found", message: "There is nothing at this address." }));

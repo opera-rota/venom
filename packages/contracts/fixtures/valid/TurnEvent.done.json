@@ -1,0 +1,1 @@
+{ "type": "done", "intent": "question", "text": "A mutex is a lock that lets one thread at a time use a shared resource.", "model": "claude-sonnet-5-5" }

@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["packages/contracts", "services/orchestrator"]
+members = ["packages/contracts", "services/reasoning", "services/orchestrator"]
 
 [dependency-groups]
 dev = [
@@ -11,11 +11,17 @@ dev = [
 required-version = ">=0.12"
 
 [tool.pytest.ini_options]
-testpaths = ["packages/contracts/python/tests", "services/orchestrator/tests"]
+testpaths = ["packages/contracts/python/tests", "services/reasoning/tests", "services/orchestrator/tests"]
 addopts = ["--strict-markers", "--import-mode=importlib"]
 
 [tool.pyright]
-include = ["packages/contracts/python", "services/orchestrator/src", "services/orchestrator/tests"]
+include = [
+    "packages/contracts/python",
+    "services/reasoning/src",
+    "services/reasoning/tests",
+    "services/orchestrator/src",
+    "services/orchestrator/tests",
+]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.14"

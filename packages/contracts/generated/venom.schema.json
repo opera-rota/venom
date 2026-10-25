@@ -10,6 +10,9 @@
       "$ref": "#/$defs/AccountSettings"
     },
     {
+      "$ref": "#/$defs/AnswerEvent"
+    },
+    {
       "$ref": "#/$defs/ApiError"
     },
     {
@@ -46,6 +49,9 @@
       "$ref": "#/$defs/ConnectorTarget"
     },
     {
+      "$ref": "#/$defs/ConversationEntry"
+    },
+    {
       "$ref": "#/$defs/Device"
     },
     {
@@ -62,6 +68,9 @@
     },
     {
       "$ref": "#/$defs/DeviceTarget"
+    },
+    {
+      "$ref": "#/$defs/Intent"
     },
     {
       "$ref": "#/$defs/LiveEvent"
@@ -82,7 +91,22 @@
       "$ref": "#/$defs/Prompt"
     },
     {
+      "$ref": "#/$defs/ReasoningDelta"
+    },
+    {
+      "$ref": "#/$defs/ReasoningDone"
+    },
+    {
+      "$ref": "#/$defs/ReasoningFailed"
+    },
+    {
+      "$ref": "#/$defs/ReasoningRequest"
+    },
+    {
       "$ref": "#/$defs/RequestEvent"
+    },
+    {
+      "$ref": "#/$defs/RetryAnswer"
     },
     {
       "$ref": "#/$defs/RouteDecision"
@@ -136,7 +160,28 @@
       "$ref": "#/$defs/StopTask"
     },
     {
+      "$ref": "#/$defs/StructuredOutput"
+    },
+    {
       "$ref": "#/$defs/Task"
+    },
+    {
+      "$ref": "#/$defs/TextOutput"
+    },
+    {
+      "$ref": "#/$defs/TokenUsage"
+    },
+    {
+      "$ref": "#/$defs/TurnDelta"
+    },
+    {
+      "$ref": "#/$defs/TurnDone"
+    },
+    {
+      "$ref": "#/$defs/TurnFailed"
+    },
+    {
+      "$ref": "#/$defs/TurnRequest"
     }
   ],
   "$defs": {
@@ -189,6 +234,40 @@
       ],
       "additionalProperties": false
     },
+    "AnswerEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "answer"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "delta": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "delta"
+      ],
+      "additionalProperties": false
+    },
     "ApiError": {
       "type": "object",
       "properties": {
@@ -219,6 +298,7 @@
         "unauthorized",
         "forbidden",
         "not_found",
+        "conflict",
         "code_incorrect",
         "challenge_expired",
         "too_many_attempts",
@@ -494,6 +574,24 @@
       ],
       "additionalProperties": false
     },
+    "ConversationEntry": {
+      "type": "object",
+      "properties": {
+        "speaker": {
+          "$ref": "#/$defs/Speaker"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        }
+      },
+      "required": [
+        "speaker",
+        "text"
+      ],
+      "additionalProperties": false
+    },
     "Device": {
       "type": "object",
       "properties": {
@@ -702,6 +800,9 @@
           "$ref": "#/$defs/MessageEvent"
         },
         {
+          "$ref": "#/$defs/AnswerEvent"
+        },
+        {
           "$ref": "#/$defs/RequestEvent"
         },
         {
@@ -711,6 +812,25 @@
       "discriminator": {
         "propertyName": "type"
       }
+    },
+    "Intent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/IntentKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "IntentKind": {
+      "type": "string",
+      "enum": [
+        "question",
+        "task"
+      ]
     },
     "ListeningMode": {
       "type": "string",
@@ -928,6 +1048,11 @@
       "maxLength": 4000,
       "pattern": "\\S"
     },
+    "ModelName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
     "OpaqueMessage": {
       "type": "string",
       "minLength": 16,
@@ -985,6 +1110,161 @@
         "reply"
       ]
     },
+    "ReasoningDelta": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "delta"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ReasoningDone": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "done"
+        },
+        "text": {
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelName"
+        },
+        "stop_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usage": {
+          "$ref": "#/$defs/TokenUsage"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "model",
+        "stop_reason",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "ReasoningEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReasoningDelta"
+        },
+        {
+          "$ref": "#/$defs/ReasoningDone"
+        },
+        {
+          "$ref": "#/$defs/ReasoningFailed"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      }
+    },
+    "ReasoningFailed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "failed"
+        },
+        "reason": {
+          "$ref": "#/$defs/ReasoningFailure"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "detail"
+      ],
+      "additionalProperties": false
+    },
+    "ReasoningFailure": {
+      "type": "string",
+      "enum": [
+        "not_configured",
+        "refused",
+        "rate_limited",
+        "unavailable",
+        "timeout",
+        "invalid_output",
+        "internal"
+      ]
+    },
+    "ReasoningOutput": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TextOutput"
+        },
+        {
+          "$ref": "#/$defs/StructuredOutput"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "ReasoningRequest": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "role": {
+          "$ref": "#/$defs/PromptRole"
+        },
+        "prompt_version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "messages": {
+          "minItems": 1,
+          "maxItems": 41,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConversationEntry"
+          }
+        },
+        "output": {
+          "$ref": "#/$defs/ReasoningOutput"
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      },
+      "required": [
+        "request_id",
+        "role",
+        "prompt_version",
+        "messages",
+        "output",
+        "max_output_tokens"
+      ],
+      "additionalProperties": false
+    },
     "RequestEvent": {
       "type": "object",
       "properties": {
@@ -1032,6 +1312,19 @@
         "completed",
         "failed"
       ]
+    },
+    "RetryAnswer": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "request_id"
+      ],
+      "additionalProperties": false
     },
     "Risk": {
       "type": "string",
@@ -1510,6 +1803,26 @@
       ],
       "additionalProperties": false
     },
+    "StructuredOutput": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "structured"
+        },
+        "contract": {
+          "type": "string",
+          "enum": [
+            "Intent"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "contract"
+      ],
+      "additionalProperties": false
+    },
     "Task": {
       "type": "object",
       "properties": {
@@ -1589,6 +1902,164 @@
         "failed",
         "cancelled"
       ]
+    },
+    "TextOutput": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "text"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "TokenUsage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens"
+      ],
+      "additionalProperties": false
+    },
+    "TurnDelta": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "delta"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "TurnDone": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "done"
+        },
+        "intent": {
+          "$ref": "#/$defs/IntentKind"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "intent",
+        "text",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "TurnEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TurnDelta"
+        },
+        {
+          "$ref": "#/$defs/TurnDone"
+        },
+        {
+          "$ref": "#/$defs/TurnFailed"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      }
+    },
+    "TurnFailed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "failed"
+        },
+        "reason": {
+          "$ref": "#/$defs/ReasoningFailure"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "detail"
+      ],
+      "additionalProperties": false
+    },
+    "TurnRequest": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "history": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConversationEntry"
+          }
+        },
+        "text": {
+          "$ref": "#/$defs/MessageText"
+        }
+      },
+      "required": [
+        "request_id",
+        "account_id",
+        "device_id",
+        "history",
+        "text"
+      ],
+      "additionalProperties": false
     },
     "VerificationCode": {
       "type": "string",

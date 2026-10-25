@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channels, type AuthView } from "../shared/bridge.ts";
@@ -14,6 +14,12 @@ const config = loadConfig();
 
 if (config.profile !== null) {
   app.setPath("userData", `${app.getPath("userData")}-${config.profile}`);
+}
+
+const appIcon = join(import.meta.dirname, "../../resources/icon.png");
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(config.profile === null ? "com.venom.desktop" : `com.venom.desktop.${config.profile}`);
 }
 
 const rendererDevUrl = process.env["ELECTRON_RENDERER_URL"];
@@ -39,6 +45,16 @@ function handle(channel: string, handler: (...args: unknown[]) => unknown): void
   });
 }
 
+async function openLink(url: unknown): Promise<void> {
+  if (typeof url !== "string" || !URL.canParse(url)) {
+    return;
+  }
+  const target = new URL(url);
+  if (target.protocol === "https:" || target.protocol === "http:") {
+    await shell.openExternal(target.href);
+  }
+}
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: config.profile === null ? "VENOM" : `VENOM (${config.profile})`,
@@ -48,6 +64,7 @@ function createWindow(): BrowserWindow {
     minHeight: 560,
     show: false,
     backgroundColor: "#050806",
+    icon: appIcon,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
@@ -119,6 +136,8 @@ function wire(): void {
   handle(channels.removeDevice, (deviceId) => (typeof deviceId === "string" ? gateway.removeDevice(deviceId) : { ok: false, code: "invalid_request", reason: "Unknown device." }));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
+  handle(channels.retry, (requestId) => gateway.retry(requestId));
+  handle(channels.openLink, (url) => openLink(url));
   handle(channels.connection, () => gateway.state);
 
   app.on("before-quit", () => gateway.stop());

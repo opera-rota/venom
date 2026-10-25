@@ -1,3 +1,4 @@
+export * from "./brain.ts";
 export * from "./gateway.ts";
 export * from "./identity.ts";
 export * from "./messages.ts";

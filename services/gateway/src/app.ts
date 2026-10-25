@@ -4,6 +4,7 @@ import type { Identity } from "@venom/identity";
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { identify } from "./auth.ts";
+import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
 import { devicesEvent, LiveHub } from "./live-hub.ts";
@@ -12,16 +13,18 @@ import { identityRoutes } from "./routes/identity.ts";
 import { liveRoute } from "./routes/live.ts";
 import { messageRoutes } from "./routes/messages.ts";
 
+export { BrainError, createBrainClient, type Brain } from "./brain.ts";
 export { closeCodes } from "./context.ts";
 
 export interface GatewayOptions {
   readonly store: Store;
   readonly identity: Identity;
+  readonly brain: Brain;
   readonly logger: NonNullable<FastifyServerOptions<RawServerDefault>["logger"]>;
   readonly heartbeatMs?: number;
 }
 
-export async function buildGateway({ store, identity, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
+export async function buildGateway({ store, identity, brain, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     bodyLimit: 64 * 1024,
@@ -30,12 +33,15 @@ export async function buildGateway({ store, identity, logger, heartbeatMs = 30_0
   });
   const hub = new LiveHub();
   const inflight = new Set<Promise<unknown>>();
+  const stopping = new AbortController();
   let closing = false;
 
   const context: GatewayContext = {
     store,
     identity,
     hub,
+    brain,
+    stopping: stopping.signal,
     heartbeatMs,
     track(work) {
       inflight.add(work);
@@ -52,6 +58,7 @@ export async function buildGateway({ store, identity, logger, heartbeatMs = 30_0
   app.addHook("onRequest", identify(identity));
   app.addHook("onClose", async () => {
     closing = true;
+    stopping.abort();
     await Promise.allSettled(inflight);
   });
 

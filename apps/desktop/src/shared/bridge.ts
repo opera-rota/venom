@@ -41,6 +41,8 @@ export interface VenomBridge {
   removeDevice(deviceId: string): Promise<StepResult>;
   history(): Promise<Message[]>;
   send(text: string): Promise<SendResult>;
+  retry(requestId: string): Promise<SendResult>;
+  openLink(url: string): Promise<void>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
   onConnection(listener: (state: ConnectionState) => void): () => void;
@@ -60,6 +62,8 @@ export const channels = {
   removeDevice: "venom:remove-device",
   history: "venom:history",
   send: "venom:send",
+  retry: "venom:retry",
+  openLink: "venom:open-link",
   connection: "venom:connection",
   event: "venom:event",
   connectionChanged: "venom:connection-changed",

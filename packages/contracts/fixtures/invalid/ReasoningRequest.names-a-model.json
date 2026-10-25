@@ -1,0 +1,9 @@
+{
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "role": "reply",
+  "prompt_version": 2,
+  "messages": [{ "speaker": "user", "text": "Hello" }],
+  "output": { "kind": "text" },
+  "max_output_tokens": 1024,
+  "model": "claude-sonnet-5-5"
+}

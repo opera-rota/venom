@@ -95,6 +95,10 @@ export class RequestTrace {
     this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state, detail });
   }
 
+  answer(delta: string): void {
+    this.#emit({ type: "answer", ...stamp(this.requestId, this.#sequence++), delta });
+  }
+
   message(message: Message): void {
     this.#emit({ type: "message", ...stamp(this.requestId, this.#sequence++), message });
   }

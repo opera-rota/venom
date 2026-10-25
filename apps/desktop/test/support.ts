@@ -2,6 +2,7 @@ import type { DeviceSession } from "@venom/contracts";
 import { connect, createStore, type Store } from "@venom/db";
 import { createTestDatabase, type TestDatabase } from "@venom/db/testing";
 import { buildGateway } from "@venom/gateway";
+import { scriptedBrain, type ScriptedBrain } from "@venom/gateway/testing";
 import { createEphemeralServerSetup, createIdentity } from "@venom/identity";
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
 import type { FastifyInstance } from "fastify";
@@ -12,6 +13,7 @@ import type { Encryptor } from "../src/main/vault.ts";
 
 export interface Backend {
   readonly mailer: RecordingMailer;
+  readonly brain: ScriptedBrain;
   readonly url: () => string;
   start(port?: number): Promise<number>;
   stop(): Promise<void>;
@@ -22,6 +24,7 @@ export async function createBackend(): Promise<Backend> {
   const database: TestDatabase = await createTestDatabase();
   const mailer = recordingMailer();
   const serverSetup = await createEphemeralServerSetup();
+  const brain = scriptedBrain();
   let running: { app: FastifyInstance; store: Store; sql: Sql } | null = null;
   let lastPort = 0;
 
@@ -37,13 +40,14 @@ export async function createBackend(): Promise<Backend> {
 
   return {
     mailer,
+    brain,
     stop,
     url: () => `http://127.0.0.1:${lastPort}`,
     async start(port = 0) {
       const store = createStore(database.appUrl);
       const sql = connect(database.appUrl);
       const identity = createIdentity({ sql, mailer, serverSetup });
-      const app = await buildGateway({ store, identity, logger: false });
+      const app = await buildGateway({ store, identity, brain, logger: false });
       await app.listen({ host: "127.0.0.1", port });
       const address = app.server.address();
       if (address === null || typeof address === "string") {

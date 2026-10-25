@@ -52,7 +52,7 @@ function record(target: GatewayClient) {
     new Promise((resolve) => {
       const check = () => {
         const mine = seen.filter((event) => event.request_id === requestId);
-        if (mine.some((event) => event.type === "request" && event.state === "completed")) {
+        if (mine.some((event) => event.type === "request" && event.state !== "accepted")) {
           waiters.delete(check);
           resolve(mine);
         }
@@ -79,7 +79,7 @@ afterAll(async () => {
 });
 
 describe("gateway client in the main process", () => {
-  it("sends a message with the device token and receives the tagged echo", async () => {
+  it("sends a message with the device token and receives the streamed answer", async () => {
     const client = startClient(session.device_token);
     const settled = record(client);
     await nextState(client, "online");
@@ -89,8 +89,31 @@ describe("gateway client in the main process", () => {
       throw new Error(result.reason);
     }
     const events = await settled(result.requestId);
-    expect(events.map((event) => event.sequence)).toEqual([0, 1, 2, 3]);
-    expect((await client.history()).at(-1)).toMatchObject({ speaker: "venom", text: "Hello from the desktop" });
+    expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index));
+    expect(events.flatMap((event) => (event.type === "answer" ? [event.delta] : [])).join("")).toBe("You asked: Hello from the desktop");
+    expect((await client.history()).at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Hello from the desktop" });
+  });
+
+  it("asks VENOM to answer a failed message again", async () => {
+    const client = startClient(session.device_token);
+    const settled = record(client);
+    await nextState(client, "online");
+    const failing = backend.brain.script;
+    backend.brain.script = () => [{ type: "failed", reason: "timeout", detail: "The model took too long to answer." }];
+
+    const sent = await client.send("Try me twice");
+    if (!sent.ok) {
+      throw new Error(sent.reason);
+    }
+    await settled(sent.requestId);
+    backend.brain.script = failing;
+    const retried = await client.retry(sent.requestId);
+    if (!retried.ok) {
+      throw new Error(retried.reason);
+    }
+    await settled(retried.requestId);
+    expect((await client.history()).at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Try me twice" });
+    expect(await client.retry("not-an-id")).toMatchObject({ ok: false, reason: "There is no answer to try again." });
   });
 
   it("lists the devices of the account", async () => {

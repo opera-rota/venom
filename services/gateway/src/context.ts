@@ -1,11 +1,14 @@
 import type { Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
+import type { Brain } from "./brain.ts";
 import type { LiveHub } from "./live-hub.ts";
 
 export interface GatewayContext {
   readonly store: Store;
   readonly identity: Identity;
   readonly hub: LiveHub;
+  readonly brain: Brain;
+  readonly stopping: AbortSignal;
   readonly heartbeatMs: number;
   track(work: Promise<unknown>): void;
   isClosing(): boolean;
