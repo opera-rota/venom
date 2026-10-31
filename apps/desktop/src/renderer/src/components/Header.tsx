@@ -54,7 +54,7 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
         <h1 className={text.section}>VENOM</h1>
         <span className={`truncate ${text.support}`}>{accountName}</span>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <div role="status" aria-live="polite" className={`flex items-center gap-2 ${text.detail} ${view.tone}`}>
           <span className={`${mark.dot} ${view.dot}`} />
           <Icon name={view.icon} />
