@@ -1,0 +1,15 @@
+{
+  "model": "openai/text-embedding-3-small",
+  "vectors": [
+    [
+      0.12,
+      -0.03,
+      0.51
+    ]
+  ],
+  "usage": {
+    "input_tokens": 11,
+    "output_tokens": 0,
+    "cost_micro_usd": 0
+  }
+}

@@ -8,6 +8,7 @@ from venom_contracts.models import (
     ConversationEntry,
     Intent,
     IntentKind,
+    MemoryContext,
     PromptRole,
     ReasoningDelta,
     ReasoningDone,
@@ -63,15 +64,27 @@ class Orchestrator:
             return
 
         history = recent(turn.history, HISTORY_CHARACTERS)
-        intent, understood = await self._understand(turn, history)
-        log.info("understood the message as a %s", intent, extra=context)
+        if turn.remembered is None:
+            intent, understood = await self._understand(turn, history)
+            log.info("understood the message as a %s", intent, extra=context)
+        else:
+            intent, understood = "question", NOTHING_USED
+            log.info("the message asked me to remember something; answering with what was saved", extra=context)
 
         if intent == "task":
             yield TurnDelta(type="delta", text=TASK_REPLY)
             yield TurnDone(type="done", intent="task", text=TASK_REPLY, model=None, usage=understood)
             return
 
-        request = self._request(turn, "reply", [*history, current(turn)], TextOutput(kind="text"), ANSWER_TOKENS)
+        request = self._request(
+            turn,
+            "reply",
+            [*history, current(turn)],
+            TextOutput(kind="text"),
+            ANSWER_TOKENS,
+            memories=turn.memories,
+            remembered=turn.remembered,
+        )
         async with aclosing(self._reasoner.reason(request, models)) as events:
             async for event in events:
                 match event:
@@ -116,12 +129,17 @@ class Orchestrator:
         messages: list[ConversationEntry],
         output: ReasoningOutput,
         max_output_tokens: int,
+        *,
+        memories: Sequence[MemoryContext] = (),
+        remembered: MemoryContext | None = None,
     ) -> ReasoningRequest:
         return ReasoningRequest(
             request_id=turn.request_id,
             role=role,
             prompt_version=get_prompt(role).version,
             messages=messages,
+            memories=list(memories),
+            remembered=remembered,
             output=output,
             max_output_tokens=max_output_tokens,
         )

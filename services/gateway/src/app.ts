@@ -2,6 +2,7 @@ import websocket from "@fastify/websocket";
 import { EngineId } from "@venom/contracts";
 import type { Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
+import type { Memory } from "@venom/memory";
 import type { Availability, Power } from "@venom/power";
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
 import { v7 as uuidv7 } from "uuid";
@@ -9,14 +10,15 @@ import { identify } from "./auth.ts";
 import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
-import { devicesEvent, LiveHub, powerEvent } from "./live-hub.ts";
+import { devicesEvent, forgottenEvent, LiveHub, memoryEvent, powerEvent } from "./live-hub.ts";
 import { deviceRoutes } from "./routes/devices.ts";
 import { identityRoutes } from "./routes/identity.ts";
 import { liveRoute } from "./routes/live.ts";
+import { memoryRoutes } from "./routes/memory.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { powerRoutes } from "./routes/power.ts";
 
-export { BrainError, createBrainClient, type Brain } from "./brain.ts";
+export { BrainError, brainEmbedder, createBrainClient, type Brain } from "./brain.ts";
 export { closeCodes } from "./context.ts";
 
 export interface GatewayOptions {
@@ -24,6 +26,7 @@ export interface GatewayOptions {
   readonly identity: Identity;
   readonly brain: Brain;
   readonly power: Power;
+  readonly memory: Memory;
   readonly logger: NonNullable<FastifyServerOptions<RawServerDefault>["logger"]>;
   readonly heartbeatMs?: number;
 }
@@ -31,7 +34,7 @@ export interface GatewayOptions {
 const availabilityMs = 30_000;
 const everyEngine: Availability = new Set(EngineId.options);
 
-export async function buildGateway({ store, identity, brain, power, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
+export async function buildGateway({ store, identity, brain, power, memory, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     bodyLimit: 64 * 1024,
@@ -50,6 +53,7 @@ export async function buildGateway({ store, identity, brain, power, logger, hear
     hub,
     brain,
     power,
+    memory,
     stopping: stopping.signal,
     heartbeatMs,
     track(work) {
@@ -62,6 +66,12 @@ export async function buildGateway({ store, identity, brain, power, logger, hear
     },
     broadcastPower(accountId, requestId, status) {
       hub.publishToAccount(accountId, powerEvent(requestId, status));
+    },
+    broadcastMemory(accountId, requestId, item) {
+      hub.publishToAccount(accountId, memoryEvent(requestId, item));
+    },
+    broadcastForgotten(accountId, requestId, forgotten) {
+      hub.publishToAccount(accountId, forgottenEvent(requestId, forgotten));
     },
     async availableEngines() {
       if (known !== null && Date.now() - known.at < availabilityMs) {
@@ -97,6 +107,7 @@ export async function buildGateway({ store, identity, brain, power, logger, hear
   deviceRoutes(app, context);
   messageRoutes(app, context);
   powerRoutes(app, context);
+  memoryRoutes(app, context);
   liveRoute(app, context);
 
   return app;

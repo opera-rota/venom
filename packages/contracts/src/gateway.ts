@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { PowerStatus } from "./power.ts";
 import { Id, Timestamp } from "./primitives.ts";
-import { Device, Message } from "./records.ts";
+import { Device, MemoryItem, Message } from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const MessageText = z
@@ -86,8 +86,25 @@ export const PowerEvent = z
   })
   .register(contracts, { id: "PowerEvent" });
 
+export const MemoryEvent = z
+  .strictObject({
+    type: z.literal("memory"),
+    ...eventFields,
+    item: MemoryItem,
+  })
+  .register(contracts, { id: "MemoryEvent" });
+
+export const ForgottenEvent = z
+  .strictObject({
+    type: z.literal("forgotten"),
+    ...eventFields,
+    item_id: Id,
+    message_ids: z.array(Id),
+  })
+  .register(contracts, { id: "ForgottenEvent" });
+
 export const GatewayEvent = z
-  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent, PowerEvent])
+  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent, PowerEvent, MemoryEvent, ForgottenEvent])
   .register(contracts, { id: "GatewayEvent" });
 
 export type MessageText = z.infer<typeof MessageText>;
@@ -101,4 +118,6 @@ export type RequestEvent = z.infer<typeof RequestEvent>;
 export type AnswerEvent = z.infer<typeof AnswerEvent>;
 export type DevicesEvent = z.infer<typeof DevicesEvent>;
 export type PowerEvent = z.infer<typeof PowerEvent>;
+export type MemoryEvent = z.infer<typeof MemoryEvent>;
+export type ForgottenEvent = z.infer<typeof ForgottenEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

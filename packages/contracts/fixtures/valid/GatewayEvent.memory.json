@@ -1,0 +1,16 @@
+{
+  "type": "memory",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e32",
+  "sequence": 0,
+  "emitted_at": "2026-10-31T08:15:01.000Z",
+  "item": {
+    "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e21",
+    "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+    "type": "preference",
+    "content": "I prefer metric units",
+    "source": "chat",
+    "created_at": "2026-10-31T08:15:00.000Z",
+    "updated_at": "2026-10-31T08:15:00.000Z",
+    "status": "active"
+  }
+}

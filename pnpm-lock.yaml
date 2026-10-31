@@ -57,6 +57,9 @@ importers:
       '@venom/gateway':
         specifier: workspace:*
         version: link:../../services/gateway
+      '@venom/memory':
+        specifier: workspace:*
+        version: link:../../services/memory
       '@venom/power':
         specifier: workspace:*
         version: link:../../services/power
@@ -133,6 +136,9 @@ importers:
       '@venom/identity':
         specifier: workspace:*
         version: link:../identity
+      '@venom/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@venom/power':
         specifier: workspace:*
         version: link:../power
@@ -180,6 +186,22 @@ importers:
       smtp-server:
         specifier: 3.19.22
         version: 3.19.22
+
+  services/memory:
+    dependencies:
+      '@venom/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@venom/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+    devDependencies:
+      uuid:
+        specifier: 14.0.2
+        version: 14.0.2
 
   services/power:
     dependencies:

@@ -22,6 +22,7 @@ class BrainSettings:
     port: int
     log_level: LogLevel
     understand_models: tuple[str, ...]
+    embed_model: str
     test_drive: bool
 
     @classmethod
@@ -53,5 +54,6 @@ class BrainSettings:
                 source.get("VENOM_UNDERSTAND_MODEL", "anthropic/claude-haiku-5.5"),
                 source.get("VENOM_UNDERSTAND_FALLBACK", "google/gemini-2.5-flash-lite"),
             ),
+            embed_model=source.get("VENOM_EMBED_MODEL", "openai/text-embedding-3-small"),
             test_drive=test_drive in {"1", "true", "on"},
         )

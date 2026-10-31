@@ -170,14 +170,19 @@ export const MemoryStatus = z
   .enum(["active", "archived", "forgotten"])
   .register(contracts, { id: "MemoryStatus" });
 
+export const MemorySource = z
+  .enum(["chat", "settings"])
+  .register(contracts, { id: "MemorySource" });
+
 export const MemoryItem = z
   .strictObject({
     id: Id,
     account_id: Id,
     type: MemoryType,
-    content: z.string().min(1),
-    source: z.string().min(1),
+    content: z.string().min(1).max(500),
+    source: MemorySource,
     created_at: Timestamp,
+    updated_at: Timestamp,
     status: MemoryStatus,
   })
   .register(contracts, { id: "MemoryItem" });
@@ -230,6 +235,7 @@ export type SkillStatus = z.infer<typeof SkillStatus>;
 export type Skill = z.infer<typeof Skill>;
 export type MemoryType = z.infer<typeof MemoryType>;
 export type MemoryStatus = z.infer<typeof MemoryStatus>;
+export type MemorySource = z.infer<typeof MemorySource>;
 export type MemoryItem = z.infer<typeof MemoryItem>;
 export type ConnectorService = z.infer<typeof ConnectorService>;
 export type ConnectorStatus = z.infer<typeof ConnectorStatus>;

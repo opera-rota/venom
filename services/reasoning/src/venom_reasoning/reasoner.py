@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 from venom_contracts.models import (
     ConversationEntry,
     Intent,
+    MemoryContext,
     ReasoningDelta,
     ReasoningDone,
     ReasoningEvent,
@@ -54,7 +55,7 @@ class Reasoner:
         for model in models:
             call = ModelCall(
                 model=model,
-                system=prompt.text,
+                system=instructions(prompt.text, request.memories, request.remembered),
                 turns=turns,
                 max_output_tokens=request.max_output_tokens,
                 schema=None if shape is None else shape.model_json_schema(),
@@ -141,6 +142,19 @@ def done(completion: Completion, shape: type[BaseModel] | None) -> ReasoningDone
 
 def failed(error: ReasoningError) -> ReasoningFailed:
     return ReasoningFailed(type="failed", reason=error.reason, detail=error.detail)
+
+
+def instructions(rules: str, memories: Sequence[MemoryContext], remembered: MemoryContext | None) -> str:
+    sections = [rules]
+    if memories:
+        sections.append("Remembered:\n" + "\n".join(listed(memory) for memory in memories))
+    if remembered is not None:
+        sections.append("Just saved:\n" + listed(remembered))
+    return "\n\n".join(sections)
+
+
+def listed(memory: MemoryContext) -> str:
+    return f"- ({memory.type}, saved {memory.saved_at.date().isoformat()}) {memory.content}"
 
 
 def to_turns(entries: Sequence[ConversationEntry]) -> list[Turn]:

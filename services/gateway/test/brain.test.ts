@@ -12,6 +12,8 @@ const turn: TurnRequest = {
   device_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
   engine: "dove",
   history: [],
+  memories: [],
+  remembered: null,
   text: "Explain what a mutex is",
 };
 
@@ -128,5 +130,33 @@ describe("brain client", () => {
     const stop = new AbortController();
     setTimeout(() => stop.abort(), 100);
     expect(await problemOf(collect(url, { signal: stop.signal }))).toBe("stopped");
+  });
+
+  it("asks the brain to embed texts and checks one vector came back for each", async () => {
+    let asked: unknown = null;
+    const url = await serve((_request, response, body) => {
+      asked = JSON.parse(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ model: "openai/text-embedding-3-small", vectors: [[0.1, 0.2]], usage: { input_tokens: 4, output_tokens: 0, cost_micro_usd: 0 } }));
+    });
+    const embedded = await createBrainClient({ url }).embed({ request_id: turn.request_id, texts: ["I prefer tea"] });
+    expect(embedded.vectors).toEqual([[0.1, 0.2]]);
+    expect(asked).toEqual({ request_id: turn.request_id, texts: ["I prefer tea"] });
+  });
+
+  it("reports a brain that cannot embed right now", async () => {
+    const url = await serve((_request, response) => {
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "not_configured", detail: "No embedding model is offered right now." }));
+    });
+    expect(await problemOf(createBrainClient({ url }).embed({ request_id: turn.request_id, texts: ["tea"] }))).toBe("refused");
+  });
+
+  it("refuses an answer with the wrong number of vectors", async () => {
+    const url = await serve((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ model: "m", vectors: [[1]], usage: { input_tokens: 1, output_tokens: 0, cost_micro_usd: 0 } }));
+    });
+    expect(await problemOf(createBrainClient({ url }).embed({ request_id: turn.request_id, texts: ["one", "two"] }))).toBe("malformed");
   });
 });

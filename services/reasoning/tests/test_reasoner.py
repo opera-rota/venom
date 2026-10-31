@@ -1,10 +1,12 @@
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
 from venom_contracts.models import (
     ConversationEntry,
+    MemoryContext,
     PromptRole,
     ReasoningDelta,
     ReasoningDone,
@@ -34,12 +36,16 @@ def request(
     role: PromptRole = "reply",
     output: ReasoningOutput | None = None,
     version: int | None = None,
+    memories: list[MemoryContext] | None = None,
+    remembered: MemoryContext | None = None,
 ) -> ReasoningRequest:
     return ReasoningRequest(
         request_id=REQUEST_ID,
         role=role,
         prompt_version=version or get_prompt(role).version,
         messages=[ConversationEntry(speaker="user", text=text)],
+        memories=memories or [],
+        remembered=remembered,
         output=output or TextOutput(kind="text"),
         max_output_tokens=512,
     )
@@ -183,3 +189,31 @@ def test_turns_start_with_the_user_and_alternate() -> None:
         ConversationEntry(speaker="venom", text="Answer"),
     ]
     assert [(turn.role, turn.text) for turn in to_turns(entries)] == [("user", "One\n\nTwo"), ("assistant", "Answer")]
+
+
+SAVED = datetime(2026, 10, 31, 8, 15, tzinfo=UTC)
+
+
+async def test_lists_what_venom_remembers_after_the_rules() -> None:
+    provider = ScriptedProvider({"primary": [answer("Berlin is about 880 km from Paris.", "primary")]})
+    metric = MemoryContext(type="preference", content="I prefer metric units", saved_at=SAVED)
+    await run(provider, request("How far is Berlin from Paris?", memories=[metric]))
+
+    system = provider.calls[0].system
+    assert system.startswith(get_prompt("reply").text)
+    assert system.endswith("Remembered:\n- (preference, saved 2026-10-31) I prefer metric units")
+    assert "Just saved:\n" not in system
+
+
+async def test_marks_what_was_just_saved() -> None:
+    provider = ScriptedProvider({"primary": [answer("I will remember that.", "primary")]})
+    sister = MemoryContext(type="event", content="My sister Ana's birthday is on 12 March", saved_at=SAVED)
+    await run(provider, request("Remember that my sister Ana's birthday is on 12 March", remembered=sister))
+
+    assert provider.calls[0].system.endswith("Just saved:\n- (event, saved 2026-10-31) My sister Ana's birthday is on 12 March")
+
+
+async def test_sends_only_the_rules_when_nothing_is_remembered() -> None:
+    provider = ScriptedProvider({"primary": [answer("Hello!", "primary")]})
+    await run(provider, request("Hello"))
+    assert provider.calls[0].system == get_prompt("reply").text

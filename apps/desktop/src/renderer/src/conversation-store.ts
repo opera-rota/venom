@@ -123,6 +123,10 @@ export function createConversation(bridge: VenomBridge, scheduler: Scheduler): C
     };
 
     const stopEvents = bridge.onEvent((event) => {
+      if (event.type === "forgotten") {
+        dispatch({ type: "forgotten", messageIds: event.message_ids });
+        return;
+      }
       if (!isLiveEvent(event)) {
         return;
       }

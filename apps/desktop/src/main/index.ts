@@ -137,6 +137,10 @@ function wire(): void {
   handle(channels.engines, () => gateway.engines());
   handle(channels.power, () => gateway.power());
   handle(channels.chooseEngine, (engine) => gateway.chooseEngine(engine));
+  handle(channels.memory, () => gateway.memory());
+  handle(channels.saveMemory, (draft) => gateway.saveMemory(draft));
+  handle(channels.editMemory, (memoryId, draft) => gateway.editMemory(memoryId, draft));
+  handle(channels.forgetMemory, (memoryId) => gateway.forgetMemory(memoryId));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
   handle(channels.retry, (requestId) => gateway.retry(requestId));

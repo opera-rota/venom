@@ -1,4 +1,4 @@
-import { MessageHistory, RetryAnswer, SendMessage, SendMessageAccepted, type PowerStatus } from "@venom/contracts";
+import { MessageHistory, RetryAnswer, SendMessage, SendMessageAccepted, type MemoryItem, type PowerStatus } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -13,7 +13,7 @@ const HistoryQuery = z.strictObject({
 });
 
 export function messageRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { store, hub, brain, power, stopping, track, availableEngines, broadcastPower } = context;
+  const { store, hub, brain, power, memory, stopping, track, availableEngines, broadcastPower, broadcastMemory } = context;
   const answering = new Set<string>();
 
   async function start(device: DeviceRef, requestId: string, question: Question, log: FastifyBaseLogger, key: string): Promise<string> {
@@ -22,8 +22,9 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
     trace.state("accepted");
     answering.add(key);
     const onPower = (status: PowerStatus, eventId: string) => broadcastPower(device.account_id, eventId, status);
+    const onMemory = (item: MemoryItem, eventId: string) => broadcastMemory(device.account_id, eventId, item);
     track(
-      converse({ store, brain, power, engine, trace, device, signal: stopping, log, onPower }, question).finally(() => {
+      converse({ store, brain, power, memory, engine, trace, device, signal: stopping, log, onPower, onMemory }, question).finally(() => {
         answering.delete(key);
       }),
     );

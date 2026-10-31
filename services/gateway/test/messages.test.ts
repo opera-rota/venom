@@ -30,6 +30,10 @@ function label(event: GatewayEvent): string {
       return "devices";
     case "power":
       return "power";
+    case "memory":
+      return "memory";
+    case "forgotten":
+      return "forgotten";
   }
 }
 

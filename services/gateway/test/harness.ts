@@ -4,10 +4,11 @@ import { createTestDatabase, type TestDatabase } from "@venom/db/testing";
 import { createEphemeralServerSetup, createIdentity, type Identity } from "@venom/identity";
 import { beginSecretWordLogin, beginSecretWordRegistration } from "@venom/identity/client";
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
+import { createMemory, type Memory } from "@venom/memory";
 import { createPower, type Power } from "@venom/power";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
-import { buildGateway } from "../src/app.ts";
+import { brainEmbedder, buildGateway } from "../src/app.ts";
 import { scriptedBrain, type ScriptedBrain } from "../src/testing.ts";
 
 export interface Environment {
@@ -23,6 +24,7 @@ export interface RunningGateway {
   readonly identity: Identity;
   readonly brain: ScriptedBrain;
   readonly power: Power;
+  readonly memory: Memory;
   stop(): Promise<void>;
 }
 
@@ -55,7 +57,8 @@ export async function startGateway(
   const sql = connect(environment.database.appUrl);
   const identity = createIdentity({ sql, mailer: environment.mailer, serverSetup: environment.serverSetup });
   const power = createPower({ sql, freeDailyAnswers });
-  const app = await buildGateway({ store, identity, brain, power, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
+  const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
+  const app = await buildGateway({ store, identity, brain, power, memory, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 
   return {
@@ -64,6 +67,7 @@ export async function startGateway(
     identity,
     brain,
     power,
+    memory,
     async stop() {
       await app.close();
       await Promise.all([store.close(), sql.end()]);

@@ -1,0 +1,10 @@
+{
+  "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e21",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "type": "fact",
+  "content": "My car is blue",
+  "source": "guessed by a model",
+  "created_at": "2026-10-31T08:15:00.000Z",
+  "updated_at": "2026-10-31T08:15:00.000Z",
+  "status": "active"
+}

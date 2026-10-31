@@ -76,6 +76,15 @@
       "$ref": "#/$defs/DeviceTarget"
     },
     {
+      "$ref": "#/$defs/EmbeddingFailure"
+    },
+    {
+      "$ref": "#/$defs/EmbeddingRequest"
+    },
+    {
+      "$ref": "#/$defs/Embeddings"
+    },
+    {
       "$ref": "#/$defs/Engine"
     },
     {
@@ -85,13 +94,31 @@
       "$ref": "#/$defs/EngineSpec"
     },
     {
+      "$ref": "#/$defs/ForgottenEvent"
+    },
+    {
       "$ref": "#/$defs/Intent"
     },
     {
       "$ref": "#/$defs/LiveEvent"
     },
     {
+      "$ref": "#/$defs/MemoryContext"
+    },
+    {
+      "$ref": "#/$defs/MemoryDraft"
+    },
+    {
+      "$ref": "#/$defs/MemoryEvent"
+    },
+    {
+      "$ref": "#/$defs/MemoryForgotten"
+    },
+    {
       "$ref": "#/$defs/MemoryItem"
+    },
+    {
+      "$ref": "#/$defs/MemoryList"
     },
     {
       "$ref": "#/$defs/Message"
@@ -332,6 +359,7 @@
         "device_limit_reached",
         "mail_unavailable",
         "out_of_power",
+        "memory_full",
         "internal"
       ]
     },
@@ -838,6 +866,81 @@
         "watch"
       ]
     },
+    "EmbeddingFailure": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ReasoningFailure"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "error",
+        "detail"
+      ],
+      "additionalProperties": false
+    },
+    "EmbeddingRequest": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "texts": {
+          "minItems": 1,
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EmbeddingText"
+          }
+        }
+      },
+      "required": [
+        "request_id",
+        "texts"
+      ],
+      "additionalProperties": false
+    },
+    "Embeddings": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelName"
+        },
+        "vectors": {
+          "minItems": 1,
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "minItems": 1,
+            "maxItems": 8192,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "usage": {
+          "$ref": "#/$defs/TokenUsage"
+        }
+      },
+      "required": [
+        "model",
+        "vectors",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "EmbeddingText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S"
+    },
     "Engine": {
       "type": "object",
       "properties": {
@@ -978,6 +1081,48 @@
         "reroute"
       ]
     },
+    "ForgottenEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "forgotten"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "item_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "item_id",
+        "message_ids"
+      ],
+      "additionalProperties": false
+    },
     "GatewayEvent": {
       "oneOf": [
         {
@@ -994,6 +1139,12 @@
         },
         {
           "$ref": "#/$defs/PowerEvent"
+        },
+        {
+          "$ref": "#/$defs/MemoryEvent"
+        },
+        {
+          "$ref": "#/$defs/ForgottenEvent"
         }
       ],
       "discriminator": {
@@ -1087,6 +1238,103 @@
         "stopped"
       ]
     },
+    "MemoryContent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "\\S"
+    },
+    "MemoryContext": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/MemoryType"
+        },
+        "content": {
+          "$ref": "#/$defs/MemoryContent"
+        },
+        "saved_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "type",
+        "content",
+        "saved_at"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryDraft": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/MemoryType"
+        },
+        "content": {
+          "$ref": "#/$defs/MemoryContent"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "memory"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "item": {
+          "$ref": "#/$defs/MemoryItem"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "item"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryForgotten": {
+      "type": "object",
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "item_id",
+        "message_ids"
+      ],
+      "additionalProperties": false
+    },
     "MemoryItem": {
       "type": "object",
       "properties": {
@@ -1103,13 +1351,17 @@
         },
         "content": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 500
         },
         "source": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/MemorySource"
         },
         "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
           "type": "string",
           "format": "date-time"
         },
@@ -1124,9 +1376,39 @@
         "content",
         "source",
         "created_at",
+        "updated_at",
         "status"
       ],
       "additionalProperties": false
+    },
+    "MemoryList": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryItem"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "MemorySource": {
+      "type": "string",
+      "enum": [
+        "chat",
+        "settings"
+      ]
     },
     "MemoryStatus": {
       "type": "string",
@@ -1548,6 +1830,23 @@
             "$ref": "#/$defs/ConversationEntry"
           }
         },
+        "memories": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryContext"
+          }
+        },
+        "remembered": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MemoryContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "output": {
           "$ref": "#/$defs/ReasoningOutput"
         },
@@ -1562,6 +1861,8 @@
         "role",
         "prompt_version",
         "messages",
+        "memories",
+        "remembered",
         "output",
         "max_output_tokens"
       ],
@@ -2363,6 +2664,23 @@
             "$ref": "#/$defs/ConversationEntry"
           }
         },
+        "memories": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryContext"
+          }
+        },
+        "remembered": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MemoryContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "text": {
           "$ref": "#/$defs/MessageText"
         }
@@ -2373,6 +2691,8 @@
         "device_id",
         "engine",
         "history",
+        "memories",
+        "remembered",
         "text"
       ],
       "additionalProperties": false

@@ -1,6 +1,6 @@
 import type { GatewayEvent, Message } from "@venom/contracts";
 
-export type LiveEvent = Exclude<GatewayEvent, { readonly type: "devices" | "power" }>;
+export type LiveEvent = Exclude<GatewayEvent, { readonly type: "devices" | "power" | "memory" | "forgotten" }>;
 
 export interface Answer {
   readonly requestId: string;
@@ -28,6 +28,7 @@ export type ConversationAction =
   | { readonly type: "events"; readonly events: readonly LiveEvent[] }
   | { readonly type: "gap"; readonly requestId: string }
   | { readonly type: "retrying"; readonly from: string; readonly to: string }
+  | { readonly type: "forgotten"; readonly messageIds: readonly string[] }
   | { readonly type: "notice"; readonly reason: string }
   | { readonly type: "dismiss" };
 
@@ -54,7 +55,7 @@ export function mergeMessages(current: readonly Message[], incoming: readonly Me
 }
 
 export function isLiveEvent(event: GatewayEvent): event is LiveEvent {
-  return event.type !== "devices" && event.type !== "power";
+  return event.type === "message" || event.type === "answer" || event.type === "request";
 }
 
 function withAnswer(answers: ReadonlyMap<string, Answer>, answer: Answer): ReadonlyMap<string, Answer> {
@@ -187,6 +188,15 @@ function fromHistory(state: ConversationState, messages: readonly Message[]): Co
   return { ...state, messages: [...messages].sort(byTime), answers, ordering: new Map() };
 }
 
+function forget(state: ConversationState, messageIds: readonly string[]): ConversationState {
+  const removed = new Set(messageIds);
+  if (!state.messages.some((message) => removed.has(message.id))) {
+    return state;
+  }
+  const answers = new Map([...state.answers].filter(([, answer]) => answer.askedId === null || !removed.has(answer.askedId)));
+  return { ...state, messages: state.messages.filter((message) => !removed.has(message.id)), answers };
+}
+
 export function reduceConversation(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
     case "history":
@@ -197,6 +207,8 @@ export function reduceConversation(state: ConversationState, action: Conversatio
       return closeGap(state, action.requestId);
     case "retrying":
       return retrying(state, action.from, action.to);
+    case "forgotten":
+      return forget(state, action.messageIds);
     case "notice":
       return { ...state, notice: action.reason };
     case "dismiss":

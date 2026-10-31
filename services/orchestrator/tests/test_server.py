@@ -4,12 +4,13 @@ import httpx2
 import pytest
 from pydantic import TypeAdapter
 
-from venom_contracts.models import AvailableEngines, TurnDone, TurnEvent
+from venom_contracts.models import AvailableEngines, EmbeddingFailure, Embeddings, TurnDone, TurnEvent
+from venom_orchestrator.embedding import EmbeddingCatalogue, EmbeddingService
 from venom_orchestrator.engines import EngineCatalogue
 from venom_orchestrator.server import create_app
 from venom_orchestrator.turns import Orchestrator
 from venom_reasoning.reasoner import Reasoner
-from venom_reasoning.testing import ScriptedProvider, answer, structured
+from venom_reasoning.testing import FixedEmbedder, ScriptedProvider, answer, structured
 
 pytestmark = pytest.mark.anyio
 
@@ -21,14 +22,27 @@ TURN: dict[str, object] = {
     "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
     "engine": "dove",
     "history": [],
+    "memories": [],
+    "remembered": None,
     "text": "Explain what a mutex is",
 }
 
 DOVE = "google/gemini-2.5-flash-lite"
 
 
-def client(provider: ScriptedProvider, catalogue: EngineCatalogue | None = None) -> httpx2.AsyncClient:
-    app = create_app(Orchestrator(Reasoner(provider), catalogue or EngineCatalogue(("quick",))))
+def client(
+    provider: ScriptedProvider,
+    catalogue: EngineCatalogue | None = None,
+    embedder: FixedEmbedder | None = None,
+    embedding_model: str | None = "openai/text-embedding-3-small",
+) -> httpx2.AsyncClient:
+    embeddings = EmbeddingCatalogue(embedding_model or "openai/text-embedding-3-small")
+    if embedding_model is None:
+        embeddings.update({})
+    app = create_app(
+        Orchestrator(Reasoner(provider), catalogue or EngineCatalogue(("quick",))),
+        EmbeddingService(embedder or FixedEmbedder(), embeddings),
+    )
     return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://brain")
 
 
@@ -67,3 +81,33 @@ async def test_lists_the_engines_that_can_answer_right_now() -> None:
         response = await brain.get("/v1/engines")
 
     assert AvailableEngines.model_validate_json(response.text).available == ["dove", "breeze", "pebble", "stormi", "utopia"]
+
+
+EMBED = {"request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01", "texts": ["I prefer metric units", "What units do I like?"]}
+
+
+async def test_embeds_texts_with_the_chosen_model() -> None:
+    embedder = FixedEmbedder(cost_micro_usd=3)
+    async with client(ScriptedProvider({}), embedder=embedder) as brain:
+        response = await brain.post("/v1/embeddings", json=EMBED)
+
+    assert response.status_code == 200
+    result = Embeddings.model_validate_json(response.text)
+    assert result.model == "openai/text-embedding-3-small"
+    assert len(result.vectors) == 2
+    assert result.usage.cost_micro_usd == 3
+    assert embedder.calls == [("openai/text-embedding-3-small", ["I prefer metric units", "What units do I like?"])]
+
+
+async def test_says_plainly_when_no_embedding_model_is_offered() -> None:
+    async with client(ScriptedProvider({}), embedding_model=None) as brain:
+        response = await brain.post("/v1/embeddings", json=EMBED)
+
+    assert response.status_code == 503
+    assert EmbeddingFailure.model_validate_json(response.text).error == "not_configured"
+
+
+async def test_refuses_an_empty_embedding_request() -> None:
+    async with client(ScriptedProvider({})) as brain:
+        response = await brain.post("/v1/embeddings", json={**EMBED, "texts": []})
+    assert response.status_code == 400

@@ -12,5 +12,7 @@
       "text": "A thread is one path of execution inside a program."
     }
   ],
+  "memories": [],
+  "remembered": null,
   "text": "Explain what a mutex is"
 }

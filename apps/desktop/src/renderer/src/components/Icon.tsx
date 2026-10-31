@@ -14,6 +14,8 @@ const paths = {
   retry: "M12.5 8a4.5 4.5 0 1 1-1.3-3.2M12.5 2.5v3h-3",
   down: "M8 3.5v9M4.5 9L8 12.5 11.5 9",
   bolt: "M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z",
+  memory: "M4 2.5h8v11L8 10.5l-4 3zM6.5 6h3",
+  search: "M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.5 10.5l3 3",
 } as const;
 
 export type IconName = keyof typeof paths;

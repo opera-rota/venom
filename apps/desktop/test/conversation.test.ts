@@ -179,4 +179,15 @@ describe("conversation state", () => {
     expect([...replaced.answers.keys()]).toEqual([retryId]);
     expect(replaced.ordering.size).toBe(0);
   });
+
+  it("removes forgotten messages and their answers, and never treats memory events as chat", () => {
+    const answered = reduceConversation(initialConversation, { type: "events", events: stream(requestId) });
+    expect(answered.messages).toHaveLength(2);
+
+    const forgotten = reduceConversation(answered, { type: "forgotten", messageIds: [question.id, reply.id] });
+    expect(forgotten.messages).toEqual([]);
+    expect(reduceConversation(forgotten, { type: "forgotten", messageIds: [question.id] })).toBe(forgotten);
+
+    expect(isLiveEvent({ type: "forgotten", request_id: retryId, sequence: 0, emitted_at: at, item_id: question.id, message_ids: [] })).toBe(false);
+  });
 });

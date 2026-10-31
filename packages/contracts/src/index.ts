@@ -1,6 +1,7 @@
 export * from "./brain.ts";
 export * from "./gateway.ts";
 export * from "./identity.ts";
+export * from "./memory.ts";
 export * from "./messages.ts";
 export * from "./power.ts";
 export * from "./primitives.ts";

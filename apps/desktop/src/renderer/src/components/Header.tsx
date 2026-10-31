@@ -17,7 +17,7 @@ export function LogoMark({ size }: { readonly size: number }) {
   );
 }
 
-export type SidePanel = "devices" | "power";
+export type SidePanel = "devices" | "power" | "memory";
 
 export interface HeaderProps {
   readonly connection: ConnectionState;
@@ -62,6 +62,15 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
             <span>{gaugeLabel(power, engineName)}</span>
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => onTogglePanel("memory")}
+          aria-pressed={panel === "memory"}
+          className={`${button.ghost} ${panel === "memory" ? "text-green-400" : ""}`}
+        >
+          <Icon name="memory" className="h-4 w-4" />
+          <span>Memory</span>
+        </button>
         <button
           type="button"
           onClick={() => onTogglePanel("devices")}

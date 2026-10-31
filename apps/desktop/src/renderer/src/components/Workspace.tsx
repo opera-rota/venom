@@ -5,10 +5,12 @@ import type { VenomBridge } from "../../../shared/bridge.ts";
 import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
+import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
 import { Composer } from "./Composer.tsx";
 import { DevicesPanel } from "./DevicesPanel.tsx";
 import { Header, type SidePanel } from "./Header.tsx";
+import { MemoryPanel } from "./MemoryPanel.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { engineName, PowerPanel } from "./PowerPanel.tsx";
 
@@ -38,6 +40,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const dismiss = useStore(store, (state) => state.dismiss);
   const devices = useDevices(bridge, device.id, connection);
   const power = usePower(bridge, connection);
+  const memory = useMemory(bridge, connection);
   const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
 
@@ -59,6 +62,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       </main>
       {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}
       {panel === "power" && <PowerPanel state={power} onClose={() => setPanel(null)} />}
+      {panel === "memory" && <MemoryPanel state={memory} onClose={() => setPanel(null)} />}
     </div>
   );
 }

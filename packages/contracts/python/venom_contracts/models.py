@@ -18,7 +18,7 @@ class AnswerEvent(BaseModel):
     delta: Annotated[str, Field(min_length=1)]
 
 
-type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "conflict", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "out_of_power", "internal"]
+type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "conflict", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "out_of_power", "memory_full", "internal"]
 
 
 class ApiIssue(BaseModel):
@@ -94,6 +94,12 @@ type DeviceToken = Annotated[str, Field(pattern="^vnm_[A-Za-z0-9_-]{43}$")]
 type DeviceType = Literal["computer", "phone", "tv", "watch"]
 
 
+type Vector = Annotated[list[float], Field(max_length=8192, min_length=1)]
+
+
+type EmbeddingText = Annotated[str, Field(max_length=2000, min_length=1, pattern="\\S")]
+
+
 type EngineClass = Literal["free", "swift", "titan"]
 
 
@@ -103,6 +109,18 @@ type EngineId = Literal["dove", "sparrow", "breeze", "pebble", "ember", "turbo",
 type FailurePolicy = Literal["abort", "retry", "reroute"]
 
 
+class ForgottenEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["forgotten"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    item_id: UUID
+    message_ids: list[UUID]
+
+
 type IntentKind = Literal["question", "task"]
 
 
@@ -110,6 +128,20 @@ type ListeningMode = Literal["wake_word", "press_to_talk"]
 
 
 type LiveEventKind = Literal["started", "output", "awaiting_confirmation", "done", "failed", "stopped"]
+
+
+type MemoryContent = Annotated[str, Field(max_length=500, min_length=1, pattern="\\S")]
+
+
+class MemoryForgotten(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    item_id: UUID
+    message_ids: list[UUID]
+
+
+type MemorySource = Literal["chat", "settings"]
 
 
 type MemoryStatus = Literal["active", "archived", "forgotten"]
@@ -465,6 +497,31 @@ class DevicesEvent(BaseModel):
     devices: list[Device]
 
 
+class EmbeddingFailure(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    error: ReasoningFailure
+    detail: Annotated[str, Field(min_length=1)]
+
+
+class EmbeddingRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
+    texts: Annotated[list[EmbeddingText], Field(max_length=32, min_length=1)]
+
+
+class Embeddings(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model: ModelName
+    vectors: Annotated[list[Vector], Field(max_length=32, min_length=1)]
+    usage: TokenUsage
+
+
 class Intent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -484,6 +541,23 @@ class LiveEvent(BaseModel):
     emitted_at: AwareDatetime
 
 
+class MemoryContext(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: MemoryType
+    content: MemoryContent
+    saved_at: AwareDatetime
+
+
+class MemoryDraft(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: MemoryType
+    content: MemoryContent
+
+
 class MemoryItem(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -491,10 +565,19 @@ class MemoryItem(BaseModel):
     id: UUID
     account_id: UUID
     type: MemoryType
-    content: Annotated[str, Field(min_length=1)]
-    source: Annotated[str, Field(min_length=1)]
+    content: Annotated[str, Field(max_length=500, min_length=1)]
+    source: MemorySource
     created_at: AwareDatetime
+    updated_at: AwareDatetime
     status: MemoryStatus
+
+
+class MemoryList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: Annotated[list[MemoryItem], Field(max_length=500)]
+    limit: Annotated[int, Field(gt=0, le=9007199254740991)]
 
 
 class Message(BaseModel):
@@ -591,6 +674,8 @@ class ReasoningRequest(BaseModel):
     role: PromptRole
     prompt_version: Annotated[int, Field(gt=0, le=9007199254740991)]
     messages: Annotated[list[ConversationEntry], Field(max_length=41, min_length=1)]
+    memories: Annotated[list[MemoryContext], Field(max_length=40)]
+    remembered: MemoryContext | None
     output: ReasoningOutput
     max_output_tokens: Annotated[int, Field(ge=1, le=8192)]
 
@@ -707,6 +792,8 @@ class TurnRequest(BaseModel):
     device_id: UUID
     engine: EngineId
     history: Annotated[list[ConversationEntry], Field(max_length=40)]
+    memories: Annotated[list[MemoryContext], Field(max_length=40)]
+    remembered: MemoryContext | None
     text: MessageText
 
 
@@ -772,10 +859,15 @@ class EngineSpec(BaseModel):
     models: Annotated[list[ModelName], Field(max_length=3, min_length=1)]
 
 
-type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent,
-    Field(discriminator="type"),
-]
+class MemoryEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["memory"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    item: MemoryItem
 
 
 type ReasoningEvent = Annotated[
@@ -792,6 +884,12 @@ class Session(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | Engine | EngineList | EngineSpec | Intent | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | PowerEvent | PowerStatus | Proficiency | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | Intent | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | PowerEvent | PowerStatus | Proficiency | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
     Field(title="Contract"),
+]
+
+
+type GatewayEvent = Annotated[
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent,
+    Field(discriminator="type"),
 ]

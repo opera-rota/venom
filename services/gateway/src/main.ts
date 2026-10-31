@@ -1,7 +1,9 @@
 import { connect, createStore } from "@venom/db";
 import { createIdentity, createSmtpMailer, loadServerSetup } from "@venom/identity";
+import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
-import { buildGateway, createBrainClient } from "./app.ts";
+import { v7 as uuidv7 } from "uuid";
+import { brainEmbedder, buildGateway, createBrainClient } from "./app.ts";
 import { loadConfig } from "./config.ts";
 
 const config = loadConfig();
@@ -13,12 +15,19 @@ const identity = createIdentity({ sql: serviceSql, mailer, serverSetup: serverSe
 
 const power = createPower({ sql: serviceSql, freeDailyAnswers: config.freeDailyAnswers });
 const brain = createBrainClient({ url: config.brainUrl });
+const memory = createMemory({
+  sql: serviceSql,
+  embedder: brainEmbedder(brain),
+  onEmbeddingProblem: (error) => app.log.warn({ err: error }, "could not embed memory; it is found by its words until the brain can embed again"),
+});
+const backfillEveryMs = 10 * 60_000;
 
 const app = await buildGateway({
   store,
   identity,
   brain,
   power,
+  memory,
   logger: {
     level: config.logLevel,
     ...(process.stdout.isTTY && {
@@ -27,12 +36,27 @@ const app = await buildGateway({
   },
 });
 
+async function backfill(): Promise<void> {
+  try {
+    const embedded = await memory.backfill(uuidv7());
+    if (embedded > 0) {
+      app.log.info({ embedded }, "filled in the meaning of saved memories");
+    }
+  } catch (error) {
+    app.log.warn({ err: error }, "could not fill in the meaning of saved memories");
+  }
+}
+
+const backfillTimer = setInterval(() => void backfill(), backfillEveryMs);
+backfillTimer.unref();
+
 if (serverSetup.created) {
   app.log.warn({ file: config.identityKeyFile }, "created a new identity key; back this file up, accounts depend on it");
 }
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "gateway stopping");
+  clearInterval(backfillTimer);
   await app.close();
   await identity.resetPresence();
   mailer.close();
@@ -46,6 +70,7 @@ await store.ping();
 await identity.resetPresence();
 await app.listen({ host: config.host, port: config.port });
 await checkBrain();
+await backfill();
 
 async function checkBrain(): Promise<void> {
   try {

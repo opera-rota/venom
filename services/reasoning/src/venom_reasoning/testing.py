@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
 
+from venom_reasoning.embeddings import Embedded
 from venom_reasoning.errors import ReasoningError
 from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk, Thinking
 
@@ -65,3 +66,20 @@ class ScriptedProvider:
                         yield step
         finally:
             self.closed += 1
+
+
+class FixedEmbedder:
+    def __init__(self, *, failure: ReasoningError | None = None, cost_micro_usd: int = 0, pause: float = 0.0) -> None:
+        self._failure = failure
+        self._cost = cost_micro_usd
+        self._pause = pause
+        self.calls: list[tuple[str, list[str]]] = []
+
+    async def embed(self, model: str, texts: Sequence[str], price_per_token: float) -> Embedded:
+        self.calls.append((model, list(texts)))
+        if self._pause:
+            await asyncio.sleep(self._pause)
+        if self._failure is not None:
+            raise self._failure
+        vectors = [[float(len(text)), float(len(text.split())), 1.0] for text in texts]
+        return Embedded(model=model, vectors=vectors, input_tokens=sum(len(text.split()) for text in texts), cost_micro_usd=self._cost)

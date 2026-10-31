@@ -2,7 +2,17 @@
   "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
   "role": "understand",
   "prompt_version": 2,
-  "messages": [{ "speaker": "user", "text": "Open my notes app" }],
-  "output": { "kind": "structured", "contract": "Intent" },
+  "messages": [
+    {
+      "speaker": "user",
+      "text": "Open my notes app"
+    }
+  ],
+  "memories": [],
+  "remembered": null,
+  "output": {
+    "kind": "structured",
+    "contract": "Intent"
+  },
   "max_output_tokens": 64
 }

@@ -138,6 +138,26 @@ describe("gateway client in the main process", () => {
     await client.chooseEngine("dove");
   });
 
+  it("adds, edits, lists and forgets memories", async () => {
+    const client = startClient(session.device_token);
+    const saved = await client.saveMemory({ type: "preference", content: "I prefer imperial units" });
+    expect(saved).toMatchObject({ ok: true, item: { source: "settings", content: "I prefer imperial units" } });
+    if (!saved.ok) {
+      return;
+    }
+    const edited = await client.editMemory(saved.item.id, { type: "preference", content: "I prefer metric units" });
+    expect(edited.ok && edited.item.content).toBe("I prefer metric units");
+
+    const listed = await client.memory();
+    expect(listed.ok && listed.list.items.map((item) => item.content)).toEqual(["I prefer metric units"]);
+
+    expect(await client.forgetMemory(saved.item.id)).toEqual({ ok: true });
+    expect(await client.forgetMemory(saved.item.id)).toMatchObject({ ok: false, code: "not_found" });
+    expect(await client.saveMemory({ type: "fact", content: "" })).toMatchObject({ ok: false, code: "invalid_request" });
+    const empty = await client.memory();
+    expect(empty.ok && empty.list.items).toEqual([]);
+  });
+
   it("refuses to send nothing", async () => {
     const client = startClient(session.device_token);
     expect(await client.send("   ")).toMatchObject({ ok: false, reason: "Write something before sending." });

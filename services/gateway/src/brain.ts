@@ -1,8 +1,10 @@
-import { AvailableEngines, TurnEvent, type EngineId, type TurnRequest } from "@venom/contracts";
+import { AvailableEngines, EmbeddingFailure, Embeddings, TurnEvent, type EmbeddingRequest, type EngineId, type TurnRequest } from "@venom/contracts";
+import type { Embedder } from "@venom/memory";
 
 export interface Brain {
   turn(request: TurnRequest, signal: AbortSignal): AsyncGenerator<TurnEvent>;
   engines(): Promise<readonly EngineId[]>;
+  embed(request: EmbeddingRequest): Promise<Embeddings>;
 }
 
 export type BrainProblem = "unreachable" | "refused" | "timeout" | "stopped" | "malformed";
@@ -29,13 +31,39 @@ export interface BrainClientOptions {
   readonly url: string;
   readonly idleMs?: number;
   readonly totalMs?: number;
+  readonly embedMs?: number;
 }
 
-export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000 }: BrainClientOptions): Brain {
+export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000, embedMs = 20_000 }: BrainClientOptions): Brain {
   const endpoint = new URL("/v1/turns", url);
   const enginesEndpoint = new URL("/v1/engines", url);
+  const embeddingsEndpoint = new URL("/v1/embeddings", url);
 
   return {
+    async embed(request) {
+      let response: Response;
+      try {
+        response = await fetch(embeddingsEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify(request),
+          signal: AbortSignal.timeout(embedMs),
+        });
+      } catch (error) {
+        throw new BrainError(error instanceof DOMException && error.name === "TimeoutError" ? "timeout" : "unreachable", { cause: error });
+      }
+      const body: unknown = await response.json().catch(() => undefined);
+      if (!response.ok) {
+        const failure = EmbeddingFailure.safeParse(body);
+        throw new BrainError("refused", { cause: new Error(failure.success ? failure.data.detail : `brain answered ${response.status}`) });
+      }
+      const parsed = Embeddings.safeParse(body);
+      if (!parsed.success || parsed.data.vectors.length !== request.texts.length) {
+        throw new BrainError("malformed", { cause: parsed.error ?? new Error("the brain returned the wrong number of vectors") });
+      }
+      return parsed.data;
+    },
+
     async engines() {
       try {
         const response = await fetch(enginesEndpoint, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
@@ -105,6 +133,12 @@ export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000 }: B
         clearTimeout(timer);
       }
     },
+  };
+}
+
+export function brainEmbedder(brain: Brain): Embedder {
+  return {
+    embed: (texts, requestId) => brain.embed({ request_id: requestId, texts: [...texts] }),
   };
 }
 

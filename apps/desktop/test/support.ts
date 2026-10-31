@@ -1,10 +1,11 @@
 import type { DeviceSession } from "@venom/contracts";
 import { connect, createStore, type Store } from "@venom/db";
 import { createTestDatabase, type TestDatabase } from "@venom/db/testing";
-import { buildGateway } from "@venom/gateway";
+import { brainEmbedder, buildGateway } from "@venom/gateway";
 import { scriptedBrain, type ScriptedBrain } from "@venom/gateway/testing";
 import { createEphemeralServerSetup, createIdentity } from "@venom/identity";
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
+import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
@@ -49,7 +50,8 @@ export async function createBackend(): Promise<Backend> {
       const sql = connect(database.appUrl);
       const identity = createIdentity({ sql, mailer, serverSetup });
       const power = createPower({ sql });
-      const app = await buildGateway({ store, identity, brain, power, logger: false });
+      const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
+      const app = await buildGateway({ store, identity, brain, power, memory, logger: false });
       await app.listen({ host: "127.0.0.1", port });
       const address = app.server.address();
       if (address === null || typeof address === "string") {

@@ -1,4 +1,17 @@
-import type { Account, ApiErrorCode, Device, DeviceList, EngineId, EngineList, GatewayEvent, Message, PowerStatus } from "@venom/contracts";
+import type {
+  Account,
+  ApiErrorCode,
+  Device,
+  DeviceList,
+  EngineId,
+  EngineList,
+  GatewayEvent,
+  MemoryDraft,
+  MemoryItem,
+  MemoryList,
+  Message,
+  PowerStatus,
+} from "@venom/contracts";
 
 export type ConnectionState = "connecting" | "online" | "offline";
 
@@ -17,6 +30,10 @@ export type DevicesResult = { readonly ok: true; readonly list: DeviceList } | F
 export type EnginesResult = { readonly ok: true; readonly list: EngineList } | Failure;
 
 export type PowerResult = { readonly ok: true; readonly power: PowerStatus } | Failure;
+
+export type MemoryResult = { readonly ok: true; readonly list: MemoryList } | Failure;
+
+export type MemoryItemResult = { readonly ok: true; readonly item: MemoryItem } | Failure;
 
 export type AuthView =
   | { readonly kind: "loading" }
@@ -46,6 +63,10 @@ export interface VenomBridge {
   engines(): Promise<EnginesResult>;
   power(): Promise<PowerResult>;
   chooseEngine(engine: EngineId): Promise<PowerResult>;
+  memory(): Promise<MemoryResult>;
+  saveMemory(draft: MemoryDraft): Promise<MemoryItemResult>;
+  editMemory(memoryId: string, draft: MemoryDraft): Promise<MemoryItemResult>;
+  forgetMemory(memoryId: string): Promise<StepResult>;
   history(): Promise<Message[]>;
   send(text: string): Promise<SendResult>;
   retry(requestId: string): Promise<SendResult>;
@@ -70,6 +91,10 @@ export const channels = {
   engines: "venom:engines",
   power: "venom:power",
   chooseEngine: "venom:choose-engine",
+  memory: "venom:memory",
+  saveMemory: "venom:save-memory",
+  editMemory: "venom:edit-memory",
+  forgetMemory: "venom:forget-memory",
   history: "venom:history",
   send: "venom:send",
   retry: "venom:retry",

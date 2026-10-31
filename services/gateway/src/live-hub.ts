@@ -1,4 +1,4 @@
-import { GatewayEvent, type Device, type Message, type PowerStatus, type RequestState } from "@venom/contracts";
+import { GatewayEvent, type Device, type MemoryForgotten, type MemoryItem, type Message, type PowerStatus, type RequestState } from "@venom/contracts";
 
 export interface LiveConnection {
   readonly deviceId: string;
@@ -81,6 +81,14 @@ export function devicesEvent(requestId: string, devices: readonly Device[]): Gat
 
 export function powerEvent(requestId: string, power: PowerStatus): GatewayEvent {
   return GatewayEvent.parse({ type: "power", ...stamp(requestId, 0), power });
+}
+
+export function memoryEvent(requestId: string, item: MemoryItem): GatewayEvent {
+  return GatewayEvent.parse({ type: "memory", ...stamp(requestId, 0), item });
+}
+
+export function forgottenEvent(requestId: string, forgotten: MemoryForgotten): GatewayEvent {
+  return GatewayEvent.parse({ type: "forgotten", ...stamp(requestId, 0), ...forgotten });
 }
 
 export class RequestTrace {

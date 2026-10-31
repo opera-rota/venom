@@ -9,22 +9,35 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from venom_contracts.models import AvailableEngines, TurnRequest
+from venom_contracts.models import AvailableEngines, EmbeddingFailure, EmbeddingRequest, TurnRequest
+from venom_orchestrator.embedding import EmbeddingService
 from venom_orchestrator.turns import Orchestrator
+from venom_reasoning.errors import ReasoningError
 
 NDJSON = "application/x-ndjson"
 
 type Background = Callable[[], Coroutine[object, object, None]]
 
 
-def create_app(orchestrator: Orchestrator, background: Background | None = None) -> Starlette:
+def create_app(orchestrator: Orchestrator, embeddings: EmbeddingService, background: Background | None = None) -> Starlette:
     async def turns(request: Request) -> Response:
         try:
             turn = TurnRequest.model_validate_json(await request.body())
         except ValidationError as error:
-            issues = json.loads(error.json(include_url=False, include_input=False, include_context=False))
-            return JSONResponse({"error": "invalid_request", "issues": issues}, status_code=400)
+            return invalid(error)
         return StreamingResponse(lines(orchestrator, turn), media_type=NDJSON, headers={"cache-control": "no-store"})
+
+    async def embed(request: Request) -> Response:
+        try:
+            asked = EmbeddingRequest.model_validate_json(await request.body())
+        except ValidationError as error:
+            return invalid(error)
+        try:
+            result = await embeddings.embed(asked)
+        except ReasoningError as error:
+            failure = EmbeddingFailure(error=error.reason, detail=error.detail)
+            return Response(failure.model_dump_json(), status_code=503, media_type="application/json")
+        return Response(result.model_dump_json(), media_type="application/json", headers={"cache-control": "no-store"})
 
     async def engines(_request: Request) -> Response:
         available = AvailableEngines(available=orchestrator.catalogue.available())
@@ -48,10 +61,16 @@ def create_app(orchestrator: Orchestrator, background: Background | None = None)
         routes=[
             Route("/v1/turns", turns, methods=["POST"]),
             Route("/v1/engines", engines, methods=["GET"]),
+            Route("/v1/embeddings", embed, methods=["POST"]),
             Route("/healthz", health, methods=["GET"]),
         ],
         lifespan=lifespan,
     )
+
+
+def invalid(error: ValidationError) -> Response:
+    issues = json.loads(error.json(include_url=False, include_input=False, include_context=False))
+    return JSONResponse({"error": "invalid_request", "issues": issues}, status_code=400)
 
 
 async def lines(orchestrator: Orchestrator, turn: TurnRequest) -> AsyncGenerator[str]:

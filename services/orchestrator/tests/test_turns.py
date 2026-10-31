@@ -1,9 +1,10 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
 from venom_contracts.engines import get_engine
-from venom_contracts.models import ConversationEntry, EngineId, TurnDelta, TurnDone, TurnEvent, TurnFailed, TurnRequest
+from venom_contracts.models import ConversationEntry, EngineId, MemoryContext, TurnDelta, TurnDone, TurnEvent, TurnFailed, TurnRequest
 from venom_orchestrator.engines import EngineCatalogue
 from venom_orchestrator.turns import ANSWER_CHARACTERS, TASK_REPLY, Orchestrator, fit, recent
 from venom_reasoning.errors import ReasoningError
@@ -15,13 +16,22 @@ pytestmark = pytest.mark.anyio
 PRIMARY, FALLBACK = get_engine("titan").models[:2]
 
 
-def turn(text: str, history: list[ConversationEntry] | None = None, engine: EngineId = "titan") -> TurnRequest:
+def turn(
+    text: str,
+    history: list[ConversationEntry] | None = None,
+    engine: EngineId = "titan",
+    *,
+    memories: list[MemoryContext] | None = None,
+    remembered: MemoryContext | None = None,
+) -> TurnRequest:
     return TurnRequest(
         request_id=UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01"),
         account_id=UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"),
         device_id=UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03"),
         engine=engine,
         history=history or [],
+        memories=memories or [],
+        remembered=remembered,
         text=text,
     )
 
@@ -138,3 +148,27 @@ def test_cuts_an_answer_that_is_too_long() -> None:
     cut = fit("x" * (ANSWER_CHARACTERS + 50))
     assert len(cut) <= ANSWER_CHARACTERS
     assert cut.endswith("length limit.*")
+
+
+SAVED = datetime(2026, 10, 31, 8, 15, tzinfo=UTC)
+
+
+async def test_answers_with_what_it_remembers() -> None:
+    metric = MemoryContext(type="preference", content="I prefer metric units", saved_at=SAVED)
+    provider = ScriptedProvider({"quick": [question()], PRIMARY: [answer("About 880 km.", PRIMARY)]})
+    await run(provider, turn("How far is Berlin from Paris?", memories=[metric]))
+
+    assert [call.model for call in provider.calls] == ["quick", PRIMARY]
+    assert "Remembered:" not in provider.calls[0].system
+    assert provider.calls[1].system.endswith("- (preference, saved 2026-10-31) I prefer metric units")
+
+
+async def test_confirms_a_saved_memory_without_treating_it_as_a_task() -> None:
+    reminder = MemoryContext(type="event", content="I have a dentist appointment on Friday", saved_at=SAVED)
+    provider = ScriptedProvider({PRIMARY: [answer("I will remember your dentist appointment.", PRIMARY)]})
+    final = (await run(provider, turn("Remember that I have a dentist appointment on Friday", remembered=reminder)))[-1]
+
+    assert isinstance(final, TurnDone)
+    assert (final.intent, final.text) == ("question", "I will remember your dentist appointment.")
+    assert [call.model for call in provider.calls] == [PRIMARY]
+    assert "Just saved:" in provider.calls[0].system

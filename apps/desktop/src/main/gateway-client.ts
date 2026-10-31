@@ -4,6 +4,10 @@ import {
   EngineList,
   GatewayEvent,
   Id,
+  MemoryDraft,
+  MemoryForgotten,
+  MemoryItem,
+  MemoryList,
   MessageHistory,
   MessageText,
   PowerStatus,
@@ -11,7 +15,7 @@ import {
   type Capabilities,
   type Message,
 } from "@venom/contracts";
-import type { ConnectionState, DevicesResult, EnginesResult, PowerResult, SendResult, StepResult } from "../shared/bridge.ts";
+import type { ConnectionState, DevicesResult, EnginesResult, MemoryItemResult, MemoryResult, PowerResult, SendResult, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
 
 export interface GatewayClientOptions {
@@ -26,6 +30,8 @@ const closeReasons: ReadonlyMap<number, Revocation> = new Map([
   [4401, "unauthorized"],
   [4403, "removed"],
 ]);
+
+const unreadableDraft = "Write what VENOM should remember, in 500 characters or fewer.";
 
 function decodeEvent(data: unknown): GatewayEvent | null {
   try {
@@ -194,6 +200,54 @@ export class GatewayClient {
       return result;
     }
     return { ok: true, power: result.value };
+  }
+
+  async memory(): Promise<MemoryResult> {
+    const result = await this.#api.request("GET", "/v1/memory", { schema: MemoryList, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, list: result.value };
+  }
+
+  async saveMemory(draft: unknown): Promise<MemoryItemResult> {
+    const parsed = MemoryDraft.safeParse(draft);
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: unreadableDraft };
+    }
+    return this.#memoryItem("POST", "/v1/memory", parsed.data);
+  }
+
+  async editMemory(memoryId: unknown, draft: unknown): Promise<MemoryItemResult> {
+    const id = Id.safeParse(memoryId);
+    const parsed = MemoryDraft.safeParse(draft);
+    if (!id.success || !parsed.success) {
+      return { ok: false, code: "invalid_request", reason: unreadableDraft };
+    }
+    return this.#memoryItem("PUT", `/v1/memory/${id.data}`, parsed.data);
+  }
+
+  async forgetMemory(memoryId: unknown): Promise<StepResult> {
+    const id = Id.safeParse(memoryId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: "That memory does not exist any more." };
+    }
+    const result = await this.#api.request("DELETE", `/v1/memory/${id.data}`, { schema: MemoryForgotten, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true };
+  }
+
+  async #memoryItem(method: "POST" | "PUT", path: string, draft: MemoryDraft): Promise<MemoryItemResult> {
+    const result = await this.#api.request(method, path, { schema: MemoryItem, body: draft, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, item: result.value };
   }
 
   async reportCapabilities(deviceId: string, capabilities: Capabilities): Promise<StepResult> {

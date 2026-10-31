@@ -1,13 +1,16 @@
+import asyncio
 import logging
 import sys
 from functools import partial
 
 import uvicorn
 
+from venom_orchestrator.embedding import EmbeddingCatalogue, EmbeddingService, keep_embeddings_fresh
 from venom_orchestrator.engines import EngineCatalogue, keep_fresh
 from venom_orchestrator.server import create_app
 from venom_orchestrator.settings import BrainSettings, SettingsError
 from venom_orchestrator.turns import Orchestrator
+from venom_reasoning.embeddings import OpenRouterEmbedder, listed_embedding_models
 from venom_reasoning.openrouter_provider import OpenRouterProvider, create_client, listed_models
 from venom_reasoning.reasoner import Reasoner
 
@@ -39,6 +42,14 @@ def main() -> None:
     client = create_client(settings.api_key, settings.openrouter_url)
     catalogue = EngineCatalogue(settings.understand_models, test_drive=settings.test_drive)
     orchestrator = Orchestrator(Reasoner(OpenRouterProvider(client)), catalogue)
+    embedding_catalogue = EmbeddingCatalogue(settings.embed_model, test_drive=settings.test_drive)
+    embeddings = EmbeddingService(OpenRouterEmbedder(client), embedding_catalogue)
+
+    async def background() -> None:
+        async with asyncio.TaskGroup() as group:
+            group.create_task(keep_fresh(catalogue, partial(listed_models, client)))
+            group.create_task(keep_embeddings_fresh(embedding_catalogue, partial(listed_embedding_models, client)))
+
     logging.getLogger("venom.brain").info(
         "brain starting on %s:%d through %s (understanding with %s)",
         settings.host,
@@ -51,7 +62,7 @@ def main() -> None:
             "TEST DRIVE is on: every engine answers with OpenRouter free models. Turn it off when OpenRouter has credit.",
         )
     uvicorn.run(
-        create_app(orchestrator, partial(keep_fresh, catalogue, partial(listed_models, client))),
+        create_app(orchestrator, embeddings, background),
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level,
