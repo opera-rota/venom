@@ -1,0 +1,22 @@
+{
+  "name": "@venom/power",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "grant": "node src/cli.ts grant",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@venom/contracts": "workspace:*",
+    "@venom/db": "workspace:*",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "uuid": "14.0.2"
+  }
+}

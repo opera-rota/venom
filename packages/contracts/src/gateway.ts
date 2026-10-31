@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PowerStatus } from "./power.ts";
 import { Id, Timestamp } from "./primitives.ts";
 import { Device, Message } from "./records.ts";
 import { contracts } from "./registry.ts";
@@ -77,8 +78,16 @@ export const DevicesEvent = z
   })
   .register(contracts, { id: "DevicesEvent" });
 
+export const PowerEvent = z
+  .strictObject({
+    type: z.literal("power"),
+    ...eventFields,
+    power: PowerStatus,
+  })
+  .register(contracts, { id: "PowerEvent" });
+
 export const GatewayEvent = z
-  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent])
+  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent, PowerEvent])
   .register(contracts, { id: "GatewayEvent" });
 
 export type MessageText = z.infer<typeof MessageText>;
@@ -91,4 +100,5 @@ export type MessageEvent = z.infer<typeof MessageEvent>;
 export type RequestEvent = z.infer<typeof RequestEvent>;
 export type AnswerEvent = z.infer<typeof AnswerEvent>;
 export type DevicesEvent = z.infer<typeof DevicesEvent>;
+export type PowerEvent = z.infer<typeof PowerEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

@@ -134,6 +134,9 @@ function wire(): void {
   handle(channels.signOut, () => sessions.signOut());
   handle(channels.devices, () => gateway.devices());
   handle(channels.removeDevice, (deviceId) => (typeof deviceId === "string" ? gateway.removeDevice(deviceId) : { ok: false, code: "invalid_request", reason: "Unknown device." }));
+  handle(channels.engines, () => gateway.engines());
+  handle(channels.power, () => gateway.power());
+  handle(channels.chooseEngine, (engine) => gateway.chooseEngine(engine));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
   handle(channels.retry, (requestId) => gateway.retry(requestId));

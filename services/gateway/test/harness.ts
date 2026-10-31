@@ -4,6 +4,7 @@ import { createTestDatabase, type TestDatabase } from "@venom/db/testing";
 import { createEphemeralServerSetup, createIdentity, type Identity } from "@venom/identity";
 import { beginSecretWordLogin, beginSecretWordRegistration } from "@venom/identity/client";
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
+import { createPower, type Power } from "@venom/power";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { buildGateway } from "../src/app.ts";
@@ -21,6 +22,7 @@ export interface RunningGateway {
   readonly app: FastifyInstance;
   readonly identity: Identity;
   readonly brain: ScriptedBrain;
+  readonly power: Power;
   stop(): Promise<void>;
 }
 
@@ -42,13 +44,18 @@ export async function destroyEnvironment(environment: Environment | undefined): 
 export interface GatewayStart {
   readonly heartbeatMs?: number;
   readonly brain?: ScriptedBrain;
+  readonly freeDailyAnswers?: number;
 }
 
-export async function startGateway(environment: Environment, { heartbeatMs, brain = scriptedBrain() }: GatewayStart = {}): Promise<RunningGateway> {
+export async function startGateway(
+  environment: Environment,
+  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100 }: GatewayStart = {},
+): Promise<RunningGateway> {
   const store: Store = createStore(environment.database.appUrl);
   const sql = connect(environment.database.appUrl);
   const identity = createIdentity({ sql, mailer: environment.mailer, serverSetup: environment.serverSetup });
-  const app = await buildGateway({ store, identity, brain, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
+  const power = createPower({ sql, freeDailyAnswers });
+  const app = await buildGateway({ store, identity, brain, power, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 
   return {
@@ -56,6 +63,7 @@ export async function startGateway(environment: Environment, { heartbeatMs, brai
     app,
     identity,
     brain,
+    power,
     async stop() {
       await app.close();
       await Promise.all([store.close(), sql.end()]);

@@ -2,7 +2,7 @@
 name = "venom-reasoning"
 version = "0.0.0"
 requires-python = ">=3.14"
-dependencies = ["venom-contracts", "anthropic==2.3.0"]
+dependencies = ["venom-contracts", "openai==3.29.0"]
 
 [tool.uv.sources]
 venom-contracts = { workspace = true }

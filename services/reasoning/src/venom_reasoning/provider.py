@@ -26,15 +26,21 @@ class TextChunk:
 
 
 @dataclass(frozen=True, slots=True)
+class Thinking:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     text: str
     model: str
     stop_reason: str | None
     input_tokens: int
     output_tokens: int
+    cost_micro_usd: int
 
 
-type ProviderEvent = TextChunk | Completion
+type ProviderEvent = TextChunk | Thinking | Completion
 
 
 class Provider(Protocol):

@@ -1,4 +1,4 @@
-import { MessageHistory, RetryAnswer, SendMessage, SendMessageAccepted } from "@venom/contracts";
+import { MessageHistory, RetryAnswer, SendMessage, SendMessageAccepted, type PowerStatus } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -13,15 +13,17 @@ const HistoryQuery = z.strictObject({
 });
 
 export function messageRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { store, hub, brain, stopping, track } = context;
+  const { store, hub, brain, power, stopping, track, availableEngines, broadcastPower } = context;
   const answering = new Set<string>();
 
-  function start(device: DeviceRef, requestId: string, question: Question, log: FastifyBaseLogger, key: string): string {
+  async function start(device: DeviceRef, requestId: string, question: Question, log: FastifyBaseLogger, key: string): Promise<string> {
+    const engine = await power.admit(device.account_id, await availableEngines());
     const trace = new RequestTrace(hub, device.id, requestId);
     trace.state("accepted");
     answering.add(key);
+    const onPower = (status: PowerStatus, eventId: string) => broadcastPower(device.account_id, eventId, status);
     track(
-      converse({ store, brain, trace, device, signal: stopping, log }, question).finally(() => {
+      converse({ store, brain, power, engine, trace, device, signal: stopping, log, onPower }, question).finally(() => {
         answering.delete(key);
       }),
     );
@@ -37,7 +39,7 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
   app.post("/v1/messages", async (request, reply) => {
     const device = requireSignedIn(request);
     const { text } = SendMessage.parse(request.body);
-    const requestId = start(device, request.id, { kind: "new", text }, request.log, request.id);
+    const requestId = await start(device, request.id, { kind: "new", text }, request.log, request.id);
     return reply.code(202).send(SendMessageAccepted.parse({ request_id: requestId }));
   });
 
@@ -54,7 +56,7 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
     if (answering.has(request_id)) {
       throw conflict("VENOM is still answering this message.");
     }
-    const requestId = start(device, request.id, { kind: "retry", message: asked.question, requestId: request_id }, request.log, request_id);
+    const requestId = await start(device, request.id, { kind: "retry", message: asked.question, requestId: request_id }, request.log, request_id);
     return reply.code(202).send(SendMessageAccepted.parse({ request_id: requestId }));
   });
 }

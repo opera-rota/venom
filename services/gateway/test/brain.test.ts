@@ -10,9 +10,12 @@ const turn: TurnRequest = {
   request_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
   account_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   device_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+  engine: "dove",
   history: [],
   text: "Explain what a mutex is",
 };
+
+const usage = { input_tokens: 40, output_tokens: 9, cost_micro_usd: 310 };
 
 let server: Server | null = null;
 
@@ -59,7 +62,7 @@ describe("brain client", () => {
     const url = await serve((request, response, body) => {
       received = `${request.method} ${request.url} ${body}`;
       response.writeHead(200, { "content-type": "application/x-ndjson" });
-      const text = line({ type: "delta", text: "A mutex " }) + line({ type: "done", intent: "question", text: "A mutex is a lock.", model: "m" });
+      const text = line({ type: "delta", text: "A mutex " }) + line({ type: "done", intent: "question", text: "A mutex is a lock.", model: "m", usage });
       response.write(text.slice(0, 11));
       setTimeout(() => response.end(text.slice(11)), 20);
     });
@@ -67,7 +70,7 @@ describe("brain client", () => {
     const events = await collect(url);
     expect(events).toEqual([
       { type: "delta", text: "A mutex " },
-      { type: "done", intent: "question", text: "A mutex is a lock.", model: "m" },
+      { type: "done", intent: "question", text: "A mutex is a lock.", model: "m", usage },
     ]);
     expect(received).toBe(`POST /v1/turns ${JSON.stringify(turn)}`);
   });
@@ -99,6 +102,22 @@ describe("brain client", () => {
     await new Promise<void>((resolve) => server?.close(() => resolve()));
     server = null;
     expect(await problemOf(collect(url))).toBe("unreachable");
+  });
+
+  it("asks the brain which engines can answer right now", async () => {
+    const url = await serve((request, response) => {
+      response.writeHead(request.url === "/v1/engines" ? 200 : 404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ available: ["dove", "titan"] }));
+    });
+    expect(await createBrainClient({ url }).engines()).toEqual(["dove", "titan"]);
+  });
+
+  it("reports a brain that cannot list its engines", async () => {
+    const url = await serve((_request, response) => {
+      response.writeHead(503);
+      response.end();
+    });
+    await expect(createBrainClient({ url }).engines()).rejects.toMatchObject({ problem: "refused" });
   });
 
   it("stops when the gateway asks it to", async () => {

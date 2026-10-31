@@ -1,4 +1,4 @@
-import { GatewayEvent, type Device, type Message, type RequestState } from "@venom/contracts";
+import { GatewayEvent, type Device, type Message, type PowerStatus, type RequestState } from "@venom/contracts";
 
 export interface LiveConnection {
   readonly deviceId: string;
@@ -77,6 +77,10 @@ function stamp(requestId: string, sequence: number) {
 
 export function devicesEvent(requestId: string, devices: readonly Device[]): GatewayEvent {
   return GatewayEvent.parse({ type: "devices", ...stamp(requestId, 0), devices });
+}
+
+export function powerEvent(requestId: string, power: PowerStatus): GatewayEvent {
+  return GatewayEvent.parse({ type: "power", ...stamp(requestId, 0), power });
 }
 
 export class RequestTrace {

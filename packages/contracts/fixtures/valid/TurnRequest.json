@@ -2,9 +2,16 @@
   "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
   "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+  "engine": "titan",
   "history": [
-    { "speaker": "user", "text": "What is a thread?" },
-    { "speaker": "venom", "text": "A thread is one path of execution inside a program." }
+    {
+      "speaker": "user",
+      "text": "What is a thread?"
+    },
+    {
+      "speaker": "venom",
+      "text": "A thread is one path of execution inside a program."
+    }
   ],
   "text": "Explain what a mutex is"
 }

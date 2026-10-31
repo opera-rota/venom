@@ -1,6 +1,6 @@
 import type { GatewayEvent, Message } from "@venom/contracts";
 
-export type LiveEvent = Exclude<GatewayEvent, { readonly type: "devices" }>;
+export type LiveEvent = Exclude<GatewayEvent, { readonly type: "devices" | "power" }>;
 
 export interface Answer {
   readonly requestId: string;
@@ -54,7 +54,7 @@ export function mergeMessages(current: readonly Message[], incoming: readonly Me
 }
 
 export function isLiveEvent(event: GatewayEvent): event is LiveEvent {
-  return event.type !== "devices";
+  return event.type !== "devices" && event.type !== "power";
 }
 
 function withAnswer(answers: ReadonlyMap<string, Answer>, answer: Answer): ReadonlyMap<string, Answer> {

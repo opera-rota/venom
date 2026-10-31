@@ -5,10 +5,12 @@ import type { VenomBridge } from "../../../shared/bridge.ts";
 import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
+import { usePower } from "../use-power.ts";
 import { Composer } from "./Composer.tsx";
 import { DevicesPanel } from "./DevicesPanel.tsx";
-import { Header } from "./Header.tsx";
+import { Header, type SidePanel } from "./Header.tsx";
 import { MessageList } from "./MessageList.tsx";
+import { engineName, PowerPanel } from "./PowerPanel.tsx";
 
 const screenScheduler: Scheduler = {
   frame: (run) => {
@@ -35,7 +37,8 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const send = useStore(store, (state) => state.send);
   const dismiss = useStore(store, (state) => state.dismiss);
   const devices = useDevices(bridge, device.id, connection);
-  const [devicesOpen, setDevicesOpen] = useState(false);
+  const power = usePower(bridge, connection);
+  const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
 
   useEffect(() => conversation.connect(), [conversation]);
@@ -46,13 +49,16 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
         <Header
           connection={connection}
           accountName={account.name}
-          devicesOpen={devicesOpen}
-          onToggleDevices={() => setDevicesOpen((open) => !open)}
+          power={power.power}
+          engineName={power.power === null ? null : engineName(power.engines, power.power)}
+          panel={panel}
+          onTogglePanel={(next) => setPanel((open) => (open === next ? null : next))}
         />
         <MessageList store={store} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
       </main>
-      {devicesOpen && <DevicesPanel state={devices} onClose={() => setDevicesOpen(false)} />}
+      {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}
+      {panel === "power" && <PowerPanel state={power} onClose={() => setPanel(null)} />}
     </div>
   );
 }

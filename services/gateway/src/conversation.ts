@@ -1,6 +1,8 @@
-import { TurnRequest, type Message } from "@venom/contracts";
+import { TurnRequest, type EngineId, type Message, type PowerStatus, type TurnDone } from "@venom/contracts";
 import type { DeviceRef, Store } from "@venom/db";
+import type { Power } from "@venom/power";
 import type { FastifyBaseLogger } from "fastify";
+import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { RequestTrace } from "./live-hub.ts";
 
@@ -9,10 +11,13 @@ export const historyLimit = 20;
 export interface Exchange {
   readonly store: Store;
   readonly brain: Brain;
+  readonly power: Power;
+  readonly engine: EngineId;
   readonly trace: RequestTrace;
   readonly device: DeviceRef;
   readonly signal: AbortSignal;
   readonly log: FastifyBaseLogger;
+  onPower(status: PowerStatus, requestId: string): void;
 }
 
 export type Question = { readonly kind: "new"; readonly text: string } | { readonly kind: "retry"; readonly message: Message; readonly requestId: string };
@@ -47,12 +52,14 @@ export async function converse(exchange: Exchange, question: Question): Promise<
   }
 }
 
-async function answer({ store, brain, trace, device, signal }: Exchange, asked: Message, answerRequestId: string): Promise<void> {
+async function answer(exchange: Exchange, asked: Message, answerRequestId: string): Promise<void> {
+  const { store, brain, engine, trace, device, signal } = exchange;
   const history = await store.conversationBefore(device.account_id, asked.id, historyLimit);
   const request = TurnRequest.parse({
     request_id: trace.requestId,
     account_id: device.account_id,
     device_id: device.id,
+    engine,
     history,
     text: asked.text,
   });
@@ -71,6 +78,7 @@ async function answer({ store, brain, trace, device, signal }: Exchange, asked: 
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);
+        await charge(exchange, event);
         trace.state("completed");
         return;
       }
@@ -80,4 +88,13 @@ async function answer({ store, brain, trace, device, signal }: Exchange, asked: 
     }
   }
   throw new BrainError("malformed", { cause: new Error("the brain stream ended without a result") });
+}
+
+async function charge({ power, engine, device, trace, log, onPower }: Exchange, done: TurnDone): Promise<void> {
+  try {
+    const status = await power.charge({ device, requestId: trace.requestId, engine, model: done.model, usage: done.usage });
+    onPower(status, uuidv7());
+  } catch (error) {
+    log.error({ err: error, engine }, "could not record the power this answer used");
+  }
 }

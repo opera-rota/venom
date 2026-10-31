@@ -5,6 +5,7 @@ import {
   heldRequests,
   initialConversation,
   isAnswering,
+  isLiveEvent,
   mergeMessages,
   reduceConversation,
   type ConversationState,
@@ -146,6 +147,26 @@ describe("conversation state", () => {
     expect(failed.answers.size).toBe(0);
     expect(failed.notice).toBe("VENOM could not save this message.");
     expect(reduceConversation(failed, { type: "dismiss" }).notice).toBeNull();
+  });
+
+  it("leaves power and device updates to their own panels", () => {
+    const power = {
+      type: "power",
+      request_id: retryId,
+      sequence: 0,
+      emitted_at: at,
+      power: {
+        engine: "dove",
+        engine_class: "free",
+        balance: 0,
+        free_daily_answers: 30,
+        free_used_today: 1,
+        free_resets_at: "2026-10-26T00:00:00.000Z",
+        answers_left: 29,
+        answers_left_exact: true,
+      },
+    } as const;
+    expect(isLiveEvent(power)).toBe(false);
   });
 
   it("replaces its copy with the cloud history after a reconnect", () => {

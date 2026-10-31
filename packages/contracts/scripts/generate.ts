@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { z } from "zod";
-import { contracts, prompts } from "../src/index.ts";
+import { contracts, engines, prompts } from "../src/index.ts";
 
 const packageRoot = join(import.meta.dirname, "..");
 const repoRoot = join(packageRoot, "..", "..");
@@ -10,6 +10,7 @@ const schemaFile = join(packageRoot, "generated", "venom.schema.json");
 const pythonPackage = join(packageRoot, "python", "venom_contracts");
 const modelsFile = join(pythonPackage, "models.py");
 const promptsFile = join(pythonPackage, "prompts.json");
+const enginesFile = join(pythonPackage, "engines.json");
 
 function buildSchema(): object {
   const { schemas } = z.toJSONSchema(contracts, {
@@ -76,8 +77,9 @@ function generatePythonModels(): void {
 
 writeJson(schemaFile, buildSchema());
 writeJson(promptsFile, prompts);
+writeJson(enginesFile, engines);
 generatePythonModels();
 
-for (const file of [schemaFile, promptsFile, modelsFile]) {
+for (const file of [schemaFile, promptsFile, enginesFile, modelsFile]) {
   console.log(`generated ${relative(repoRoot, file)}`);
 }

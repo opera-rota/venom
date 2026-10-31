@@ -28,6 +28,8 @@ function label(event: GatewayEvent): string {
       return "answer";
     case "devices":
       return "devices";
+    case "power":
+      return "power";
   }
 }
 

@@ -1,3 +1,4 @@
+import type { PowerStatus } from "@venom/contracts";
 import type { ConnectionState } from "../../../shared/bridge.ts";
 import { button, mark, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
@@ -16,14 +17,25 @@ export function LogoMark({ size }: { readonly size: number }) {
   );
 }
 
+export type SidePanel = "devices" | "power";
+
 export interface HeaderProps {
   readonly connection: ConnectionState;
   readonly accountName: string;
-  readonly devicesOpen: boolean;
-  readonly onToggleDevices: () => void;
+  readonly power: PowerStatus | null;
+  readonly engineName: string | null;
+  readonly panel: SidePanel | null;
+  readonly onTogglePanel: (panel: SidePanel) => void;
 }
 
-export function Header({ connection, accountName, devicesOpen, onToggleDevices }: HeaderProps) {
+function gaugeLabel(power: PowerStatus, engineName: string): string {
+  if (power.engine_class === "free") {
+    return `${engineName} · ${Math.max(0, power.free_daily_answers - power.free_used_today)} free left`;
+  }
+  return `${engineName} · ${new Intl.NumberFormat().format(power.balance)} power`;
+}
+
+export function Header({ connection, accountName, power, engineName, panel, onTogglePanel }: HeaderProps) {
   const view = connectionView[connection];
 
   return (
@@ -39,7 +51,23 @@ export function Header({ connection, accountName, devicesOpen, onToggleDevices }
           <Icon name={view.icon} />
           <span>{view.label}</span>
         </div>
-        <button type="button" onClick={onToggleDevices} aria-pressed={devicesOpen} className={`${button.ghost} ${devicesOpen ? "text-green-400" : ""}`}>
+        {power !== null && engineName !== null && (
+          <button
+            type="button"
+            onClick={() => onTogglePanel("power")}
+            aria-pressed={panel === "power"}
+            className={`${button.ghost} tabular-nums ${panel === "power" ? "text-green-400" : ""}`}
+          >
+            <Icon name="bolt" className="h-4 w-4" />
+            <span>{gaugeLabel(power, engineName)}</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onTogglePanel("devices")}
+          aria-pressed={panel === "devices"}
+          className={`${button.ghost} ${panel === "devices" ? "text-green-400" : ""}`}
+        >
           <Icon name="devices" className="h-4 w-4" />
           <span>Devices</span>
         </button>

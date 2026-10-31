@@ -1,5 +1,17 @@
-import { DeviceList, GatewayEvent, Id, MessageHistory, MessageText, SendMessageAccepted, type Capabilities, type Message } from "@venom/contracts";
-import type { ConnectionState, DevicesResult, SendResult, StepResult } from "../shared/bridge.ts";
+import {
+  DeviceList,
+  EngineId,
+  EngineList,
+  GatewayEvent,
+  Id,
+  MessageHistory,
+  MessageText,
+  PowerStatus,
+  SendMessageAccepted,
+  type Capabilities,
+  type Message,
+} from "@venom/contracts";
+import type { ConnectionState, DevicesResult, EnginesResult, PowerResult, SendResult, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
 
 export interface GatewayClientOptions {
@@ -147,6 +159,41 @@ export class GatewayClient {
       this.#watch(result.code);
     }
     return result.ok ? { ok: true } : result;
+  }
+
+  async engines(): Promise<EnginesResult> {
+    const result = await this.#api.request("GET", "/v1/engines", { schema: EngineList, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, list: result.value };
+  }
+
+  async power(): Promise<PowerResult> {
+    const result = await this.#api.request("GET", "/v1/power", { schema: PowerStatus, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, power: result.value };
+  }
+
+  async chooseEngine(engine: unknown): Promise<PowerResult> {
+    const parsed = EngineId.safeParse(engine);
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: "That engine does not exist." };
+    }
+    const result = await this.#api.request("PUT", "/v1/engines/current", {
+      schema: PowerStatus,
+      body: { engine: parsed.data },
+      token: this.#token,
+    });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, power: result.value };
   }
 
   async reportCapabilities(deviceId: string, capabilities: Capabilities): Promise<StepResult> {

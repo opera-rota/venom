@@ -57,6 +57,9 @@ importers:
       '@venom/gateway':
         specifier: workspace:*
         version: link:../../services/gateway
+      '@venom/power':
+        specifier: workspace:*
+        version: link:../../services/power
       '@vitejs/plugin-react':
         specifier: 5.2.0
         version: 5.2.0(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.33.0))
@@ -130,6 +133,9 @@ importers:
       '@venom/identity':
         specifier: workspace:*
         version: link:../identity
+      '@venom/power':
+        specifier: workspace:*
+        version: link:../power
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -174,6 +180,22 @@ importers:
       smtp-server:
         specifier: 3.19.22
         version: 3.19.22
+
+  services/power:
+    dependencies:
+      '@venom/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@venom/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+    devDependencies:
+      uuid:
+        specifier: 14.0.2
+        version: 14.0.2
 
 packages:
 

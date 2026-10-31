@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MessageText } from "./gateway.ts";
+import { EngineId, ModelName } from "./power.ts";
 import { Id } from "./primitives.ts";
 import { PromptRole } from "./prompts.ts";
 import { Speaker } from "./records.ts";
@@ -17,6 +18,7 @@ export const TurnRequest = z
     request_id: Id,
     account_id: Id,
     device_id: Id,
+    engine: EngineId,
     history: z.array(ConversationEntry).max(40),
     text: MessageText,
   })
@@ -59,16 +61,11 @@ export const ReasoningFailure = z
   .enum(["not_configured", "refused", "rate_limited", "unavailable", "timeout", "invalid_output", "internal"])
   .register(contracts, { id: "ReasoningFailure" });
 
-export const ModelName = z
-  .string()
-  .min(1)
-  .max(100)
-  .register(contracts, { id: "ModelName" });
-
 export const TokenUsage = z
   .strictObject({
     input_tokens: z.int().nonnegative(),
     output_tokens: z.int().nonnegative(),
+    cost_micro_usd: z.int().nonnegative(),
   })
   .register(contracts, { id: "TokenUsage" });
 
@@ -104,6 +101,7 @@ export const TurnDone = z
     intent: IntentKind,
     text: z.string().min(1).max(16_000),
     model: ModelName.nullable(),
+    usage: TokenUsage,
   })
   .register(contracts, { id: "TurnDone" });
 
@@ -124,7 +122,6 @@ export type StructuredOutput = z.infer<typeof StructuredOutput>;
 export type ReasoningOutput = z.infer<typeof ReasoningOutput>;
 export type ReasoningRequest = z.infer<typeof ReasoningRequest>;
 export type ReasoningFailure = z.infer<typeof ReasoningFailure>;
-export type ModelName = z.infer<typeof ModelName>;
 export type TokenUsage = z.infer<typeof TokenUsage>;
 export type ReasoningDelta = z.infer<typeof ReasoningDelta>;
 export type ReasoningDone = z.infer<typeof ReasoningDone>;

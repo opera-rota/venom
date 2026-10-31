@@ -153,6 +153,7 @@ export const ApiErrorCode = z
     "account_exists",
     "device_limit_reached",
     "mail_unavailable",
+    "out_of_power",
     "internal",
   ])
   .register(contracts, { id: "ApiErrorCode" });

@@ -1,13 +1,14 @@
 import logging
 import sys
+from functools import partial
 
-import anthropic
 import uvicorn
 
+from venom_orchestrator.engines import EngineCatalogue, keep_fresh
 from venom_orchestrator.server import create_app
 from venom_orchestrator.settings import BrainSettings, SettingsError
 from venom_orchestrator.turns import Orchestrator
-from venom_reasoning.anthropic_provider import AnthropicProvider
+from venom_reasoning.openrouter_provider import OpenRouterProvider, create_client, listed_models
 from venom_reasoning.reasoner import Reasoner
 
 
@@ -23,7 +24,8 @@ def configure_logging(level: str) -> None:
     handler.addFilter(RequestIdDefault())
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(name)s [%(request_id)s] %(message)s", "%H:%M:%S"))
     logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
-    logging.getLogger("httpx2").setLevel(logging.WARNING)
+    for noisy in ("httpx2", "openai"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def main() -> None:
@@ -34,28 +36,22 @@ def main() -> None:
         raise SystemExit(1) from None
 
     configure_logging(settings.log_level)
-    client = anthropic.AsyncAnthropic(
-        api_key=settings.api_key,
-        max_retries=1,
-        timeout=anthropic.Timeout(120.0, connect=10.0),
-    )
-    reasoner = Reasoner(
-        AnthropicProvider(client),
-        {
-            "understand": (settings.understand_model,),
-            "reply": (settings.reply_model, settings.fallback_model),
-        },
-    )
+    client = create_client(settings.api_key, settings.openrouter_url)
+    catalogue = EngineCatalogue(settings.understand_models, test_drive=settings.test_drive)
+    orchestrator = Orchestrator(Reasoner(OpenRouterProvider(client)), catalogue)
     logging.getLogger("venom.brain").info(
-        "brain starting on %s:%d (reply %s, fallback %s, understand %s)",
+        "brain starting on %s:%d through %s (understanding with %s)",
         settings.host,
         settings.port,
-        settings.reply_model,
-        settings.fallback_model,
-        settings.understand_model,
+        settings.openrouter_url,
+        ", ".join(settings.understand_models),
     )
+    if catalogue.test_drive:
+        logging.getLogger("venom.brain").warning(
+            "TEST DRIVE is on: every engine answers with OpenRouter free models. Turn it off when OpenRouter has credit.",
+        )
     uvicorn.run(
-        create_app(Orchestrator(reasoner)),
+        create_app(orchestrator, partial(keep_fresh, catalogue, partial(listed_models, client))),
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level,

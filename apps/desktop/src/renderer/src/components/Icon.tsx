@@ -13,6 +13,7 @@ const paths = {
   copy: "M5.5 5.5h7v7h-7zM3.5 10.5v-7h7",
   retry: "M12.5 8a4.5 4.5 0 1 1-1.3-3.2M12.5 2.5v3h-3",
   down: "M8 3.5v9M4.5 9L8 12.5 11.5 9",
+  bolt: "M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z",
 } as const;
 
 export type IconName = keyof typeof paths;

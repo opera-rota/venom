@@ -8,7 +8,6 @@ from pydantic import BaseModel, ValidationError
 from venom_contracts.models import (
     ConversationEntry,
     Intent,
-    PromptRole,
     ReasoningDelta,
     ReasoningDone,
     ReasoningEvent,
@@ -20,7 +19,7 @@ from venom_contracts.models import (
 )
 from venom_contracts.prompts import get_prompt
 from venom_reasoning.errors import ReasoningError
-from venom_reasoning.provider import Completion, ModelCall, Provider, ProviderEvent, TextChunk, Turn
+from venom_reasoning.provider import Completion, ModelCall, Provider, ProviderEvent, TextChunk, Thinking, Turn
 
 log = logging.getLogger("venom.reasoning")
 
@@ -35,26 +34,24 @@ class Limits:
 
 
 class Reasoner:
-    def __init__(self, provider: Provider, models: Mapping[PromptRole, Sequence[str]], limits: Limits | None = None) -> None:
+    def __init__(self, provider: Provider, limits: Limits | None = None) -> None:
         self._provider = provider
-        self._models = models
         self._limits = limits or Limits()
 
-    async def reason(self, request: ReasoningRequest) -> AsyncGenerator[ReasoningEvent]:
+    async def reason(self, request: ReasoningRequest, models: Sequence[str]) -> AsyncGenerator[ReasoningEvent]:
         prompt = get_prompt(request.role)
         if prompt.version != request.prompt_version:
             yield failed(ReasoningError("internal", "VENOM asked for a prompt version it does not have."))
             return
-        candidates = self._models.get(request.role, ())
-        if not candidates:
-            yield failed(ReasoningError("not_configured", "No model is set up for this kind of request."))
+        if not models:
+            yield failed(ReasoningError("not_configured", "No model is available for this request right now."))
             return
 
         shape = structured_shape(request.output)
         turns = to_turns(request.messages)
         last = ReasoningError("internal", "The model could not answer.")
 
-        for model in candidates:
+        for model in models:
             call = ModelCall(
                 model=model,
                 system=prompt.text,
@@ -69,6 +66,8 @@ class Reasoner:
                         case TextChunk(text=text):
                             emitted = True
                             yield ReasoningDelta(type="delta", text=text)
+                        case Thinking():
+                            continue
                         case Completion():
                             yield done(event, shape)
                 return
@@ -132,7 +131,11 @@ def done(completion: Completion, shape: type[BaseModel] | None) -> ReasoningDone
         text=text,
         model=completion.model,
         stop_reason=completion.stop_reason,
-        usage=TokenUsage(input_tokens=completion.input_tokens, output_tokens=completion.output_tokens),
+        usage=TokenUsage(
+            input_tokens=completion.input_tokens,
+            output_tokens=completion.output_tokens,
+            cost_micro_usd=completion.cost_micro_usd,
+        ),
     )
 
 

@@ -1,43 +1,95 @@
 # /// script
 # requires-python = ">=3.14"
-# dependencies = ["anthropic==2.3.0"]
+# dependencies = ["openai==3.29.0"]
 # ///
 import os
 import sys
 
-import anthropic
+import openai
 
-MODEL = "claude-haiku-5-5"
 PROMPT = "Reply with exactly these words and nothing else: VENOM is alive."
 
 
+def explain(error: openai.APIError) -> str:
+    match error:
+        case openai.AuthenticationError():
+            return "The key was refused. Create a new key at openrouter.ai/settings/keys and store it again."
+        case openai.APIStatusError(status_code=402):
+            return "OpenRouter asked for credit. Check that the model name ends with :free."
+        case openai.RateLimitError():
+            return "Every free model is busy or today's free requests are used up. Wait a few minutes, then try again."
+        case openai.APIConnectionError():
+            return "Could not reach openrouter.ai. Check the internet connection, then try again."
+        case openai.APIStatusError(status_code=status):
+            return f"OpenRouter answered with status {status}: {error.message}"
+        case _:
+            return f"OpenRouter stopped with an error: {error.message}"
+
+
+def free_models(client: openai.OpenAI) -> list[str]:
+    free: list[str] = []
+    for model in client.models.list():
+        supported = (model.model_extra or {}).get("supported_parameters")
+        if model.id.endswith(":free") and isinstance(supported, list) and "tools" in supported:
+            free.append(model.id)
+    return sorted(free)[:6]
+
+
+def show_allowance(client: openai.OpenAI) -> None:
+    key = client.get("/key", cast_to=object)
+    data = key.get("data", {}) if isinstance(key, dict) else {}
+    daily = data.get("free_model_daily_requests") if isinstance(data, dict) else None
+    if isinstance(daily, dict):
+        print(f"Free requests left today: {daily.get('remaining')} of {daily.get('limit')}")
+
+
 def main() -> int:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is not set in this terminal. Close the terminal, open a new one, and run this again.")
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        print("OPENROUTER_API_KEY is not set in this terminal. Close the terminal, open a new one, and run this again.")
         return 1
-    client = anthropic.Anthropic(timeout=30.0, max_retries=2)
+    client = openai.OpenAI(
+        api_key=key,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={"HTTP-Referer": "https://github.com/opera-rota/venom", "X-Title": "VENOM"},
+        timeout=60.0,
+        max_retries=1,
+    )
     try:
-        reply = client.messages.create(model=MODEL, max_tokens=32, messages=[{"role": "user", "content": PROMPT}])
-    except anthropic.AuthenticationError:
-        print("The API key was refused. Create a new key in the Claude Console and store it again.")
+        show_allowance(client)
+        candidates = free_models(client)
+    except openai.APIError as error:
+        print(explain(error))
         return 1
-    except anthropic.PermissionDeniedError:
-        print("The key is valid but this account cannot use this model yet. Check Billing in the Claude Console.")
+    if not candidates:
+        print("OpenRouter offers no free model right now. Try again later.")
         return 1
-    except anthropic.RateLimitError:
-        print("Too many requests or no credit left. Check Billing in the Claude Console, then try again.")
-        return 1
-    except anthropic.APIConnectionError:
-        print("Could not reach api.anthropic.com. Check the internet connection, then try again.")
-        return 1
-    except anthropic.APIStatusError as error:
-        print(f"The API answered with status {error.status_code}: {error.message}")
-        return 1
-    text = "".join(block.text for block in reply.content if block.type == "text").strip()
-    print(f"Model:  {reply.model}")
-    print(f"Reply:  {text}")
-    print(f"Tokens: {reply.usage.input_tokens} in, {reply.usage.output_tokens} out")
-    return 0 if text.rstrip(".") == "VENOM is alive" else 1
+
+    last: openai.APIError | None = None
+    for model in candidates:
+        try:
+            reply = client.chat.completions.create(model=model, max_tokens=400, messages=[{"role": "user", "content": PROMPT}])
+        except (openai.RateLimitError, openai.NotFoundError, openai.InternalServerError) as error:
+            print(f"{model} is busy, trying the next free model")
+            last = error
+            continue
+        except openai.APIError as error:
+            print(explain(error))
+            return 1
+        text = (reply.choices[0].message.content or "").strip() if reply.choices else ""
+        if not text:
+            print(f"{model} gave an empty reply, trying the next free model")
+            continue
+        print(f"Model:  {reply.model}")
+        print(f"Reply:  {text}")
+        if reply.usage is not None:
+            cost = (reply.usage.model_extra or {}).get("cost", 0)
+            print(f"Tokens: {reply.usage.prompt_tokens} in, {reply.usage.completion_tokens} out")
+            print(f"Cost:   ${cost}")
+        return 0
+
+    print(explain(last) if last is not None else "No free model answered. Wait a few minutes, then try again.")
+    return 1
 
 
 if __name__ == "__main__":

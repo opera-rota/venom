@@ -26,6 +26,7 @@
     "@types/react-dom": "19.3.0",
     "@venom/db": "workspace:*",
     "@venom/gateway": "workspace:*",
+    "@venom/power": "workspace:*",
     "@vitejs/plugin-react": "5.2.0",
     "electron": "44.7.0",
     "electron-vite": "5.0.0",

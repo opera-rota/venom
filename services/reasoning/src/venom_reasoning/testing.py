@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
 
 from venom_reasoning.errors import ReasoningError
-from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk
+from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk, Thinking
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,17 +11,35 @@ class Pause:
     seconds: float
 
 
-type Step = TextChunk | Completion | Pause | ReasoningError
+type Step = TextChunk | Thinking | Completion | Pause | ReasoningError
 
 
-def answer(text: str, model: str, *, chunk: int = 8) -> list[Step]:
+def answer(text: str, model: str, *, chunk: int = 8, cost_micro_usd: int = 2500) -> list[Step]:
     pieces: list[Step] = [TextChunk(text[start : start + chunk]) for start in range(0, len(text), chunk)]
-    pieces.append(Completion(text=text, model=model, stop_reason="end_turn", input_tokens=12, output_tokens=len(text) // 4))
+    pieces.append(
+        Completion(
+            text=text,
+            model=model,
+            stop_reason="stop",
+            input_tokens=12,
+            output_tokens=len(text) // 4,
+            cost_micro_usd=cost_micro_usd,
+        )
+    )
     return pieces
 
 
-def structured(json_text: str, model: str) -> list[Step]:
-    return [Completion(text=json_text, model=model, stop_reason="tool_use", input_tokens=40, output_tokens=6)]
+def structured(json_text: str, model: str, *, cost_micro_usd: int = 40) -> list[Step]:
+    return [
+        Completion(
+            text=json_text,
+            model=model,
+            stop_reason="tool_calls",
+            input_tokens=40,
+            output_tokens=6,
+            cost_micro_usd=cost_micro_usd,
+        )
+    ]
 
 
 class ScriptedProvider:
@@ -43,7 +61,7 @@ class ScriptedProvider:
                         await asyncio.sleep(seconds)
                     case ReasoningError():
                         raise step
-                    case TextChunk() | Completion():
+                    case TextChunk() | Thinking() | Completion():
                         yield step
         finally:
             self.closed += 1

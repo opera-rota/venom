@@ -1,0 +1,10 @@
+{
+  "engine": "titan",
+  "engine_class": "titan",
+  "balance": 9890,
+  "free_daily_answers": 30,
+  "free_used_today": 4,
+  "free_resets_at": "2026-11-01T00:00:00Z",
+  "answers_left": 89,
+  "answers_left_exact": false
+}

@@ -17,6 +17,7 @@ from venom_contracts.models import (
 )
 from venom_contracts.prompts import get_prompt
 from venom_reasoning.errors import ReasoningError
+from venom_reasoning.provider import Thinking
 from venom_reasoning.reasoner import Limits, Reasoner, to_turns
 from venom_reasoning.testing import Pause, ScriptedProvider, Step, answer, structured
 
@@ -45,8 +46,8 @@ def request(
 
 
 async def run(provider: ScriptedProvider, ask: ReasoningRequest) -> list[ReasoningEvent]:
-    reasoner = Reasoner(provider, MODELS, FAST)
-    return [event async for event in reasoner.reason(ask)]
+    reasoner = Reasoner(provider, FAST)
+    return [event async for event in reasoner.reason(ask, MODELS.get(ask.role, ()))]
 
 
 def deltas(events: Sequence[ReasoningEvent]) -> str:
@@ -120,8 +121,8 @@ async def test_gives_up_cleanly_when_every_model_fails() -> None:
 async def test_the_total_limit_stops_a_slow_stream() -> None:
     trickle: list[Step] = [step for chunk in answer("one two three four", "primary", chunk=4)[:-1] for step in (chunk, Pause(0.15))]
     provider = ScriptedProvider({"primary": [trickle]})
-    reasoner = Reasoner(provider, {"reply": ("primary",)}, Limits(first_output=1.0, idle=1.0, total=0.4))
-    final = [event async for event in reasoner.reason(request("Hello"))][-1]
+    reasoner = Reasoner(provider, Limits(first_output=1.0, idle=1.0, total=0.4))
+    final = [event async for event in reasoner.reason(request("Hello"), ("primary",))][-1]
 
     assert isinstance(final, ReasoningFailed)
     assert final.reason == "timeout"
@@ -155,7 +156,19 @@ async def test_refuses_an_unknown_prompt_version() -> None:
     assert provider.calls == []
 
 
-async def test_reports_a_role_with_no_model() -> None:
+async def test_thinking_keeps_a_slow_model_alive_without_showing_anything() -> None:
+    thinking: list[Step] = [Thinking(), Pause(0.15), Thinking(), Pause(0.15), *answer("Done thinking.", "primary", cost_micro_usd=9100)]
+    provider = ScriptedProvider({"primary": [thinking]})
+    events = await run(provider, request("Prove it"))
+
+    assert deltas(events) == "Done thinking."
+    final = events[-1]
+    assert isinstance(final, ReasoningDone)
+    assert final.usage.cost_micro_usd == 9100
+    assert [call.model for call in provider.calls] == ["primary"]
+
+
+async def test_reports_when_no_model_is_available() -> None:
     final = (await run(ScriptedProvider({}), request("Hello", role="plan")))[-1]
 
     assert isinstance(final, ReasoningFailed)

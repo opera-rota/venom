@@ -1,7 +1,8 @@
-import { TurnEvent, type TurnRequest } from "@venom/contracts";
+import { AvailableEngines, TurnEvent, type EngineId, type TurnRequest } from "@venom/contracts";
 
 export interface Brain {
   turn(request: TurnRequest, signal: AbortSignal): AsyncGenerator<TurnEvent>;
+  engines(): Promise<readonly EngineId[]>;
 }
 
 export type BrainProblem = "unreachable" | "refused" | "timeout" | "stopped" | "malformed";
@@ -32,8 +33,21 @@ export interface BrainClientOptions {
 
 export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000 }: BrainClientOptions): Brain {
   const endpoint = new URL("/v1/turns", url);
+  const enginesEndpoint = new URL("/v1/engines", url);
 
   return {
+    async engines() {
+      try {
+        const response = await fetch(enginesEndpoint, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
+        if (!response.ok) {
+          throw new BrainError("refused", { cause: new Error(`brain answered ${response.status}`) });
+        }
+        return AvailableEngines.parse(await response.json()).available;
+      } catch (error) {
+        throw error instanceof BrainError ? error : new BrainError("unreachable", { cause: error });
+      }
+    },
+
     async *turn(request, signal) {
       const idle = new AbortController();
       const overall = AbortSignal.timeout(totalMs);

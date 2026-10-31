@@ -1,0 +1,17 @@
+{
+  "id": "dove",
+  "name": "Dove",
+  "class": "free",
+  "tagline": "Gentle everyday helper",
+  "proficiency": {
+    "thinking": 2,
+    "coding": 2,
+    "writing": 3,
+    "speed": 5,
+    "long_memory": 5
+  },
+  "typical_power": 0,
+  "models": [
+    "google/gemini-2.5-flash-lite"
+  ]
+}

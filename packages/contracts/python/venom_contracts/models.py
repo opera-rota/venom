@@ -18,7 +18,7 @@ class AnswerEvent(BaseModel):
     delta: Annotated[str, Field(min_length=1)]
 
 
-type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "conflict", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "internal"]
+type ApiErrorCode = Literal["invalid_request", "unauthorized", "forbidden", "not_found", "conflict", "code_incorrect", "challenge_expired", "too_many_attempts", "secret_word_incorrect", "email_not_verified", "account_exists", "device_limit_reached", "mail_unavailable", "out_of_power", "internal"]
 
 
 class ApiIssue(BaseModel):
@@ -94,6 +94,12 @@ type DeviceToken = Annotated[str, Field(pattern="^vnm_[A-Za-z0-9_-]{43}$")]
 type DeviceType = Literal["computer", "phone", "tv", "watch"]
 
 
+type EngineClass = Literal["free", "swift", "titan"]
+
+
+type EngineId = Literal["dove", "sparrow", "breeze", "pebble", "ember", "turbo", "comet", "stormi", "falcon", "viper", "utopia", "phantom", "nova", "titan", "oracle"]
+
+
 type FailurePolicy = Literal["abort", "retry", "reroute"]
 
 
@@ -127,6 +133,23 @@ type PersonName = Annotated[str, Field(max_length=120, min_length=1, pattern="\\
 
 
 type Platform = Literal["windows", "macos", "linux", "android", "ios", "android_tv", "tvos", "wear_os", "watchos"]
+
+
+class PowerStatus(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    engine: EngineId
+    engine_class: EngineClass
+    balance: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+    free_daily_answers: Annotated[int, Field(ge=0, le=9007199254740991)]
+    free_used_today: Annotated[int, Field(ge=0, le=9007199254740991)]
+    free_resets_at: AwareDatetime
+    answers_left: Annotated[int, Field(ge=0, le=9007199254740991)]
+    answers_left_exact: bool
+
+
+type ProficiencyLevel = Annotated[int, Field(ge=1, le=5)]
 
 
 type PromptRole = Literal["understand", "plan", "reply"]
@@ -280,6 +303,7 @@ class TokenUsage(BaseModel):
     )
     input_tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
     output_tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
+    cost_micro_usd: Annotated[int, Field(ge=0, le=9007199254740991)]
 
 
 class TurnDelta(BaseModel):
@@ -298,6 +322,7 @@ class TurnDone(BaseModel):
     intent: IntentKind
     text: Annotated[str, Field(max_length=16000, min_length=1)]
     model: ModelName | None
+    usage: TokenUsage
 
 
 class TurnFailed(BaseModel):
@@ -352,6 +377,20 @@ class AttachStart(BaseModel):
     )
     email: EmailStr
     start_login_request: OpaqueMessage
+
+
+class AvailableEngines(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    available: list[EngineId]
+
+
+class ChooseEngine(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    engine: EngineId
 
 
 class ConfirmRequest(BaseModel):
@@ -486,6 +525,28 @@ class MessageHistory(BaseModel):
         extra="forbid",
     )
     messages: list[Message]
+
+
+class PowerEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["power"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    power: PowerStatus
+
+
+class Proficiency(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    thinking: ProficiencyLevel
+    coding: ProficiencyLevel
+    writing: ProficiencyLevel
+    speed: ProficiencyLevel
+    long_memory: ProficiencyLevel
 
 
 class Prompt(BaseModel):
@@ -644,6 +705,7 @@ class TurnRequest(BaseModel):
     request_id: UUID
     account_id: UUID
     device_id: UUID
+    engine: EngineId
     history: Annotated[list[ConversationEntry], Field(max_length=40)]
     text: MessageText
 
@@ -677,8 +739,41 @@ class DeviceSession(BaseModel):
     device_token: DeviceToken
 
 
+class Engine(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: EngineId
+    name: Annotated[str, Field(max_length=24, min_length=1)]
+    class_: Annotated[EngineClass, Field(alias="class")]
+    tagline: Annotated[str, Field(max_length=60, min_length=1)]
+    proficiency: Proficiency
+    typical_power: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class EngineList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    engines: list[Engine]
+    current: EngineId
+
+
+class EngineSpec(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: EngineId
+    name: Annotated[str, Field(max_length=24, min_length=1)]
+    class_: Annotated[EngineClass, Field(alias="class")]
+    tagline: Annotated[str, Field(max_length=60, min_length=1)]
+    proficiency: Proficiency
+    typical_power: Annotated[int, Field(ge=0, le=9007199254740991)]
+    models: Annotated[list[ModelName], Field(max_length=3, min_length=1)]
+
+
 type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent,
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent,
     Field(discriminator="type"),
 ]
 
@@ -697,6 +792,6 @@ class Session(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | Capabilities | CapabilityReport | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | Intent | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | Engine | EngineList | EngineSpec | Intent | LiveEvent | MemoryItem | Message | MessageEvent | MessageHistory | PowerEvent | PowerStatus | Proficiency | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
     Field(title="Contract"),
 ]

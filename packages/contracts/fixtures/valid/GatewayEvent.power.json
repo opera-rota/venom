@@ -1,0 +1,16 @@
+{
+  "type": "power",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "sequence": 4,
+  "emitted_at": "2026-10-31T09:15:02.120Z",
+  "power": {
+    "engine": "titan",
+    "engine_class": "titan",
+    "balance": 9890,
+    "free_daily_answers": 30,
+    "free_used_today": 4,
+    "free_resets_at": "2026-11-01T00:00:00Z",
+    "answers_left": 89,
+    "answers_left_exact": false
+  }
+}

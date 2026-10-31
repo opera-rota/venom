@@ -122,6 +122,22 @@ describe("gateway client in the main process", () => {
     expect(result.ok && result.list.current_device_id).toBe(session.device.id);
   });
 
+  it("shows the engines and power meter, and switches engines", async () => {
+    const client = startClient(session.device_token);
+    const engines = await client.engines();
+    expect(engines.ok && engines.list.current).toBe("dove");
+    expect(engines.ok && engines.list.engines.some((engine) => engine.name === "Utopia")).toBe(true);
+
+    const before = await client.power();
+    expect(before.ok && before.power).toMatchObject({ engine: "dove", answers_left_exact: true });
+
+    const switched = await client.chooseEngine("utopia");
+    expect(switched.ok && switched.power).toMatchObject({ engine: "utopia", engine_class: "titan", balance: 0, answers_left: 0 });
+    expect(await client.send("Think hard")).toMatchObject({ ok: false, code: "out_of_power" });
+    expect(await client.chooseEngine("skynet")).toMatchObject({ ok: false, reason: "That engine does not exist." });
+    await client.chooseEngine("dove");
+  });
+
   it("refuses to send nothing", async () => {
     const client = startClient(session.device_token);
     expect(await client.send("   ")).toMatchObject({ ok: false, reason: "Write something before sending." });
