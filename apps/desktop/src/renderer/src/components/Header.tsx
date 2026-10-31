@@ -48,7 +48,7 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
   const view = connectionView[connection];
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-line-subtle px-5 py-3.5">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-subtle px-5 py-3.5">
       <div className="flex min-w-0 items-center gap-3">
         <LogoMark size={28} />
         <h1 className={text.section}>VENOM</h1>
