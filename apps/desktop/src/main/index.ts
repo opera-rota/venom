@@ -1,5 +1,6 @@
-import { ConfirmationStrictness, ConfirmDecision, DrillKind } from "@venom/contracts";
+import { ConfirmationStrictness, ConfirmDecision, DrillKind, Id } from "@venom/contracts";
 import { app, BrowserWindow, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channels, type AuthView } from "../shared/bridge.ts";
@@ -173,6 +174,15 @@ function wire(): void {
   handle(channels.drill, (kind) => {
     const parsed = DrillKind.safeParse(kind);
     return parsed.success ? gateway.drill(parsed.data) : unreadable;
+  });
+  handle(channels.taskControl, (taskId, control) => gateway.control(taskId, control));
+  handle(channels.stopTask, (taskId) => {
+    const parsed = Id.safeParse(taskId);
+    if (!parsed.success) {
+      return unreadable;
+    }
+    hands.haltTask(parsed.data);
+    return gateway.stopTask(parsed.data, randomUUID());
   });
   handle(channels.confirm, (taskId, stepId, decision) => {
     const parsed = ConfirmDecision.safeParse(decision);

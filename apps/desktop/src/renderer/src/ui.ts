@@ -13,6 +13,8 @@ export const button = {
     "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-control border border-line bg-surface-2 px-3.5 py-2 text-[13px] font-medium text-ink transition-colors duration-140 ease-ui hover:border-line-strong disabled:text-ink-faint",
   halt:
     "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-red-500 px-4 py-1.5 text-sm font-semibold text-white shadow-accent transition-colors duration-140 ease-ui hover:bg-red-400 disabled:opacity-80",
+  mini:
+    "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[12px] font-medium text-ink-muted transition-colors duration-140 ease-ui hover:bg-surface-2 hover:text-ink disabled:text-ink-faint disabled:hover:bg-transparent",
   gateCancel:
     "inline-flex items-center justify-center gap-2 rounded-control border border-line bg-surface-2 px-3.5 py-2 text-[13px] font-medium text-ink transition-colors duration-140 ease-ui hover:border-line-strong",
 } as const;
@@ -42,6 +44,8 @@ export const mark = {
   logo: "grid shrink-0 place-items-center rounded-full bg-green-500 font-bold text-on-accent ring-2 ring-mint-200 shadow-mark",
   tag: "inline-flex shrink-0 items-center whitespace-nowrap rounded-tag bg-(--tint-accent) px-2 py-0.5 text-[11.5px] font-medium text-green-300",
   divider: "h-px w-full bg-line-subtle",
+  badge: "inline-grid min-w-4 shrink-0 place-items-center rounded-full px-1 text-[10.5px] leading-4 font-semibold tabular-nums",
+  track: "h-1.5 w-full overflow-hidden rounded-full bg-surface-2",
   caution: "inline-flex shrink-0 items-center whitespace-nowrap rounded-tag border border-status-wait/40 px-2 py-0.5 text-[11.5px] font-medium text-status-wait",
 } as const;
 

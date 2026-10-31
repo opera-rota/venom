@@ -170,6 +170,34 @@ describe("the halt switch", () => {
   });
 });
 
+describe("controls from the Tasks view", () => {
+  it("stops one task on this computer and in the cloud, changes its plan and resumes it", async () => {
+    const device = await symbiote();
+    const drilled = await device.gateway.drill("progress");
+    if (!drilled.ok) {
+      throw new Error(drilled.reason);
+    }
+    const { task } = drilled;
+    await device.until(stepsAre(task.id, ["running", "pending", "pending", "pending", "pending"]));
+
+    expect(device.hands.haltTask(task.id)).toBe(1);
+    const stopped = await device.gateway.stopTask(task.id, crypto.randomUUID());
+    expect(stopped.ok && stopped.receipt.tasks.map((entry) => entry.id)).toEqual([task.id]);
+    await device.until(stepsAre(task.id, ["stopped", "pending", "pending", "pending", "pending"]));
+
+    const ignored = await device.gateway.control(task.id, { kind: "ignore", step_id: task.plan[4]?.id, reason: "Not needed today" });
+    expect(ignored.ok && ignored.task.progress).toMatchObject({ counted: 4, ignored: 1, percent: 0 });
+    const unreadable = await device.gateway.control(task.id, { kind: "ignore", step_id: task.plan[3]?.id, reason: "" });
+    expect(unreadable).toMatchObject({ ok: false, code: "invalid_request" });
+
+    const resumed = await device.gateway.control(task.id, { kind: "resume" });
+    expect(resumed.ok && resumed.task.status).toBe("running");
+    await device.until(stepsAre(task.id, ["running", "pending", "pending", "pending", "ignored"]));
+    device.halt.press();
+    await device.haltView("stopped");
+  });
+});
+
 describe("refusals", () => {
   it("refuses a forged command and tells the cloud", async () => {
     const device = await symbiote();

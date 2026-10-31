@@ -6,6 +6,7 @@
   "expires_at": "2026-10-31T19:00:33.000Z",
   "body": {
     "kind": "stop",
-    "stop_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e42"
+    "stop_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e42",
+    "task_id": null
   }
 }

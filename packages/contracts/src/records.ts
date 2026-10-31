@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Email, Id, Timestamp } from "./primitives.ts";
+import { progressOf, sameProgress } from "./progress.ts";
 import { contracts } from "./registry.ts";
 
 export const ListeningMode = z
@@ -103,7 +104,7 @@ export const FailurePolicy = z
   .register(contracts, { id: "FailurePolicy" });
 
 export const StepStatus = z
-  .enum(["pending", "waiting", "running", "done", "failed", "skipped", "stopped"])
+  .enum(["pending", "waiting", "running", "done", "failed", "skipped", "stopped", "ignored"])
   .register(contracts, { id: "StepStatus" });
 
 const stepFields = {
@@ -114,6 +115,13 @@ const stepFields = {
   reversible: z.boolean(),
   on_failure: FailurePolicy,
 };
+
+export const SetAsideReason = z
+  .string()
+  .min(1)
+  .max(300)
+  .regex(/\S/)
+  .register(contracts, { id: "SetAsideReason" });
 
 export const StepTemplate = z
   .strictObject(stepFields)
@@ -128,12 +136,27 @@ export const Step = z
     ...stepFields,
     status: StepStatus,
     output: z.string().nullable(),
+    set_aside_reason: SetAsideReason.nullable(),
+    repeatable: z.boolean(),
   })
   .register(contracts, { id: "Step" });
 
 export const TaskStatus = z
   .enum(["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled", "stopped"])
   .register(contracts, { id: "TaskStatus" });
+
+const stepCount = z.int().nonnegative();
+
+export const TaskProgress = z
+  .strictObject({
+    done: stepCount,
+    counted: stepCount,
+    skipped: stepCount,
+    ignored: stepCount,
+    total: stepCount,
+    percent: z.int().min(0).max(100),
+  })
+  .register(contracts, { id: "TaskProgress" });
 
 export const Task = z
   .strictObject({
@@ -144,9 +167,15 @@ export const Task = z
     request_text: z.string().min(1),
     plan: z.array(Step),
     status: TaskStatus,
+    progress: TaskProgress,
     result: z.string().nullable(),
     created_at: Timestamp,
     updated_at: Timestamp,
+  })
+  .superRefine((task, context) => {
+    if (!sameProgress(task.progress, progressOf(task.plan.map((step) => step.status)))) {
+      context.addIssue({ code: "custom", path: ["progress"], message: "Progress must be counted from the steps of the plan." });
+    }
   })
   .register(contracts, { id: "Task" });
 
@@ -234,9 +263,11 @@ export type ConnectorTarget = z.infer<typeof ConnectorTarget>;
 export type StepTarget = z.infer<typeof StepTarget>;
 export type FailurePolicy = z.infer<typeof FailurePolicy>;
 export type StepStatus = z.infer<typeof StepStatus>;
+export type SetAsideReason = z.infer<typeof SetAsideReason>;
 export type StepTemplate = z.infer<typeof StepTemplate>;
 export type Step = z.infer<typeof Step>;
 export type TaskStatus = z.infer<typeof TaskStatus>;
+export type TaskProgress = z.infer<typeof TaskProgress>;
 export type Task = z.infer<typeof Task>;
 export type SkillStatus = z.infer<typeof SkillStatus>;
 export type Skill = z.infer<typeof Skill>;

@@ -18,6 +18,7 @@ import {
   SendMessageAccepted,
   StopReceipt,
   Task,
+  TaskControl,
   TaskList,
   type Capabilities,
   type CommandReport,
@@ -39,6 +40,7 @@ import type {
   StepResult,
   TaskResult,
   TasksResult,
+  TaskStopResult,
 } from "../shared/bridge.ts";
 import type { Api, Result } from "./api.ts";
 import type { DeviceTrust } from "./session-manager.ts";
@@ -318,6 +320,22 @@ export class GatewayClient {
 
   async drill(kind: DrillKind): Promise<TaskResult> {
     return this.#call(this.#api.request("POST", "/v1/tasks/drill", { schema: Task, body: { kind }, token: this.#token }), (task) => ({ ok: true, task }));
+  }
+
+  async control(taskId: unknown, control: unknown): Promise<TaskResult> {
+    const id = Id.safeParse(taskId);
+    const parsed = TaskControl.safeParse(control);
+    if (!id.success || !parsed.success) {
+      return { ok: false, code: "invalid_request", reason: "Write a short reason, in 300 characters or fewer." };
+    }
+    return this.#call(this.#api.request("POST", `/v1/tasks/${id.data}/control`, { schema: Task, body: parsed.data, token: this.#token }), (task) => ({ ok: true, task }));
+  }
+
+  async stopTask(taskId: string, stopId: string): Promise<TaskStopResult> {
+    return this.#call(
+      this.#api.request("POST", "/v1/stop", { schema: StopReceipt, body: { stop_id: stopId, scope: { kind: "task", task_id: taskId } }, token: this.#token }),
+      (receipt) => ({ ok: true, receipt }),
+    );
   }
 
   async confirm(taskId: string, stepId: string, decision: ConfirmDecision): Promise<AnswerResult> {

@@ -1,4 +1,4 @@
-import type { ConfirmationStrictness, ConfirmDecision, ConfirmRequest, DrillKind } from "@venom/contracts";
+import type { ConfirmationStrictness, ConfirmDecision, ConfirmRequest, DrillKind, TaskControl } from "@venom/contracts";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import type { ConnectionState, HaltView, VenomBridge } from "../../shared/bridge.ts";
 import { initialTasks, isSafetyEvent, reduceTasks, type TasksState } from "./tasks-state.ts";
@@ -7,22 +7,36 @@ export interface TasksHandle {
   readonly state: TasksState;
   readonly halt: HaltView;
   readonly sending: ReadonlySet<string>;
+  readonly controlling: ReadonlySet<string>;
   readonly failure: string | null;
   readonly strictness: ConfirmationStrictness | null;
   readonly saving: boolean;
   stop(): void;
   drill(kind: DrillKind): Promise<boolean>;
   answer(request: ConfirmRequest, decision: ConfirmDecision): Promise<void>;
+  control(taskId: string, control: TaskControl): Promise<boolean>;
+  stopTask(taskId: string): Promise<void>;
   dismiss(taskId: string): void;
   seen(stepId: string): void;
   choose(strictness: ConfirmationStrictness): Promise<void>;
   clearFailure(): void;
 }
 
+export function controlKey(taskId: string, kind: TaskControl["kind"] | "stop", stepId: string | null = null): string {
+  return `${taskId}:${kind}:${stepId ?? ""}`;
+}
+
+function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  const next = new Set(set);
+  next.delete(key);
+  return next;
+}
+
 export function useTasks(bridge: VenomBridge, connection: ConnectionState): TasksHandle {
   const [state, dispatch] = useReducer(reduceTasks, initialTasks);
   const [halt, setHalt] = useState<HaltView>({ kind: "idle" });
   const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
+  const [controlling, setControlling] = useState<ReadonlySet<string>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);
   const [strictness, setStrictness] = useState<ConfirmationStrictness | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,6 +104,37 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
     [bridge],
   );
 
+  const control = useCallback(
+    async (taskId: string, next: TaskControl) => {
+      const key = controlKey(taskId, next.kind, "step_id" in next ? next.step_id : null);
+      setControlling((current) => new Set(current).add(key));
+      const result = await bridge.taskControl(taskId, next);
+      setControlling((current) => without(current, key));
+      if (result.ok) {
+        dispatch({ type: "task", task: result.task });
+      }
+      setFailure(result.ok ? null : result.reason);
+      return result.ok;
+    },
+    [bridge],
+  );
+
+  const stopTask = useCallback(
+    async (taskId: string) => {
+      const key = controlKey(taskId, "stop");
+      setControlling((current) => new Set(current).add(key));
+      const result = await bridge.stopTask(taskId);
+      setControlling((current) => without(current, key));
+      if (result.ok) {
+        for (const task of result.receipt.tasks) {
+          dispatch({ type: "task", task });
+        }
+      }
+      setFailure(result.ok ? null : result.reason);
+    },
+    [bridge],
+  );
+
   const choose = useCallback(
     async (next: ConfirmationStrictness) => {
       setSaving(true);
@@ -107,12 +152,15 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
     state,
     halt,
     sending,
+    controlling,
     failure,
     strictness,
     saving,
     stop,
     drill,
     answer,
+    control,
+    stopTask,
     choose,
     dismiss: (taskId) => dispatch({ type: "dismiss", taskId }),
     seen: (stepId) => dispatch({ type: "seen", stepId }),

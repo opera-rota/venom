@@ -67,6 +67,7 @@ export const StopCommand = z
   .strictObject({
     kind: z.literal("stop"),
     stop_id: Id,
+    task_id: Id.nullable(),
   })
   .register(contracts, { id: "StopCommand" });
 
@@ -127,7 +128,7 @@ export const StopReceipt = z
   .register(contracts, { id: "StopReceipt" });
 
 export const DrillKind = z
-  .enum(["wait", "sensitive"])
+  .enum(["wait", "sensitive", "progress"])
   .register(contracts, { id: "DrillKind" });
 
 export const TaskDrill = z

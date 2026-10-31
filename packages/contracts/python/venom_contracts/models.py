@@ -118,7 +118,7 @@ type DeviceToken = Annotated[str, Field(pattern="^vnm_[A-Za-z0-9_-]{43}$")]
 type DeviceType = Literal["computer", "phone", "tv", "watch"]
 
 
-type DrillKind = Literal["wait", "sensitive"]
+type DrillKind = Literal["wait", "sensitive", "progress"]
 
 
 type Effect = Literal["deletes", "pays", "posts", "uses_credential", "reaches_outside"]
@@ -245,11 +245,34 @@ type ReasoningFailure = Literal["not_configured", "refused", "rate_limited", "un
 type RequestState = Literal["accepted", "completed", "failed"]
 
 
+class RestoreStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["restore"]
+    step_id: UUID
+
+
+class ResumeTask(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["resume"]
+
+
 class RetryAnswer(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     request_id: UUID
+
+
+class RetryStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["retry"]
+    step_id: UUID
 
 
 type Risk = Literal["low", "medium", "high"]
@@ -297,6 +320,9 @@ class SendMessageAccepted(BaseModel):
     request_id: UUID
 
 
+type SetAsideReason = Annotated[str, Field(max_length=300, min_length=1, pattern="\\S")]
+
+
 type Signature = Annotated[str, Field(pattern="^[A-Za-z0-9_-]{86}$")]
 
 
@@ -327,13 +353,22 @@ class SignupStarted(BaseModel):
 type SkillStatus = Literal["taught", "saved", "active", "updated", "retired"]
 
 
+class SkipStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["skip"]
+    step_id: UUID
+    reason: SetAsideReason
+
+
 type Speaker = Literal["user", "venom"]
 
 
 type StepAction = Literal["wait", "open_app", "type_text", "click", "run_script", "take_screenshot", "call_connector"]
 
 
-type StepStatus = Literal["pending", "waiting", "running", "done", "failed", "skipped", "stopped"]
+type StepStatus = Literal["pending", "waiting", "running", "done", "failed", "skipped", "stopped", "ignored"]
 
 
 type StepTarget = Annotated[DeviceTarget | ConnectorTarget, Field(discriminator="kind")]
@@ -364,6 +399,7 @@ class StopCommand(BaseModel):
     )
     kind: Literal["stop"]
     stop_id: UUID
+    task_id: UUID | None
 
 
 class StopDevice(BaseModel):
@@ -395,6 +431,18 @@ class TaskDrill(BaseModel):
         extra="forbid",
     )
     kind: DrillKind
+
+
+class TaskProgress(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    done: Annotated[int, Field(ge=0, le=9007199254740991)]
+    counted: Annotated[int, Field(ge=0, le=9007199254740991)]
+    skipped: Annotated[int, Field(ge=0, le=9007199254740991)]
+    ignored: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    percent: Annotated[int, Field(ge=0, le=100)]
 
 
 type TaskStatus = Literal["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled", "stopped"]
@@ -655,6 +703,15 @@ class Embeddings(BaseModel):
     usage: TokenUsage
 
 
+class IgnoreStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["ignore"]
+    step_id: UUID
+    reason: SetAsideReason
+
+
 class Intent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -907,6 +964,8 @@ class Step(BaseModel):
     on_failure: FailurePolicy
     status: StepStatus
     output: str | None
+    set_aside_reason: SetAsideReason | None
+    repeatable: bool
 
 
 type StopScope = Annotated[StopAll | StopTask | StopDevice, Field(discriminator="kind")]
@@ -932,9 +991,16 @@ class Task(BaseModel):
     request_text: Annotated[str, Field(min_length=1)]
     plan: list[Step]
     status: TaskStatus
+    progress: TaskProgress
     result: str | None
     created_at: AwareDatetime
     updated_at: AwareDatetime
+
+
+type TaskControl = Annotated[
+    ResumeTask | RetryStep | SkipStep | IgnoreStep | RestoreStep,
+    Field(discriminator="kind"),
+]
 
 
 class TaskEvent(BaseModel):
@@ -1127,7 +1193,7 @@ class StopRequest(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | HaltEvent | Intent | LiveChallenge | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | PendingAnswer | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | RunStepCommand | SafetySettings | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | Task | TaskDrill | TaskEvent | TaskList | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | PendingAnswer | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunStepCommand | SafetySettings | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | Step | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | Task | TaskDrill | TaskEvent | TaskList | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | WaitAction,
     Field(title="Contract"),
 ]
 

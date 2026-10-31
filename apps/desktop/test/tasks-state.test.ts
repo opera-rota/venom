@@ -1,6 +1,6 @@
-import type { ConfirmRequest, GatewayEvent, Task } from "@venom/contracts";
+import { progressOf, type ConfirmRequest, type GatewayEvent, type Task } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
-import { initialTasks, reduceTasks, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
+import { initialTasks, reduceTasks, taskCount, taskGroups, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
 
 const accountId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01";
 const deviceId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02";
@@ -29,9 +29,12 @@ function task(status: Task["status"], stepStatus: Task["plan"][number]["status"]
         on_failure: "abort",
         status: stepStatus,
         output: null,
+        set_aside_reason: null,
+        repeatable: false,
       },
     ],
     status,
+    progress: progressOf([stepStatus]),
     result: null,
     created_at: "2026-10-31T19:00:00.000Z",
     updated_at: updatedAt,
@@ -98,5 +101,37 @@ describe("tasks state follows the cloud", () => {
     expect(taskInView(loaded)).toBeNull();
     const running = reduceTasks(loaded, { type: "list", list: { tasks: [finished, task("running", "running", "2026-10-31T19:00:00.000Z")], confirmations: [] } });
     expect(taskInView(running)?.id).toBe(taskId);
+  });
+});
+
+describe("the Tasks view groups tasks by what they need", () => {
+  it("puts tasks that need you first, then running, finished, failed and stopped", () => {
+    const ids = ["0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e21", "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e22", "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e23", "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e24"];
+    const list = {
+      tasks: [
+        task("completed", "done", "2026-10-31T19:00:01.000Z", ids[0]),
+        task("cancelled", "stopped", "2026-10-31T19:00:02.000Z", ids[1]),
+        task("awaiting_confirmation", "waiting", "2026-10-31T19:00:03.000Z", ids[2]),
+        task("running", "running", "2026-10-31T19:00:04.000Z", ids[3]),
+      ],
+      confirmations: [],
+    };
+    const state = reduceTasks(initialTasks, { type: "list", list });
+    expect(taskGroups(state).map((group) => [group.title, group.tasks.length])).toEqual([
+      ["Needs you", 1],
+      ["Running", 1],
+      ["Finished", 1],
+      ["Stopped", 1],
+    ]);
+    expect(taskCount(state)).toEqual({ open: 2, needsYou: true });
+  });
+
+  it("takes a task the cloud sent back after a control, unless a newer copy is already here", () => {
+    const newer = play([{ type: "task", ...stamp, task: task("running", "running", "2026-10-31T19:00:08.000Z") }]);
+    const stale = reduceTasks(newer, { type: "task", task: task("stopped", "stopped", "2026-10-31T19:00:07.000Z") });
+    expect(stale.tasks.get(taskId)?.status).toBe("running");
+    const fresh = reduceTasks(newer, { type: "task", task: task("stopped", "stopped", "2026-10-31T19:00:09.000Z") });
+    expect(fresh.tasks.get(taskId)?.progress.percent).toBe(0);
+    expect(fresh.tasks.get(taskId)?.status).toBe("stopped");
   });
 });

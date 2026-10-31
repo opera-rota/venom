@@ -124,6 +124,9 @@
       "$ref": "#/$defs/HaltEvent"
     },
     {
+      "$ref": "#/$defs/IgnoreStep"
+    },
+    {
       "$ref": "#/$defs/Intent"
     },
     {
@@ -193,7 +196,16 @@
       "$ref": "#/$defs/RequestEvent"
     },
     {
+      "$ref": "#/$defs/RestoreStep"
+    },
+    {
+      "$ref": "#/$defs/ResumeTask"
+    },
+    {
       "$ref": "#/$defs/RetryAnswer"
+    },
+    {
+      "$ref": "#/$defs/RetryStep"
     },
     {
       "$ref": "#/$defs/RouteDecision"
@@ -238,6 +250,9 @@
       "$ref": "#/$defs/Skill"
     },
     {
+      "$ref": "#/$defs/SkipStep"
+    },
+    {
       "$ref": "#/$defs/Step"
     },
     {
@@ -278,6 +293,9 @@
     },
     {
       "$ref": "#/$defs/TaskList"
+    },
+    {
+      "$ref": "#/$defs/TaskProgress"
     },
     {
       "$ref": "#/$defs/TextOutput"
@@ -1220,7 +1238,8 @@
       "type": "string",
       "enum": [
         "wait",
-        "sensitive"
+        "sensitive",
+        "progress"
       ]
     },
     "Effect": {
@@ -1570,6 +1589,28 @@
         "stop_id",
         "stopped_at",
         "tasks"
+      ],
+      "additionalProperties": false
+    },
+    "IgnoreStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "ignore"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "$ref": "#/$defs/SetAsideReason"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id",
+        "reason"
       ],
       "additionalProperties": false
     },
@@ -2439,6 +2480,37 @@
         "failed"
       ]
     },
+    "RestoreStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "restore"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id"
+      ],
+      "additionalProperties": false
+    },
+    "ResumeTask": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "resume"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
     "RetryAnswer": {
       "type": "object",
       "properties": {
@@ -2449,6 +2521,24 @@
       },
       "required": [
         "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "RetryStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "retry"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id"
       ],
       "additionalProperties": false
     },
@@ -2608,6 +2698,12 @@
         "device"
       ],
       "additionalProperties": false
+    },
+    "SetAsideReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "\\S"
     },
     "Signature": {
       "type": "string",
@@ -2779,6 +2875,28 @@
         "retired"
       ]
     },
+    "SkipStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "skip"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "$ref": "#/$defs/SetAsideReason"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
     "Speaker": {
       "type": "string",
       "enum": [
@@ -2837,6 +2955,19 @@
             "string",
             "null"
           ]
+        },
+        "set_aside_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetAsideReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repeatable": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -2851,7 +2982,9 @@
         "reversible",
         "on_failure",
         "status",
-        "output"
+        "output",
+        "set_aside_reason",
+        "repeatable"
       ],
       "additionalProperties": false
     },
@@ -2876,7 +3009,8 @@
         "done",
         "failed",
         "skipped",
-        "stopped"
+        "stopped",
+        "ignored"
       ]
     },
     "StepTarget": {
@@ -2951,11 +3085,23 @@
         "stop_id": {
           "type": "string",
           "format": "uuid"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "kind",
-        "stop_id"
+        "stop_id",
+        "task_id"
       ],
       "additionalProperties": false
     },
@@ -3134,6 +3280,9 @@
         "status": {
           "$ref": "#/$defs/TaskStatus"
         },
+        "progress": {
+          "$ref": "#/$defs/TaskProgress"
+        },
         "result": {
           "type": [
             "string",
@@ -3157,11 +3306,34 @@
         "request_text",
         "plan",
         "status",
+        "progress",
         "result",
         "created_at",
         "updated_at"
       ],
       "additionalProperties": false
+    },
+    "TaskControl": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ResumeTask"
+        },
+        {
+          "$ref": "#/$defs/RetryStep"
+        },
+        {
+          "$ref": "#/$defs/SkipStep"
+        },
+        {
+          "$ref": "#/$defs/IgnoreStep"
+        },
+        {
+          "$ref": "#/$defs/RestoreStep"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
     },
     "TaskDrill": {
       "type": "object",
@@ -3228,6 +3400,50 @@
       "required": [
         "tasks",
         "confirmations"
+      ],
+      "additionalProperties": false
+    },
+    "TaskProgress": {
+      "type": "object",
+      "properties": {
+        "done": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "counted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ignored": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "done",
+        "counted",
+        "skipped",
+        "ignored",
+        "total",
+        "percent"
       ],
       "additionalProperties": false
     },

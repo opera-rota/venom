@@ -6,7 +6,8 @@ import { beginSecretWordLogin, beginSecretWordRegistration } from "@venom/identi
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
 import { createMemory, type Memory } from "@venom/memory";
 import { createPower, type Power } from "@venom/power";
-import { createCommandSigner, createTasks, createTrust, newKeyPair, type CommandSigner, type Tasks } from "@venom/safety";
+import { createCommandSigner, createTrust, newKeyPair, type CommandSigner } from "@venom/safety";
+import { createTasks, type Tasks } from "@venom/tasks";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { brainEmbedder, buildGateway } from "../src/app.ts";

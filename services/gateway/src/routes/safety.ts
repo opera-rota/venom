@@ -20,8 +20,11 @@ export function safetyRoutes(app: FastifyInstance, context: GatewayContext): voi
   app.post("/v1/stop", async (request) => {
     const device = requireSignedIn(request);
     const stop = StopRequest.parse(request.body);
-    for (const deviceId of hub.devicesOf(device.account_id)) {
-      hub.sendCommand(deviceId, signer.issue({ id: deviceId, account_id: device.account_id }, { kind: "stop", stop_id: stop.stop_id }).frame);
+    const { scope } = stop;
+    const reached = hub.devicesOf(device.account_id).filter((deviceId) => scope.kind !== "device" || deviceId === scope.device_id);
+    const taskId = scope.kind === "task" ? scope.task_id : null;
+    for (const deviceId of reached) {
+      hub.sendCommand(deviceId, signer.issue({ id: deviceId, account_id: device.account_id }, { kind: "stop", stop_id: stop.stop_id, task_id: taskId }).frame);
     }
     const { receipt, closed } = await tasks.stop(device, stop, request.id);
     runner.wakeAll();

@@ -1,5 +1,6 @@
 import type { PowerStatus } from "@venom/contracts";
 import type { ConnectionState, HaltView } from "../../../shared/bridge.ts";
+import type { TaskCount } from "../tasks-state.ts";
 import { button, mark, text } from "../ui.ts";
 import { HaltSwitch } from "./HaltSwitch.tsx";
 import { Icon, type IconName } from "./Icon.tsx";
@@ -18,9 +19,10 @@ export function LogoMark({ size }: { readonly size: number }) {
   );
 }
 
-export type SidePanel = "devices" | "power" | "memory" | "safety";
+export type SidePanel = "tasks" | "devices" | "power" | "memory" | "safety";
 
 const panelButtons: readonly { readonly panel: Exclude<SidePanel, "power">; readonly label: string; readonly icon: IconName }[] = [
+  { panel: "tasks", label: "Tasks", icon: "list" },
   { panel: "memory", label: "Memory", icon: "memory" },
   { panel: "devices", label: "Devices", icon: "devices" },
   { panel: "safety", label: "Safety", icon: "shield" },
@@ -35,6 +37,7 @@ export interface HeaderProps {
   readonly onTogglePanel: (panel: SidePanel) => void;
   readonly halt: HaltView;
   readonly onStop: () => void;
+  readonly taskCount: TaskCount;
 }
 
 function gaugeLabel(power: PowerStatus, engineName: string): string {
@@ -44,7 +47,14 @@ function gaugeLabel(power: PowerStatus, engineName: string): string {
   return `${engineName} · ${new Intl.NumberFormat().format(power.balance)} power`;
 }
 
-export function Header({ connection, accountName, power, engineName, panel, onTogglePanel, halt, onStop }: HeaderProps) {
+function taskLabel({ open, needsYou }: TaskCount): string {
+  if (open === 0) {
+    return "Tasks";
+  }
+  return `Tasks, ${open} open${needsYou ? ", one needs you" : ""}`;
+}
+
+export function Header({ connection, accountName, power, engineName, panel, onTogglePanel, halt, onStop, taskCount }: HeaderProps) {
   const view = connectionView[connection];
 
   return (
@@ -77,12 +87,15 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
             type="button"
             onClick={() => onTogglePanel(entry.panel)}
             aria-pressed={panel === entry.panel}
-            aria-label={entry.label}
-            title={entry.label}
+            aria-label={entry.panel === "tasks" ? taskLabel(taskCount) : entry.label}
+            title={entry.panel === "tasks" ? taskLabel(taskCount) : entry.label}
             className={`${button.ghost} ${panel === entry.panel ? "text-green-400" : ""}`}
           >
             <Icon name={entry.icon} className="h-4 w-4" />
             <span className="hidden xl:inline">{entry.label}</span>
+            {entry.panel === "tasks" && taskCount.open > 0 && (
+              <span className={`${mark.badge} ${taskCount.needsYou ? "bg-status-wait text-on-accent" : "bg-(--tint-accent) text-green-300"}`}>{taskCount.open}</span>
+            )}
           </button>
         ))}
         <HaltSwitch view={halt} onStop={onStop} />

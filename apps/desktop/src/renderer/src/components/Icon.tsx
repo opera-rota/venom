@@ -18,6 +18,11 @@ const paths = {
   search: "M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.5 10.5l3 3",
   stop: "M4.5 4.5h7v7h-7z",
   shield: "M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4z",
+  list: "M6 4h7.5M6 8h7.5M6 12h7.5M2.5 4h.01M2.5 8h.01M2.5 12h.01",
+  play: "M5 3.5l7 4.5-7 4.5z",
+  skip: "M3.5 3.5l6 4.5-6 4.5zM12.5 3.5v9",
+  chevron: "M4.5 6.5L8 10l3.5-3.5",
+  undo: "M3.5 6.5h6.5a3 3 0 0 1 0 6H6.5M6 3.5l-2.5 3 2.5 3",
 } as const;
 
 export type IconName = keyof typeof paths;

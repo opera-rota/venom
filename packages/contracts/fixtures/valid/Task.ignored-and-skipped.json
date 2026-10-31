@@ -1,0 +1,116 @@
+{
+  "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "origin_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "target_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "request_text": "Progress drill: five practice steps",
+  "plan": [
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e10",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "order": 0,
+      "summary": "Practice step 1 of 5: wait 8 seconds",
+      "action": "wait",
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
+      "requires_confirmation": false,
+      "reversible": true,
+      "on_failure": "abort",
+      "status": "done",
+      "output": "Waited 8 seconds.",
+      "set_aside_reason": null,
+      "repeatable": true
+    },
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e11",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "order": 1,
+      "summary": "Practice step 2 of 5: wait 8 seconds",
+      "action": "wait",
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
+      "requires_confirmation": false,
+      "reversible": true,
+      "on_failure": "abort",
+      "status": "done",
+      "output": "Waited 8 seconds.",
+      "set_aside_reason": null,
+      "repeatable": true
+    },
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e12",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "order": 2,
+      "summary": "Practice step 3 of 5: wait 8 seconds",
+      "action": "wait",
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
+      "requires_confirmation": false,
+      "reversible": true,
+      "on_failure": "abort",
+      "status": "running",
+      "output": null,
+      "set_aside_reason": null,
+      "repeatable": true
+    },
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e13",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "order": 3,
+      "summary": "Practice step 4 of 5: wait 8 seconds",
+      "action": "wait",
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
+      "requires_confirmation": false,
+      "reversible": true,
+      "on_failure": "abort",
+      "status": "skipped",
+      "output": null,
+      "set_aside_reason": "Come back to this after the others",
+      "repeatable": true
+    },
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e14",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "order": 4,
+      "summary": "Practice step 5 of 5: wait 8 seconds",
+      "action": "wait",
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
+      "requires_confirmation": false,
+      "reversible": true,
+      "on_failure": "abort",
+      "status": "ignored",
+      "output": null,
+      "set_aside_reason": "Not needed today",
+      "repeatable": true
+    }
+  ],
+  "status": "running",
+  "progress": {
+    "done": 2,
+    "counted": 4,
+    "skipped": 1,
+    "ignored": 1,
+    "total": 5,
+    "percent": 50
+  },
+  "result": null,
+  "created_at": "2026-10-11T09:30:00Z",
+  "updated_at": "2026-10-11T09:30:04+02:00"
+}

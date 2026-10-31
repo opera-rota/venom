@@ -7,7 +7,7 @@ import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
-import { taskInView } from "../tasks-state.ts";
+import { taskCount, taskInView } from "../tasks-state.ts";
 import { useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
@@ -17,6 +17,7 @@ import { MemoryPanel } from "./MemoryPanel.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { engineName, PowerPanel } from "./PowerPanel.tsx";
 import { SafetyPanel } from "./SafetyPanel.tsx";
+import { TasksPanel } from "./TasksPanel.tsx";
 import { TaskStrip } from "./TaskStrip.tsx";
 
 const screenScheduler: Scheduler = {
@@ -65,11 +66,15 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
           onTogglePanel={(next) => setPanel((open) => (open === next ? null : next))}
           halt={tasks.halt}
           onStop={tasks.stop}
+          taskCount={taskCount(tasks.state)}
         />
-        {inView !== null && <TaskStrip task={inView} deviceId={device.id} devices={devices.devices} onDismiss={tasks.dismiss} />}
+        {inView !== null && panel !== "tasks" && (
+          <TaskStrip task={inView} deviceId={device.id} devices={devices.devices} onDismiss={tasks.dismiss} onOpenTasks={() => setPanel("tasks")} />
+        )}
         <MessageList store={store} devices={devices.devices} deviceId={device.id} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
       </main>
+      {panel === "tasks" && <TasksPanel handle={tasks} deviceId={device.id} devices={devices.devices} onClose={() => setPanel(null)} />}
       {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}
       {panel === "power" && <PowerPanel state={power} onClose={() => setPanel(null)} />}
       {panel === "memory" && <MemoryPanel state={memory} onClose={() => setPanel(null)} />}

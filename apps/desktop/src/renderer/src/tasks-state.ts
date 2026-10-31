@@ -18,6 +18,7 @@ export interface TasksState {
 export type TasksAction =
   | { readonly type: "list"; readonly list: TaskList }
   | { readonly type: "event"; readonly event: SafetyEvent }
+  | { readonly type: "task"; readonly task: Task }
   | { readonly type: "dismiss"; readonly taskId: string }
   | { readonly type: "seen"; readonly stepId: string };
 
@@ -100,6 +101,8 @@ export function reduceTasks(state: TasksState, action: TasksAction): TasksState 
     }
     case "event":
       return apply(state, action.event);
+    case "task":
+      return { ...state, tasks: withTasks(state.tasks, [action.task]) };
     case "dismiss":
       return { ...state, dismissed: new Set(state.dismissed).add(action.taskId) };
     case "seen":
@@ -115,4 +118,48 @@ export function taskInView(state: TasksState): Task | null {
   }
   const latest = candidates.sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
   return latest ?? null;
+}
+
+export type TaskGroupName = "needs_you" | "running" | "finished" | "failed" | "stopped";
+
+export interface TaskGroup {
+  readonly name: TaskGroupName;
+  readonly title: string;
+  readonly tasks: readonly Task[];
+}
+
+const groupOf: Record<Task["status"], TaskGroupName> = {
+  awaiting_confirmation: "needs_you",
+  created: "running",
+  planned: "running",
+  running: "running",
+  completed: "finished",
+  failed: "failed",
+  stopped: "stopped",
+  cancelled: "stopped",
+};
+
+const groupTitles: readonly (readonly [TaskGroupName, string])[] = [
+  ["needs_you", "Needs you"],
+  ["running", "Running"],
+  ["finished", "Finished"],
+  ["failed", "Failed"],
+  ["stopped", "Stopped"],
+];
+
+export function taskGroups(state: TasksState): readonly TaskGroup[] {
+  const newestFirst = [...state.tasks.values()].sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return groupTitles
+    .map(([name, title]) => ({ name, title, tasks: newestFirst.filter((task) => groupOf[task.status] === name) }))
+    .filter((group) => group.tasks.length > 0);
+}
+
+export interface TaskCount {
+  readonly open: number;
+  readonly needsYou: boolean;
+}
+
+export function taskCount(state: TasksState): TaskCount {
+  const open = [...state.tasks.values()].filter(isOpen);
+  return { open: open.length, needsYou: open.some((task) => task.status === "awaiting_confirmation") };
 }

@@ -2,6 +2,7 @@ import {
   ConfirmationAnswered,
   ConfirmRequest,
   DeviceAction,
+  progressOf,
   safetyLimits,
   StopReceipt,
   Task,
@@ -12,13 +13,17 @@ import {
   type DrillKind,
   type Effect,
   type StepAction,
+  type StepStatus,
   type StopRequest,
   type StopScope,
+  type TaskControl,
+  type TaskStatus,
 } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
+import { assess, drills, plainLanguage } from "@venom/safety";
 import type { Sql, TransactionSql } from "postgres";
-import { refuseSafety } from "./errors.ts";
-import { assess, drills, plainLanguage } from "./rules.ts";
+import { refuseTasks } from "./errors.ts";
+import { openTaskStatuses, repeatable, resumableTaskStatuses } from "./machine.ts";
 
 export const activeTaskLimit = 3;
 
@@ -34,7 +39,11 @@ export interface NextStep {
   readonly waiting: boolean;
 }
 
-export type Next = { readonly kind: "over" } | { readonly kind: "finished" } | { readonly kind: "step"; readonly step: NextStep };
+export type Next =
+  | { readonly kind: "over" }
+  | { readonly kind: "finished" }
+  | { readonly kind: "come_back"; readonly stepId: string }
+  | { readonly kind: "step"; readonly step: NextStep };
 
 export interface Asked {
   readonly task: Task;
@@ -50,16 +59,23 @@ export interface Stopped {
   readonly closed: readonly ConfirmRequest[];
 }
 
+export interface Controlled {
+  readonly task: Task;
+  readonly run: boolean;
+}
+
 export interface Tasks {
   drill(device: DeviceRef, kind: DrillKind, requestId: string): Promise<Task>;
   get(accountId: string, taskId: string): Promise<Task | null>;
   list(accountId: string): Promise<TaskList>;
   next(accountId: string, taskId: string): Promise<Next>;
+  comeBack(accountId: string, stepId: string, requestId: string): Promise<Task | null>;
   ask(accountId: string, stepId: string, requestId: string): Promise<Asked | null>;
   answer(device: DeviceRef, taskId: string, stepId: string, decision: ConfirmDecision, requestId: string): Promise<Answered>;
   start(accountId: string, stepId: string, requestId: string): Promise<Task | null>;
   finish(accountId: string, stepId: string, outcome: CommandOutcome, detail: string, requestId: string): Promise<Task | null>;
   complete(accountId: string, taskId: string, requestId: string): Promise<Task | null>;
+  control(device: DeviceRef, taskId: string, control: TaskControl, requestId: string): Promise<Controlled>;
   stop(device: DeviceRef, request: StopRequest, requestId: string): Promise<Stopped>;
   interruptAll(): Promise<number>;
   strictness(accountId: string): Promise<ConfirmationStrictness>;
@@ -72,7 +88,7 @@ interface TaskRow {
   readonly origin_device_id: string;
   readonly target_device_id: string | null;
   readonly request_text: string;
-  readonly status: string;
+  readonly status: TaskStatus;
   readonly result: string | null;
   readonly created_at: Date;
   readonly updated_at: Date;
@@ -91,15 +107,18 @@ interface StepRow {
   readonly requires_confirmation: boolean;
   readonly reversible: boolean;
   readonly on_failure: string;
-  readonly status: string;
+  readonly status: StepStatus;
   readonly output: string | null;
+  readonly set_aside_reason: string | null;
   readonly asked_at: Date | null;
   readonly answered_at: Date | null;
+  readonly started_at: Date | null;
+  readonly finished_at: Date | null;
 }
 
 type Db = Sql | TransactionSql;
 
-const openStatuses = ["running", "awaiting_confirmation"];
+type Actor = DeviceRef | { readonly account_id: string; readonly id: null };
 
 const finishedAs: Record<CommandOutcome, "done" | "stopped" | "failed"> = {
   done: "done",
@@ -108,25 +127,34 @@ const finishedAs: Record<CommandOutcome, "done" | "stopped" | "failed"> = {
   refused: "failed",
 };
 
+const taskColumns = "id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at";
+
 function count(total: number, one: string, many = `${one}s`): string {
   return `${total} ${total === 1 ? one : many}`;
 }
 
-function describe(status: string, steps: readonly StepRow[]): string | null {
+function setAside(steps: readonly StepRow[]): string {
+  const skipped = steps.filter((step) => step.status === "skipped").length;
+  const ignored = steps.filter((step) => step.status === "ignored").length;
+  return [skipped > 0 ? `, ${skipped} skipped` : "", ignored > 0 ? `, ${ignored} ignored` : ""].join("");
+}
+
+function describe(status: TaskStatus, steps: readonly StepRow[]): string | null {
   const done = steps.filter((step) => step.status === "done").length;
   const stopped = steps.filter((step) => step.status === "stopped").length;
   const waiting = steps.filter((step) => step.status === "pending" || step.status === "waiting").length;
   const running = steps.filter((step) => step.status === "running").length;
+  const aside = setAside(steps);
   switch (status) {
     case "completed":
-      return `Finished. ${count(done, "step")} done.`;
+      return `Finished. ${count(done, "step")} done${aside}.`;
     case "stopped":
-      return `Stopped. ${done} finished, ${stopped + running} stopped${running > 0 ? " (stopping now)" : ""}, ${waiting} never started.`;
+      return `Stopped. ${done} finished, ${stopped + running} stopped${running > 0 ? " (stopping now)" : ""}, ${waiting} never started${aside}.`;
     case "cancelled":
-      return `Cancelled because you declined a step. ${done} finished before that, ${waiting} never started.`;
+      return `Cancelled because you declined a step. ${done} finished before that, ${waiting} never started${aside}.`;
     case "failed": {
       const failed = steps.find((step) => step.status === "failed");
-      return `Failed. ${failed?.output ?? "A step did not finish."} ${done} finished before that.`;
+      return `Failed. ${failed?.output ?? "A step did not finish."} ${done} finished before that${aside}.`;
     }
     default:
       return null;
@@ -153,8 +181,11 @@ function toTask(row: TaskRow, steps: readonly StepRow[]): Task {
       on_failure: step.on_failure,
       status: step.status,
       output: step.output,
+      set_aside_reason: step.set_aside_reason,
+      repeatable: repeatable(step),
     })),
     status: row.status,
+    progress: progressOf(steps.map((step) => step.status)),
     result: row.result,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
@@ -181,7 +212,8 @@ async function loadSteps(db: Db, taskIds: readonly string[]): Promise<StepRow[]>
   }
   return db<StepRow[]>`
     select s.id, s.task_id, s.position, s.summary, s.action, s.params, s.target_device_id, d.name as target_name,
-           s.effects, s.requires_confirmation, s.reversible, s.on_failure, s.status, s.output, s.asked_at, s.answered_at
+           s.effects, s.requires_confirmation, s.reversible, s.on_failure, s.status, s.output, s.set_aside_reason,
+           s.asked_at, s.answered_at, s.started_at, s.finished_at
     from steps s join devices d on d.id = s.target_device_id
     where s.task_id = any(${taskIds}::uuid[])
     order by s.task_id, s.position
@@ -200,8 +232,6 @@ async function loadTasks(db: Db, rows: readonly TaskRow[]): Promise<Task[]> {
     ),
   );
 }
-
-const taskColumns = "id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at";
 
 async function taskRow(db: Db, accountId: string, taskId: string, lock = false): Promise<TaskRow | null> {
   const [row] = await db.unsafe<TaskRow[]>(`select ${taskColumns} from tasks where id = $1 and account_id = $2${lock ? " for update" : ""}`, [taskId, accountId]);
@@ -222,16 +252,34 @@ async function settle(db: Db, accountId: string, taskId: string): Promise<Task |
   return updated === undefined ? null : toTask(updated, steps);
 }
 
-async function audit(db: Db, device: DeviceRef | { account_id: string; id: null }, requestId: string | null, actor: "user" | "venom" | "system", action: string, subjectId: string, detail: Record<string, string | number | boolean | null> = {}): Promise<void> {
+async function settled(db: Db, accountId: string, taskId: string): Promise<Task> {
+  const task = await settle(db, accountId, taskId);
+  if (task === null) {
+    throw refuseTasks.taskNotFound();
+  }
+  return task;
+}
+
+async function audit(db: Db, actor: Actor, requestId: string | null, kind: "user" | "venom" | "system", action: string, subjectId: string, detail: Record<string, string | number | boolean | null> = {}): Promise<void> {
   await db`
     insert into audit_log (account_id, device_id, request_id, actor, action, subject_id, detail)
-    values (${device.account_id}, ${device.id}, ${requestId}, ${actor}, ${action}, ${subjectId}, ${db.json(detail)})
+    values (${actor.account_id}, ${actor.id}, ${requestId}, ${kind}, ${action}, ${subjectId}, ${db.json(detail)})
   `;
 }
 
 async function readStrictness(db: Db, accountId: string): Promise<ConfirmationStrictness> {
   const [row] = await db<{ confirmation_strictness: ConfirmationStrictness }[]>`select confirmation_strictness from accounts where id = ${accountId}`;
   return row?.confirmation_strictness ?? "standard";
+}
+
+async function holdActiveSlot(db: TransactionSql, accountId: string): Promise<void> {
+  await db`select pg_advisory_xact_lock(hashtextextended(${accountId}::text, 5))`;
+  const [active] = await db<{ total: number }[]>`
+    select count(*)::int as total from tasks where account_id = ${accountId} and status = any(${openTaskStatuses})
+  `;
+  if ((active?.total ?? 0) >= activeTaskLimit) {
+    throw refuseTasks.tooManyTasks(activeTaskLimit);
+  }
 }
 
 function scopeFilter(db: Db, scope: StopScope) {
@@ -245,20 +293,66 @@ function scopeFilter(db: Db, scope: StopScope) {
   }
 }
 
+function findStep(steps: readonly StepRow[], stepId: string): StepRow {
+  const step = steps.find((candidate) => candidate.id === stepId);
+  if (step === undefined) {
+    throw refuseTasks.stepNotFound();
+  }
+  return step;
+}
+
+async function resetToPending(db: Db, stepIds: readonly string[]): Promise<void> {
+  if (stepIds.length > 0) {
+    await db`
+      update steps
+      set status = 'pending', output = null, started_at = null, finished_at = null, asked_at = null, answered_at = null, answered_by = null
+      where id = any(${stepIds}::uuid[])
+    `;
+  }
+}
+
+async function resume(db: TransactionSql, device: DeviceRef, task: TaskRow, steps: readonly StepRow[], requestId: string): Promise<Controlled> {
+  if (task.status === "completed") {
+    throw refuseTasks.finished();
+  }
+  if (!resumableTaskStatuses.includes(task.status)) {
+    throw refuseTasks.alreadyRunning();
+  }
+  if (steps.some((step) => step.status === "running")) {
+    throw refuseTasks.stillStopping();
+  }
+  const unfinished = steps.filter((step) => step.status === "stopped" || step.status === "failed");
+  const unsafe = unfinished.find((step) => step.started_at !== null && !repeatable(step));
+  if (unsafe !== undefined) {
+    throw refuseTasks.notRepeatable(unsafe.position);
+  }
+  await holdActiveSlot(db, device.account_id);
+  await resetToPending(
+    db,
+    unfinished.map((step) => step.id),
+  );
+  await db`update tasks set status = 'running', stop_id = null, updated_at = clock_timestamp() where id = ${task.id}`;
+  await audit(db, device, requestId, "user", "task.resumed", task.id, { steps: unfinished.length });
+  return { task: await settled(db, device.account_id, task.id), run: true };
+}
+
+async function markSetAside(db: Db, device: DeviceRef, step: StepRow, status: "skipped" | "ignored", reason: string, requestId: string): Promise<void> {
+  await db`
+    update steps
+    set status = ${status}, set_aside_reason = ${reason}, set_aside_at = clock_timestamp(), set_aside_by = ${device.id}
+    where id = ${step.id}
+  `;
+  await audit(db, device, requestId, "user", status === "skipped" ? "step.skipped" : "step.ignored", step.id);
+}
+
 export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
-  const system = (accountId: string) => ({ account_id: accountId, id: null });
+  const system = (accountId: string): Actor => ({ account_id: accountId, id: null });
 
   return {
     async drill(device, kind, requestId) {
       const plan = drills[kind];
       return sql.begin(async (tx) => {
-        await tx`select pg_advisory_xact_lock(hashtextextended(${device.account_id}::text, 5))`;
-        const [active] = await tx<{ total: number }[]>`
-          select count(*)::int as total from tasks where account_id = ${device.account_id} and status = any(${openStatuses})
-        `;
-        if ((active?.total ?? 0) >= activeTaskLimit) {
-          throw refuseSafety.tooManyTasks(activeTaskLimit);
-        }
+        await holdActiveSlot(tx, device.account_id);
         const strictness = await readStrictness(tx, device.account_id);
         const [task] = await tx<TaskRow[]>`
           insert into tasks (account_id, origin_device_id, target_device_id, request_text, status)
@@ -311,12 +405,17 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
 
     async next(accountId, taskId) {
       const row = await taskRow(sql, accountId, taskId);
-      if (row === null || !openStatuses.includes(row.status)) {
+      if (row === null || !openTaskStatuses.includes(row.status)) {
         return { kind: "over" };
       }
-      const step = (await loadSteps(sql, [row.id])).find((candidate) => candidate.status === "pending" || candidate.status === "waiting");
+      const steps = await loadSteps(sql, [row.id]);
+      const step = steps.find((candidate) => candidate.status === "pending" || candidate.status === "waiting");
       if (step === undefined) {
-        return { kind: "finished" };
+        const skipped = steps.find((candidate) => candidate.status === "skipped");
+        if (skipped !== undefined) {
+          return { kind: "come_back", stepId: skipped.id };
+        }
+        return steps.every((candidate) => candidate.status === "done" || candidate.status === "ignored") ? { kind: "finished" } : { kind: "over" };
       }
       return {
         kind: "step",
@@ -330,6 +429,23 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           waiting: step.status === "waiting",
         },
       };
+    },
+
+    async comeBack(accountId, stepId, requestId) {
+      return sql.begin(async (tx) => {
+        const [step] = await tx<{ task_id: string }[]>`
+          update steps s set status = 'pending', set_aside_reason = null, set_aside_at = null, set_aside_by = null
+          from tasks t
+          where s.id = ${stepId} and s.account_id = ${accountId} and s.status = 'skipped'
+            and t.id = s.task_id and t.status = 'running'
+          returning s.task_id
+        `;
+        if (step === undefined) {
+          return null;
+        }
+        await audit(tx, system(accountId), requestId, "venom", "step.came_back", stepId);
+        return settle(tx, accountId, step.task_id);
+      });
     },
 
     async ask(accountId, stepId, requestId) {
@@ -359,7 +475,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
       return sql.begin(async (tx) => {
         const task = await taskRow(tx, device.account_id, taskId, true);
         if (task === null) {
-          throw refuseSafety.taskNotFound();
+          throw refuseTasks.taskNotFound();
         }
         const [step] = await tx<{ status: string; answered_by_name: string | null }[]>`
           select s.status, d.name as answered_by_name
@@ -367,10 +483,10 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           where s.id = ${stepId} and s.task_id = ${taskId}
         `;
         if (step === undefined) {
-          throw refuseSafety.taskNotFound();
+          throw refuseTasks.taskNotFound();
         }
         if (step.status !== "waiting") {
-          throw step.answered_by_name === null ? refuseSafety.noLongerWaiting() : refuseSafety.alreadyAnswered(step.answered_by_name);
+          throw step.answered_by_name === null ? refuseTasks.noLongerWaiting() : refuseTasks.alreadyAnswered(step.answered_by_name);
         }
         const approved = decision === "approve";
         await tx`
@@ -384,16 +500,16 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         `;
         await tx`update tasks set status = ${approved ? "running" : "cancelled"}, updated_at = clock_timestamp() where id = ${taskId}`;
         await audit(tx, device, requestId, "user", "confirmation.answered", stepId, { decision });
-        const settled = await settle(tx, device.account_id, taskId);
+        const current = await settle(tx, device.account_id, taskId);
         const [answeredStep] = (await loadSteps(tx, [taskId])).filter((candidate) => candidate.id === stepId);
         const [who] = await tx<{ name: string; answered_at: Date }[]>`
           select d.name, s.answered_at from steps s join devices d on d.id = s.answered_by where s.id = ${stepId}
         `;
-        if (settled === null || answeredStep === undefined || who === undefined) {
-          throw refuseSafety.taskNotFound();
+        if (current === null || answeredStep === undefined || who === undefined) {
+          throw refuseTasks.taskNotFound();
         }
         return {
-          task: settled,
+          task: current,
           request: toRequest({ ...answeredStep, status: "waiting" }, await readStrictness(tx, device.account_id)),
           answered: ConfirmationAnswered.parse({
             outcome: approved ? "approved" : "declined",
@@ -438,10 +554,8 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         if (step === undefined) {
           return null;
         }
-        if (status === "stopped") {
-          await tx`update tasks set status = 'stopped', updated_at = clock_timestamp() where id = ${step.task_id} and status = any(${openStatuses})`;
-        } else if (status === "failed") {
-          await tx`update tasks set status = 'failed', updated_at = clock_timestamp() where id = ${step.task_id} and status = any(${openStatuses})`;
+        if (status !== "done") {
+          await tx`update tasks set status = ${status}, updated_at = clock_timestamp() where id = ${step.task_id} and status = any(${openTaskStatuses})`;
         }
         await audit(tx, system(accountId), requestId, "venom", "step.finished", stepId, { outcome });
         return settle(tx, accountId, step.task_id);
@@ -453,7 +567,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         const [row] = await tx<{ id: string }[]>`
           update tasks set status = 'completed', updated_at = clock_timestamp()
           where id = ${taskId} and account_id = ${accountId} and status = 'running'
-            and not exists (select 1 from steps where task_id = ${taskId} and status in ('pending', 'waiting', 'running'))
+            and not exists (select 1 from steps where task_id = ${taskId} and status not in ('done', 'ignored'))
           returning id
         `;
         if (row === undefined) {
@@ -461,6 +575,62 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         }
         await audit(tx, system(accountId), requestId, "venom", "task.completed", taskId);
         return settle(tx, accountId, taskId);
+      });
+    },
+
+    async control(device, taskId, control, requestId) {
+      return sql.begin(async (tx) => {
+        const task = await taskRow(tx, device.account_id, taskId, true);
+        if (task === null) {
+          throw refuseTasks.taskNotFound();
+        }
+        const steps = await loadSteps(tx, [task.id]);
+        if (control.kind === "resume") {
+          return resume(tx, device, task, steps, requestId);
+        }
+        if (task.status === "completed") {
+          throw refuseTasks.finished();
+        }
+        const step = findStep(steps, control.step_id);
+        switch (control.kind) {
+          case "retry":
+            if (step.status !== "failed") {
+              throw refuseTasks.cannotRetry();
+            }
+            if (!repeatable(step)) {
+              throw refuseTasks.notRepeatable(step.position);
+            }
+            return resume(tx, device, task, steps, requestId);
+          case "skip":
+            if (!(step.status === "pending" || (step.status === "failed" && repeatable(step)))) {
+              throw refuseTasks.cannotSkip();
+            }
+            await markSetAside(tx, device, step, "skipped", control.reason, requestId);
+            break;
+          case "ignore":
+            if (!(step.status === "pending" || step.status === "skipped" || step.status === "failed")) {
+              throw refuseTasks.cannotIgnore();
+            }
+            if (steps.filter((candidate) => candidate.status !== "ignored").length <= 1) {
+              throw refuseTasks.lastCounted();
+            }
+            await markSetAside(tx, device, step, "ignored", control.reason, requestId);
+            break;
+          case "restore": {
+            if (step.status !== "skipped" && step.status !== "ignored") {
+              throw refuseTasks.cannotRestore();
+            }
+            const back = step.status === "ignored" && step.finished_at !== null ? "failed" : "pending";
+            await tx`
+              update steps set status = ${back}, set_aside_reason = null, set_aside_at = null, set_aside_by = null
+              where id = ${step.id}
+            `;
+            await audit(tx, device, requestId, "user", "step.restored", step.id);
+            break;
+          }
+        }
+        await tx`update tasks set updated_at = clock_timestamp() where id = ${task.id}`;
+        return { task: await settled(tx, device.account_id, task.id), run: false };
       });
     },
 
@@ -473,14 +643,13 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         `;
         const [existing] = inserted === undefined ? await tx<{ account_id: string; stopped_at: Date }[]>`select account_id, stopped_at from stops where id = ${stop_id}` : [inserted];
         if (existing === undefined || existing.account_id !== device.account_id) {
-          throw refuseSafety.stopTaken();
+          throw refuseTasks.stopTaken();
         }
-        const recorded = { stopped_at: existing.stopped_at, first: inserted !== undefined };
         const stopped = await tx<{ id: string }[]>`
           update tasks set status = 'stopped', stop_id = ${stop_id}, updated_at = clock_timestamp()
           where account_id = ${device.account_id}
             and (
-              status = any(${openStatuses})
+              status = any(${openTaskStatuses})
               or (status = 'stopped' and stop_id is null and updated_at > clock_timestamp() - make_interval(secs => ${haltedRecentlySeconds}))
             )
             ${scopeFilter(tx, scope)}
@@ -494,19 +663,19 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         if (closing.length > 0) {
           await tx`update steps set status = 'pending' where id = any(${closing.map((step) => step.id)}::uuid[])`;
         }
-        if (recorded.first) {
+        if (inserted !== undefined) {
           await audit(tx, device, requestId, "user", "safety.stopped", stop_id, { scope: scope.kind, tasks: stopped.length });
         }
         const rows = await tx.unsafe<TaskRow[]>(`select ${taskColumns} from tasks where stop_id = $1 and account_id = $2 order by created_at`, [stop_id, device.account_id]);
         const tasks: Task[] = [];
         for (const row of rows) {
-          const settled = await settle(tx, device.account_id, row.id);
-          if (settled !== null) {
-            tasks.push(settled);
+          const current = await settle(tx, device.account_id, row.id);
+          if (current !== null) {
+            tasks.push(current);
           }
         }
         return {
-          receipt: StopReceipt.parse({ stop_id, stopped_at: recorded.stopped_at.toISOString(), tasks }),
+          receipt: StopReceipt.parse({ stop_id, stopped_at: existing.stopped_at.toISOString(), tasks }),
           closed: closing.map((step) => toRequest(step, strictness)),
         };
       });
@@ -516,7 +685,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
       return sql.begin(async (tx) => {
         const rows = await tx<{ id: string; account_id: string }[]>`
           update tasks set status = 'failed', updated_at = clock_timestamp()
-          where status = any(${openStatuses})
+          where status = any(${openTaskStatuses})
           returning id, account_id
         `;
         if (rows.length === 0) {

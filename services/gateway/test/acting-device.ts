@@ -36,7 +36,7 @@ export async function liveHeaders(base: string, session: DeviceSession, pair: Ke
   };
 }
 
-export async function actingDevice(base: string, session: DeviceSession): Promise<ActingDevice> {
+export async function actingDevice(base: string, session: DeviceSession, { speed = 1 }: { readonly speed?: number } = {}): Promise<ActingDevice> {
   const { pair, serverKey } = await enrollKey(base, session);
   const socket = new WebSocket(`${base.replace("http", "ws")}/v1/live`, { headers: await liveHeaders(base, session, pair) });
   const guard = new CommandGuard(serverKey, session.device.id);
@@ -44,7 +44,7 @@ export async function actingDevice(base: string, session: DeviceSession): Promis
   const reports: Report[] = [];
   const stops: string[] = [];
   const waiters = new Set<() => void>();
-  let running: { readonly abort: AbortController; readonly started: number } | null = null;
+  let running: { readonly abort: AbortController; readonly taskId: string } | null = null;
 
   const wake = () => {
     for (const check of [...waiters]) check();
@@ -64,17 +64,19 @@ export async function actingDevice(base: string, session: DeviceSession): Promis
     const { command_id, body } = checked.payload;
     if (body.kind === "stop") {
       stops.push(body.stop_id);
-      running?.abort.abort();
+      if (body.task_id === null || body.task_id === running?.taskId) {
+        running?.abort.abort();
+      }
       wake();
       return;
     }
     const abort = new AbortController();
     const started = Date.now();
-    running = { abort, started };
+    running = { abort, taskId: body.task_id };
     const timer = setTimeout(() => {
       running = null;
       void report(command_id, body.step_id, "done", `Waited ${body.action.seconds} seconds.`);
-    }, body.action.seconds * 1000);
+    }, (body.action.seconds * 1000) / speed);
     abort.signal.addEventListener("abort", () => {
       clearTimeout(timer);
       running = null;

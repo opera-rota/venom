@@ -32,6 +32,7 @@ describe("fixed rules decide what needs confirmation", () => {
     const marked = drills.sensitive.steps.map((step) => assess(step, "standard").requiresConfirmation);
     expect(marked).toEqual([false, true, false]);
     expect(drills.wait.steps.map((step) => step.seconds)).toEqual([3, 30, 3]);
+    expect(drills.progress.steps.map((step) => assess(step, "strict").requiresConfirmation)).toEqual([false, false, false, false, false]);
   });
 
   it("says the action, the target and whether it can be undone", () => {
@@ -52,13 +53,13 @@ describe("signed commands", () => {
 
   it("accepts a fresh command once and refuses it when repeated", () => {
     const guard = new CommandGuard(server.publicKey, device.id);
-    const { frame } = signer.issue(device, { kind: "stop", stop_id: device.id });
+    const { frame } = signer.issue(device, { kind: "stop", stop_id: device.id, task_id: null });
     expect(guard.check(frame.command)).toMatchObject({ ok: true });
     expect(guard.check(frame.command)).toMatchObject({ ok: false, refusal: "repeated" });
   });
 
   it("refuses unsigned, wrongly signed, misaddressed and expired commands", () => {
-    const { frame } = signer.issue(device, { kind: "stop", stop_id: device.id });
+    const { frame } = signer.issue(device, { kind: "stop", stop_id: device.id, task_id: null });
     const forger = newKeyPair();
     const forged = { payload: frame.command.payload, signature: signText(forger, commandText(frame.command.payload)) };
     expect(new CommandGuard(server.publicKey, device.id).check({ payload: frame.command.payload })).toMatchObject({ refusal: "unsigned" });

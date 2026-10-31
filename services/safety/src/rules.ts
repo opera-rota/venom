@@ -68,6 +68,10 @@ export const drills: Record<DrillKind, Drill> = {
     requestText: "Safety drill: wait thirty seconds",
     steps: [wait("Wait 3 seconds to get ready", 3), wait("Wait 30 seconds", 30), wait("Wait 3 seconds to finish", 3)],
   },
+  progress: {
+    requestText: "Progress drill: five practice steps",
+    steps: [1, 2, 3, 4, 5].map((part) => wait(`Practice step ${part} of 5: wait 8 seconds`, 8)),
+  },
   sensitive: {
     requestText: "Safety drill: a step that needs your confirmation",
     steps: [

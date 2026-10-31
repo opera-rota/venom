@@ -1,6 +1,7 @@
 import type { CommandOutcome, CommandReport, ConfirmationAnswered, ConfirmRequest, DeviceAction, Task } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
-import type { CommandSigner, NextStep, Tasks } from "@venom/safety";
+import type { CommandSigner } from "@venom/safety";
+import type { NextStep, Tasks } from "@venom/tasks";
 import type { FastifyBaseLogger } from "fastify";
 import type { LiveHub } from "./live-hub.ts";
 
@@ -21,6 +22,11 @@ export interface RunnerOptions {
   publishConfirmation(accountId: string, requestId: string, request: ConfirmRequest, answered: ConfirmationAnswered | null): void;
 }
 
+interface Rerun {
+  readonly accountId: string;
+  readonly requestId: string;
+}
+
 interface Awaiting {
   readonly deviceId: string;
   readonly targetName: string;
@@ -39,6 +45,8 @@ export class TaskRunner {
   readonly #graceMs: number;
   readonly #reports = new Map<string, Awaiting>();
   readonly #answers = new Map<string, () => void>();
+  readonly #driving = new Set<string>();
+  readonly #again = new Map<string, Rerun>();
 
   constructor(options: RunnerOptions) {
     this.#options = options;
@@ -47,9 +55,23 @@ export class TaskRunner {
   }
 
   run(accountId: string, taskId: string, requestId: string): void {
-    const work = this.#drive(accountId, taskId, requestId).catch((error: unknown) => {
-      this.#options.log.error({ err: error, task_id: taskId }, "task runner failed");
-    });
+    if (this.#driving.has(taskId)) {
+      this.#again.set(taskId, { accountId, requestId });
+      return;
+    }
+    this.#driving.add(taskId);
+    const work = this.#drive(accountId, taskId, requestId)
+      .catch((error: unknown) => {
+        this.#options.log.error({ err: error, task_id: taskId }, "task runner failed");
+      })
+      .finally(() => {
+        this.#driving.delete(taskId);
+        const again = this.#again.get(taskId);
+        this.#again.delete(taskId);
+        if (again !== undefined && !this.#options.closing.aborted) {
+          this.run(again.accountId, taskId, again.requestId);
+        }
+      });
     this.#options.track(work);
   }
 
@@ -90,6 +112,10 @@ export class TaskRunner {
       if (next.kind === "finished") {
         this.#publish(accountId, requestId, await tasks.complete(accountId, taskId, requestId));
         return;
+      }
+      if (next.kind === "come_back") {
+        this.#publish(accountId, requestId, await tasks.comeBack(accountId, next.stepId, requestId));
+        continue;
       }
       const { step } = next;
       if (step.requiresConfirmation && !step.approved) {

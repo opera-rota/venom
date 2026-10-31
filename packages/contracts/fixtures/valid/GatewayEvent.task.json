@@ -25,7 +25,9 @@
         "reversible": true,
         "on_failure": "abort",
         "status": "done",
-        "output": "Waited 3 seconds."
+        "output": "Waited 3 seconds.",
+        "set_aside_reason": null,
+        "repeatable": true
       },
       {
         "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
@@ -42,10 +44,20 @@
         "reversible": true,
         "on_failure": "abort",
         "status": "stopped",
-        "output": "Stopped after 12 of 30 seconds."
+        "output": "Stopped after 12 of 30 seconds.",
+        "set_aside_reason": null,
+        "repeatable": true
       }
     ],
     "status": "stopped",
+    "progress": {
+      "done": 1,
+      "counted": 2,
+      "skipped": 0,
+      "ignored": 0,
+      "total": 2,
+      "percent": 50
+    },
     "result": "Stopped. 1 finished, 1 stopped, 0 never started.",
     "created_at": "2026-10-31T19:00:00.000Z",
     "updated_at": "2026-10-31T19:00:15.000Z"

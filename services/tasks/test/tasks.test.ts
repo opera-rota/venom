@@ -1,23 +1,21 @@
+import type { Task } from "@venom/contracts";
 import { connect, type DeviceRef } from "@venom/db";
 import { createTestDatabase, insertAccountWithDevice, type TestDatabase } from "@venom/db/testing";
 import type { Sql } from "postgres";
 import { v7 as uuidv7 } from "uuid";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTasks, createTrust, liveChallengeText, newKeyPair, signText, type Tasks, type Trust } from "../src/index.ts";
+import { createTasks, type Tasks } from "../src/index.ts";
 
 let database: TestDatabase;
 let owner: Sql;
 let sql: Sql;
 let tasks: Tasks;
-let trust: Trust;
-const server = newKeyPair();
 
 beforeAll(async () => {
   database = await createTestDatabase();
   owner = connect(database.migratorUrl, { max: 1 });
   sql = connect(database.appUrl, { max: 4 });
   tasks = createTasks({ sql });
-  trust = createTrust({ sql, serverKey: server.publicKey });
 });
 
 afterAll(async () => {
@@ -119,26 +117,6 @@ describe("a sensitive step pauses for confirmation", () => {
   });
 });
 
-describe("device trust", () => {
-  it("enrolls a key once, then proves a fresh challenge only once", async () => {
-    const here = await device();
-    const pair = newKeyPair();
-    await expect(trust.challenge(here)).rejects.toMatchObject({ code: "device_key_missing" });
-    expect(await trust.enroll(here, pair.publicKey, uuidv7())).toEqual({ device_id: here.id, server_key: server.publicKey });
-    expect(await trust.enroll(here, pair.publicKey, uuidv7())).toEqual({ device_id: here.id, server_key: server.publicKey });
-    await expect(trust.enroll(here, newKeyPair().publicKey, uuidv7())).rejects.toMatchObject({ statusCode: 409 });
-
-    const challenge = await trust.challenge(here);
-    const signature = signText(pair, liveChallengeText(here.id, challenge.challenge_id, challenge.nonce));
-    expect(await trust.prove(here, challenge.challenge_id, signature)).toBe(true);
-    expect(await trust.prove(here, challenge.challenge_id, signature)).toBe(false);
-
-    const other = await trust.challenge(here);
-    const forged = signText(newKeyPair(), liveChallengeText(here.id, other.challenge_id, other.nonce));
-    expect(await trust.prove(here, other.challenge_id, forged)).toBe(false);
-  });
-});
-
 describe("limits and restarts", () => {
   it("runs at most three tasks at once per account", async () => {
     const here = await device();
@@ -159,5 +137,112 @@ describe("limits and restarts", () => {
     const after = await tasks.get(here.account_id, task.id);
     expect(after?.plan.map((step) => step.status)).toEqual(["done", "failed", "pending"]);
     expect(after?.result).toBe("Failed. VENOM restarted before this step finished. 1 finished before that.");
+  });
+});
+
+async function runNext(here: DeviceRef, taskId: string, outcome: "done" | "failed" | "stopped" = "done"): Promise<Task | null> {
+  const stepId = await nextStepId(here, taskId);
+  await tasks.start(here.account_id, stepId, uuidv7());
+  return tasks.finish(here.account_id, stepId, outcome, outcome === "done" ? "Waited 8 seconds." : "The device could not finish this step.", uuidv7());
+}
+
+function percents(task: Task | null): string {
+  return task === null ? "none" : `${task.progress.done}/${task.progress.counted} ${task.progress.percent}%`;
+}
+
+describe("the seeded five step task proves the progress engine", () => {
+  it("moves exactly as the formula predicts, and ignoring a step shrinks the total", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "progress", uuidv7());
+    expect(task.plan.map((step) => step.summary)).toEqual([1, 2, 3, 4, 5].map((part) => `Practice step ${part} of 5: wait 8 seconds`));
+    expect(percents(task)).toBe("0/5 0%");
+    expect(percents(await runNext(here, task.id))).toBe("1/5 20%");
+    expect(percents(await runNext(here, task.id))).toBe("2/5 40%");
+
+    const fifth = task.plan[4]?.id ?? "";
+    const ignored = await tasks.control(here, task.id, { kind: "ignore", step_id: fifth, reason: "Not needed today" }, uuidv7());
+    expect(ignored.run).toBe(false);
+    expect(ignored.task.progress).toEqual({ done: 2, counted: 4, skipped: 0, ignored: 1, total: 5, percent: 50 });
+    expect(ignored.task.plan[4]).toMatchObject({ status: "ignored", set_aside_reason: "Not needed today" });
+
+    expect(percents(await runNext(here, task.id))).toBe("3/4 75%");
+    expect(percents(await runNext(here, task.id))).toBe("4/4 100%");
+    expect(await tasks.next(here.account_id, task.id)).toEqual({ kind: "finished" });
+    const finished = await tasks.complete(here.account_id, task.id, uuidv7());
+    expect(finished).toMatchObject({ status: "completed", result: "Finished. 4 steps done, 1 ignored." });
+    await expect(tasks.control(here, task.id, { kind: "restore", step_id: fifth }, uuidv7())).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("keeps a skipped step counted and comes back to it after the others", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "progress", uuidv7());
+    const second = task.plan[1]?.id ?? "";
+    const skipped = await tasks.control(here, task.id, { kind: "skip", step_id: second, reason: "Come back to this later" }, uuidv7());
+    expect(skipped.task.progress).toMatchObject({ counted: 5, skipped: 1, percent: 0 });
+    for (const expected of ["1/5 20%", "2/5 40%", "3/5 60%", "4/5 80%"]) {
+      expect(percents(await runNext(here, task.id))).toBe(expected);
+    }
+    expect(await tasks.next(here.account_id, task.id)).toEqual({ kind: "come_back", stepId: second });
+    const back = await tasks.comeBack(here.account_id, second, uuidv7());
+    expect(back?.plan[1]).toMatchObject({ status: "pending", set_aside_reason: null });
+    expect(percents(await runNext(here, task.id))).toBe("5/5 100%");
+  });
+
+  it("brings an ignored step back, and never lets the last counted step be ignored", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "progress", uuidv7());
+    const ids = task.plan.map((step) => step.id);
+    for (const stepId of ids.slice(1)) {
+      await tasks.control(here, task.id, { kind: "ignore", step_id: stepId, reason: "Testing the limit" }, uuidv7());
+    }
+    await expect(tasks.control(here, task.id, { kind: "ignore", step_id: ids[0] ?? "", reason: "Testing the limit" }, uuidv7())).rejects.toMatchObject({
+      message: "At least one step must still count. Stop the task instead.",
+    });
+    const restored = await tasks.control(here, task.id, { kind: "restore", step_id: ids[4] ?? "" }, uuidv7());
+    expect(restored.task.plan[4]).toMatchObject({ status: "pending", set_aside_reason: null });
+    expect(restored.task.progress).toMatchObject({ counted: 2, ignored: 3 });
+  });
+});
+
+describe("resume and retry continue from the first unfinished step", () => {
+  it("resumes a stopped task without touching finished work", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "progress", uuidv7());
+    await runNext(here, task.id);
+    const second = await nextStepId(here, task.id);
+    await tasks.start(here.account_id, second, uuidv7());
+    await tasks.stop(here, { stop_id: uuidv7(), scope: { kind: "task", task_id: task.id } }, uuidv7());
+    await expect(tasks.control(here, task.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({ message: "A step of this task is still stopping. Try again in a moment." });
+    await tasks.finish(here.account_id, second, "stopped", "Stopped after 3 of 8 seconds.", uuidv7());
+
+    const resumed = await tasks.control(here, task.id, { kind: "resume" }, uuidv7());
+    expect(resumed.run).toBe(true);
+    expect(resumed.task).toMatchObject({ status: "running", result: null });
+    expect(resumed.task.plan.map((step) => step.status)).toEqual(["done", "pending", "pending", "pending", "pending"]);
+    expect(resumed.task.plan[1]?.output).toBeNull();
+    await expect(tasks.control(here, task.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({ message: "This task is already running." });
+  });
+
+  it("retries a failed step that is safe to repeat, and refuses one that is not failed", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "progress", uuidv7());
+    const failed = await runNext(here, task.id, "failed");
+    expect(failed).toMatchObject({ status: "failed", result: "Failed. The device could not finish this step. 0 finished before that." });
+    await expect(tasks.control(here, task.id, { kind: "retry", step_id: task.plan[1]?.id ?? "" }, uuidv7())).rejects.toMatchObject({ message: "Only a failed step can be tried again." });
+    const retried = await tasks.control(here, task.id, { kind: "retry", step_id: task.plan[0]?.id ?? "" }, uuidv7());
+    expect(retried.task.plan[0]).toMatchObject({ status: "pending", repeatable: true });
+    expect(retried.task.status).toBe("running");
+  });
+
+  it("asks again for a declined step when a cancelled task is resumed", async () => {
+    const here = await device();
+    const task = await tasks.drill(here, "sensitive", uuidv7());
+    await runNext(here, task.id);
+    const sensitive = await nextStepId(here, task.id);
+    await tasks.ask(here.account_id, sensitive, uuidv7());
+    await tasks.answer(here, task.id, sensitive, "decline", uuidv7());
+    const resumed = await tasks.control(here, task.id, { kind: "resume" }, uuidv7());
+    expect(resumed.task.plan.map((step) => step.status)).toEqual(["done", "pending", "pending"]);
+    expect(await tasks.next(here.account_id, task.id)).toMatchObject({ kind: "step", step: { id: sensitive, approved: false, requiresConfirmation: true } });
   });
 });

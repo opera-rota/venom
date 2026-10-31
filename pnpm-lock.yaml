@@ -66,6 +66,9 @@ importers:
       '@venom/power':
         specifier: workspace:*
         version: link:../../services/power
+      '@venom/tasks':
+        specifier: workspace:*
+        version: link:../../services/tasks
       '@vitejs/plugin-react':
         specifier: 5.2.0
         version: 5.2.0(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.33.0))
@@ -148,6 +151,9 @@ importers:
       '@venom/safety':
         specifier: workspace:*
         version: link:../safety
+      '@venom/tasks':
+        specifier: workspace:*
+        version: link:../tasks
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -233,6 +239,25 @@ importers:
       '@venom/db':
         specifier: workspace:*
         version: link:../../packages/db
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+    devDependencies:
+      uuid:
+        specifier: 14.0.2
+        version: 14.0.2
+
+  services/tasks:
+    dependencies:
+      '@venom/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@venom/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@venom/safety':
+        specifier: workspace:*
+        version: link:../safety
       postgres:
         specifier: 3.4.9
         version: 3.4.9

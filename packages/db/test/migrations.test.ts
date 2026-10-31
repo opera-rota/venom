@@ -55,6 +55,7 @@ describe("upgrading a database that already holds Phase 2 data", () => {
     const sql = connect(legacy.migratorUrl, { max: 1 });
     try {
       await sql.unsafe("drop table stops, steps, tasks, live_challenges");
+      await sql.unsafe("drop function steps_moves_allowed, tasks_moves_allowed");
       await sql.unsafe("drop function steps_finished_work_stays");
       await sql.unsafe("drop trigger devices_key_once on devices");
       await sql.unsafe("drop function devices_key_enrolled_once");

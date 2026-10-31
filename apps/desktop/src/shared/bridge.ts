@@ -8,6 +8,7 @@ import type {
   SafetySettings,
   StopReceipt,
   Task,
+  TaskControl,
   TaskList,
   Device,
   DeviceList,
@@ -46,6 +47,8 @@ export type MemoryItemResult = { readonly ok: true; readonly item: MemoryItem } 
 export type TasksResult = { readonly ok: true; readonly list: TaskList } | Failure;
 
 export type TaskResult = { readonly ok: true; readonly task: Task } | Failure;
+
+export type TaskStopResult = { readonly ok: true; readonly receipt: StopReceipt } | Failure;
 
 export type AnswerResult = { readonly ok: true; readonly answered: ConfirmationAnswered } | Failure;
 
@@ -99,6 +102,8 @@ export interface VenomBridge {
   onHalt(listener: (view: HaltView) => void): () => void;
   tasks(): Promise<TasksResult>;
   drill(kind: DrillKind): Promise<TaskResult>;
+  taskControl(taskId: string, control: TaskControl): Promise<TaskResult>;
+  stopTask(taskId: string): Promise<TaskStopResult>;
   confirm(taskId: string, stepId: string, decision: ConfirmDecision): Promise<AnswerResult>;
   safety(): Promise<SafetyResult>;
   setSafety(strictness: ConfirmationStrictness): Promise<SafetyResult>;
@@ -135,6 +140,8 @@ export const channels = {
   haltChanged: "venom:halt-changed",
   tasks: "venom:tasks",
   drill: "venom:drill",
+  taskControl: "venom:task-control",
+  stopTask: "venom:stop-task",
   confirm: "venom:confirm",
   safety: "venom:safety",
   setSafety: "venom:set-safety",

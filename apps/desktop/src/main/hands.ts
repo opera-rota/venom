@@ -10,6 +10,7 @@ export interface HandsOptions {
 
 interface Running {
   readonly commandId: string;
+  readonly taskId: string;
   readonly abort: AbortController;
 }
 
@@ -42,14 +43,26 @@ export class Hands {
     }
     const { command_id, body } = checked.payload;
     if (body.kind === "stop") {
-      this.haltAll();
+      if (body.task_id === null) {
+        this.haltAll();
+      } else {
+        this.haltTask(body.task_id);
+      }
       return;
     }
     this.#run(command_id, body);
   }
 
   haltAll(): number {
-    const running = [...this.#running.values()];
+    return this.#halt(() => true);
+  }
+
+  haltTask(taskId: string): number {
+    return this.#halt((running) => running.taskId === taskId);
+  }
+
+  #halt(matches: (running: Running) => boolean): number {
+    const running = [...this.#running.values()].filter(matches);
     for (const { abort } of running) {
       abort.abort();
     }
@@ -58,7 +71,7 @@ export class Hands {
 
   #run(commandId: string, command: RunStepCommand): void {
     const abort = new AbortController();
-    this.#running.set(command.step_id, { commandId, abort });
+    this.#running.set(command.step_id, { commandId, taskId: command.task_id, abort });
     const { seconds } = command.action;
     const started = Date.now();
 
