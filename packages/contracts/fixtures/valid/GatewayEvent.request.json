@@ -1,0 +1,12 @@
+{
+  "type": "request",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e20",
+  "sequence": 0,
+  "emitted_at": "2026-10-31T18:00:00.000Z",
+  "state": "accepted",
+  "detail": null,
+  "question": {
+    "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e10",
+    "message_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e11"
+  }
+}

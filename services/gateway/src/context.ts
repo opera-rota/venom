@@ -5,11 +5,13 @@ import type { Memory } from "@venom/memory";
 import type { Availability, Power } from "@venom/power";
 import type { Brain } from "./brain.ts";
 import type { LiveHub } from "./live-hub.ts";
+import type { LiveRequests } from "./requests.ts";
 
 export interface GatewayContext {
   readonly store: Store;
   readonly identity: Identity;
   readonly hub: LiveHub;
+  readonly requests: LiveRequests;
   readonly brain: Brain;
   readonly power: Power;
   readonly memory: Memory;

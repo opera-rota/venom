@@ -13,7 +13,6 @@ import {
   PowerStatus,
   SendMessageAccepted,
   type Capabilities,
-  type Message,
 } from "@venom/contracts";
 import type { ConnectionState, DevicesResult, EnginesResult, MemoryItemResult, MemoryResult, PowerResult, SendResult, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
@@ -107,13 +106,13 @@ export class GatewayClient {
     return () => this.#revokedListeners.delete(listener);
   }
 
-  async history(limit = 200): Promise<Message[]> {
+  async history(limit = 200): Promise<MessageHistory> {
     const result = await this.#api.request("GET", `/v1/messages?limit=${limit}`, { schema: MessageHistory, token: this.#token });
     if (!result.ok) {
       this.#watch(result.code);
       throw new Error(result.reason);
     }
-    return result.value.messages;
+    return result.value;
   }
 
   async send(text: unknown): Promise<SendResult> {

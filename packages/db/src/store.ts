@@ -1,5 +1,5 @@
 import postgres, { type Sql } from "postgres";
-import { ConversationEntry, Message, type IntentKind, type Speaker } from "@venom/contracts";
+import { ConversationEntry, Message, type IntentKind, type QuestionRef, type Speaker } from "@venom/contracts";
 
 export interface DeviceRef {
   readonly id: string;
@@ -19,9 +19,14 @@ export interface AskedRequest {
   readonly answered: boolean;
 }
 
+export interface Conversation {
+  readonly messages: Message[];
+  readonly unanswered: QuestionRef[];
+}
+
 export interface Store {
   recordMessage(input: RecordMessage): Promise<Message>;
-  listMessages(accountId: string, limit: number): Promise<Message[]>;
+  listConversation(accountId: string, limit: number): Promise<Conversation>;
   conversationBefore(accountId: string, messageId: string, limit: number): Promise<ConversationEntry[]>;
   findRequest(accountId: string, requestId: string): Promise<AskedRequest | null>;
   ping(): Promise<void>;
@@ -37,6 +42,10 @@ interface RequestRow extends MessageRow {
   answered: boolean;
 }
 
+interface ConversationRow extends RequestRow {
+  request_id: string;
+}
+
 interface MessageRow {
   id: string;
   account_id: string;
@@ -46,8 +55,8 @@ interface MessageRow {
   created_at: Date;
 }
 
-function toMessage(row: MessageRow): Message {
-  return Message.parse({ ...row, created_at: row.created_at.toISOString() });
+function toMessage({ id, account_id, device_id, speaker, text, created_at }: MessageRow): Message {
+  return Message.parse({ id, account_id, device_id, speaker, text, created_at: created_at.toISOString() });
 }
 
 export function connect(url: string, options: { max?: number } = {}): Sql {
@@ -85,18 +94,26 @@ export function createStore(url: string): Store {
       });
     },
 
-    async listMessages(accountId, limit) {
-      const rows = await sql<MessageRow[]>`
-        select id, account_id, device_id, speaker, text, created_at
+    async listConversation(accountId, limit) {
+      const rows = await sql<ConversationRow[]>`
+        select
+          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.text, latest.created_at,
+          latest.speaker = 'venom' or exists (
+            select 1 from messages reply
+            where reply.account_id = latest.account_id and reply.request_id = latest.request_id and reply.speaker = 'venom'
+          ) as answered
         from (
           select * from messages
           where account_id = ${accountId}
           order by created_at desc, id desc
           limit ${limit}
         ) latest
-        order by created_at, id
+        order by latest.created_at, latest.id
       `;
-      return rows.map(toMessage);
+      return {
+        messages: rows.map(toMessage),
+        unanswered: rows.filter((row) => !row.answered).map((row) => ({ request_id: row.request_id, message_id: row.id })),
+      };
     },
 
     async conversationBefore(accountId, messageId, limit) {

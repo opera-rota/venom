@@ -23,54 +23,45 @@ export interface Exchange {
   onMemory(item: MemoryItem, requestId: string): void;
 }
 
-export type Question = { readonly kind: "new"; readonly text: string } | { readonly kind: "retry"; readonly message: Message; readonly requestId: string };
+export interface Question {
+  readonly kind: "new" | "retry";
+  readonly message: Message;
+  readonly requestId: string;
+}
 
 interface Remembered {
   readonly context: MemoryContext;
   readonly usage: TokenUsage;
 }
 
-const unsaved = "VENOM could not save this message. Try sending it again.";
 const unfinished = "VENOM could not finish this answer. Try again.";
 
 export async function converse(exchange: Exchange, question: Question): Promise<void> {
-  const { store, trace, device, log } = exchange;
-  let asked: Message;
+  const { trace, log } = exchange;
   try {
-    asked = question.kind === "new" ? await store.recordMessage({ device, requestId: trace.requestId, speaker: "user", text: question.text }) : question.message;
-  } catch (error) {
-    log.error({ err: error }, "could not record the message");
-    trace.state("failed", unsaved);
-    return;
-  }
-  if (question.kind === "new") {
-    trace.message(asked);
-  }
-
-  try {
-    await answer(exchange, asked, question);
+    await answer(exchange, question);
   } catch (error) {
     if (error instanceof BrainError) {
       log.warn({ err: error.cause, problem: error.problem }, "the brain did not answer");
-      trace.state("failed", error.message);
+      trace.failed(error.message);
       return;
     }
     if (error instanceof MemoryError) {
-      trace.state("failed", error.message);
+      trace.failed(error.message);
       return;
     }
     log.error({ err: error }, "answering failed");
-    trace.state("failed", unfinished);
+    trace.failed(unfinished);
   }
 }
 
-async function remember(exchange: Exchange, asked: Message, question: Question): Promise<Remembered | null> {
+async function remember(exchange: Exchange, question: Question): Promise<Remembered | null> {
   const { memory, device, trace, onMemory } = exchange;
   if (question.kind === "retry") {
     const context = await memory.spokenIn(device.account_id, question.requestId);
     return context === null ? null : { context, usage: nothingUsed };
   }
-  const draft = detect(asked.text);
+  const draft = detect(question.message.text);
   if (draft === null) {
     return null;
   }
@@ -82,10 +73,10 @@ async function remember(exchange: Exchange, asked: Message, question: Question):
   };
 }
 
-async function answer(exchange: Exchange, asked: Message, question: Question): Promise<void> {
+async function answer(exchange: Exchange, question: Question): Promise<void> {
   const { store, brain, memory, engine, trace, device, signal } = exchange;
-  const answerRequestId = question.kind === "new" ? trace.requestId : question.requestId;
-  const remembered = await remember(exchange, asked, question);
+  const asked = question.message;
+  const remembered = await remember(exchange, question);
   const [history, recall] = await Promise.all([
     store.conversationBefore(device.account_id, asked.id, historyLimit),
     memory.recall(device.account_id, asked.text, trace.requestId),
@@ -110,18 +101,18 @@ async function answer(exchange: Exchange, asked: Message, question: Question): P
       case "done": {
         const reply = await store.recordMessage({
           device,
-          requestId: answerRequestId,
+          requestId: question.requestId,
           speaker: "venom",
           text: event.text,
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);
         await charge(exchange, event, spentBeforeAnswer);
-        trace.state("completed");
+        trace.completed();
         return;
       }
       case "failed":
-        trace.state("failed", event.detail);
+        trace.failed(event.detail);
         return;
     }
   }

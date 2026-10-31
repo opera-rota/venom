@@ -1,4 +1,5 @@
-import { GatewayEvent, type Device, type MemoryForgotten, type MemoryItem, type Message, type PowerStatus, type RequestState } from "@venom/contracts";
+import { GatewayEvent, type Device, type MemoryForgotten, type MemoryItem, type Message, type PowerStatus, type QuestionRef } from "@venom/contracts";
+import type { LiveRequests } from "./requests.ts";
 
 export interface LiveConnection {
   readonly deviceId: string;
@@ -93,18 +94,29 @@ export function forgottenEvent(requestId: string, forgotten: MemoryForgotten): G
 
 export class RequestTrace {
   readonly requestId: string;
-  readonly #deviceId: string;
+  readonly #accountId: string;
   readonly #hub: LiveHub;
+  readonly #requests: LiveRequests;
   #sequence = 0;
 
-  constructor(hub: LiveHub, deviceId: string, requestId: string) {
+  constructor(hub: LiveHub, requests: LiveRequests, accountId: string, requestId: string) {
     this.#hub = hub;
-    this.#deviceId = deviceId;
+    this.#requests = requests;
+    this.#accountId = accountId;
     this.requestId = requestId;
   }
 
-  state(state: RequestState, detail: string | null = null): void {
-    this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state, detail });
+  accepted(question: QuestionRef): void {
+    this.#requests.start(this.#accountId, this.requestId, question);
+    this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state: "accepted", detail: null, question });
+  }
+
+  completed(): void {
+    this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state: "completed", detail: null, question: null });
+  }
+
+  failed(detail: string): void {
+    this.#emit({ type: "request", ...stamp(this.requestId, this.#sequence++), state: "failed", detail, question: null });
   }
 
   answer(delta: string): void {
@@ -116,6 +128,8 @@ export class RequestTrace {
   }
 
   #emit(event: GatewayEvent): void {
-    this.#hub.publishToDevice(this.#deviceId, GatewayEvent.parse(event));
+    const parsed = GatewayEvent.parse(event);
+    this.#requests.record(this.#accountId, parsed);
+    this.#hub.publishToAccount(this.#accountId, parsed);
   }
 }

@@ -3,7 +3,7 @@ import { EngineId, type EmbeddingRequest, type TokenUsage, type TurnEvent, type 
 import { wordVector } from "@venom/memory/testing";
 import { BrainError, type Brain, type BrainProblem } from "./brain.ts";
 
-export type BrainStep = TurnEvent | { readonly pause: number } | { readonly crash: BrainProblem };
+export type BrainStep = TurnEvent | { readonly pause: number } | { readonly hold: Promise<void> } | { readonly crash: BrainProblem };
 
 export type BrainScript = (request: TurnRequest) => readonly BrainStep[];
 
@@ -56,6 +56,8 @@ export function scriptedBrain(script: BrainScript = echoAnswers): ScriptedBrain 
           } catch (error) {
             throw new BrainError("stopped", { cause: error });
           }
+        } else if ("hold" in step) {
+          await step.hold;
         } else if ("crash" in step) {
           throw new BrainError(step.crash);
         } else {

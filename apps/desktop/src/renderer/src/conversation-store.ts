@@ -3,12 +3,12 @@ import type { ConnectionState, VenomBridge } from "../../shared/bridge.ts";
 import {
   heldRequests,
   initialConversation,
-  isLiveEvent,
+  isConversationEvent,
   reduceConversation,
   type Answer,
   type ConversationAction,
+  type ConversationEvent,
   type ConversationState,
-  type LiveEvent,
 } from "./conversation.ts";
 
 export const gapWaitMs = 3000;
@@ -30,6 +30,10 @@ export interface Scheduler {
   later(run: () => void, ms: number): () => void;
 }
 
+interface CatchUp {
+  readonly replay: ConversationEvent[];
+}
+
 export function createConversation(bridge: VenomBridge, scheduler: Scheduler): ConversationHandle {
   const store = createStore<ConversationStore>()((set, get) => {
     const dispatch = (action: ConversationAction) => set((state) => reduceConversation(state, action));
@@ -45,9 +49,7 @@ export function createConversation(bridge: VenomBridge, scheduler: Scheduler): C
       },
       async retry(answer) {
         const result = await bridge.retry(answer.origin);
-        if (result.ok) {
-          dispatch({ type: "retrying", from: answer.requestId, to: result.requestId });
-        } else if (get().answers.has(answer.requestId)) {
+        if (!result.ok && get().answers.has(answer.requestId)) {
           dispatch({ type: "notice", reason: result.reason });
         }
         return result.ok;
@@ -62,20 +64,10 @@ export function createConversation(bridge: VenomBridge, scheduler: Scheduler): C
 
   function connect(): () => void {
     let active = true;
-    let queued: LiveEvent[] = [];
+    let queued: ConversationEvent[] = [];
     let flushing = false;
+    let catchUp: CatchUp | null = null;
     const gaps = new Map<string, () => void>();
-
-    const reload = () => {
-      bridge.history().then(
-        (messages) => {
-          if (active) {
-            dispatch({ type: "history", messages });
-          }
-        },
-        () => {},
-      );
-    };
 
     const watchGaps = () => {
       const held = new Set(heldRequests(store.getState()));
@@ -101,6 +93,26 @@ export function createConversation(bridge: VenomBridge, scheduler: Scheduler): C
       }
     };
 
+    const reload = () => {
+      const attempt: CatchUp = { replay: [] };
+      catchUp = attempt;
+      bridge.history().then(
+        (history) => {
+          if (!active || catchUp !== attempt) {
+            return;
+          }
+          catchUp = null;
+          dispatch({ type: "history", history, replay: attempt.replay });
+          watchGaps();
+        },
+        () => {
+          if (catchUp === attempt) {
+            catchUp = null;
+          }
+        },
+      );
+    };
+
     const flush = () => {
       flushing = false;
       if (!active || queued.length === 0) {
@@ -123,13 +135,10 @@ export function createConversation(bridge: VenomBridge, scheduler: Scheduler): C
     };
 
     const stopEvents = bridge.onEvent((event) => {
-      if (event.type === "forgotten") {
-        dispatch({ type: "forgotten", messageIds: event.message_ids });
+      if (!isConversationEvent(event)) {
         return;
       }
-      if (!isLiveEvent(event)) {
-        return;
-      }
+      catchUp?.replay.push(event);
       queued.push(event);
       if (!flushing) {
         flushing = true;

@@ -11,6 +11,7 @@ import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
 import { devicesEvent, forgottenEvent, LiveHub, memoryEvent, powerEvent } from "./live-hub.ts";
+import { LiveRequests } from "./requests.ts";
 import { deviceRoutes } from "./routes/devices.ts";
 import { identityRoutes } from "./routes/identity.ts";
 import { liveRoute } from "./routes/live.ts";
@@ -42,6 +43,7 @@ export async function buildGateway({ store, identity, brain, power, memory, logg
     logController: new LogController({ requestIdLogLabel: "request_id" }),
   });
   const hub = new LiveHub();
+  const requests = new LiveRequests();
   const inflight = new Set<Promise<unknown>>();
   const stopping = new AbortController();
   let closing = false;
@@ -51,6 +53,7 @@ export async function buildGateway({ store, identity, brain, power, memory, logg
     store,
     identity,
     hub,
+    requests,
     brain,
     power,
     memory,
@@ -71,6 +74,7 @@ export async function buildGateway({ store, identity, brain, power, memory, logg
       hub.publishToAccount(accountId, memoryEvent(requestId, item));
     },
     broadcastForgotten(accountId, requestId, forgotten) {
+      requests.forget(accountId, forgotten.message_ids);
       hub.publishToAccount(accountId, forgottenEvent(requestId, forgotten));
     },
     async availableEngines() {

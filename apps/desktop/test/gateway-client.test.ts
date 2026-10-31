@@ -91,7 +91,7 @@ describe("gateway client in the main process", () => {
     const events = await settled(result.requestId);
     expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index));
     expect(events.flatMap((event) => (event.type === "answer" ? [event.delta] : [])).join("")).toBe("You asked: Hello from the desktop");
-    expect((await client.history()).at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Hello from the desktop" });
+    expect((await client.history()).messages.at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Hello from the desktop" });
   });
 
   it("asks VENOM to answer a failed message again", async () => {
@@ -112,7 +112,7 @@ describe("gateway client in the main process", () => {
       throw new Error(retried.reason);
     }
     await settled(retried.requestId);
-    expect((await client.history()).at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Try me twice" });
+    expect((await client.history()).messages.at(-1)).toMatchObject({ speaker: "venom", text: "You asked: Try me twice" });
     expect(await client.retry("not-an-id")).toMatchObject({ ok: false, reason: "There is no answer to try again." });
   });
 

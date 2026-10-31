@@ -9,7 +9,7 @@ import type {
   MemoryDraft,
   MemoryItem,
   MemoryList,
-  Message,
+  MessageHistory,
   PowerStatus,
 } from "@venom/contracts";
 
@@ -67,7 +67,7 @@ export interface VenomBridge {
   saveMemory(draft: MemoryDraft): Promise<MemoryItemResult>;
   editMemory(memoryId: string, draft: MemoryDraft): Promise<MemoryItemResult>;
   forgetMemory(memoryId: string): Promise<StepResult>;
-  history(): Promise<Message[]>;
+  history(): Promise<MessageHistory>;
   send(text: string): Promise<SendResult>;
   retry(requestId: string): Promise<SendResult>;
   openLink(url: string): Promise<void>;

@@ -57,7 +57,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
           panel={panel}
           onTogglePanel={(next) => setPanel((open) => (open === next ? null : next))}
         />
-        <MessageList store={store} onOpenLink={openLink} />
+        <MessageList store={store} devices={devices.devices} deviceId={device.id} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
       </main>
       {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}

@@ -1,13 +1,15 @@
-import type { Message, RequestEvent } from "@venom/contracts";
+import type { Device, ForgottenEvent, Message, MessageHistory, RequestEvent } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
 import {
   arrange,
   heldRequests,
   initialConversation,
   isAnswering,
-  isLiveEvent,
+  isConversationEvent,
   mergeMessages,
   reduceConversation,
+  sentFrom,
+  type ConversationEvent,
   type ConversationState,
   type LiveEvent,
 } from "../src/renderer/src/conversation.ts";
@@ -20,6 +22,7 @@ const base = {
 const at = "2026-10-25T10:00:00.000Z";
 const requestId = "01a12c54-8d81-756e-8439-b843a4fd7ef0";
 const retryId = "01a12c54-8d81-756e-8439-b843a4fd7ef1";
+const otherId = "01a12c54-8d81-756e-8439-b843a4fd7ef2";
 
 function message(id: string, speaker: "user" | "venom", text: string, created_at = at): Message {
   return { ...base, id, created_at, speaker, text };
@@ -27,23 +30,41 @@ function message(id: string, speaker: "user" | "venom", text: string, created_at
 
 const question = message("01a12c54-0000-7000-8000-000000000001", "user", "Explain what a mutex is");
 const reply = message("01a12c54-0000-7000-8000-000000000002", "venom", "A mutex is a lock.", "2026-10-25T10:00:02.000Z");
+const asked = { request_id: requestId, message_id: question.id };
+
+function accepted(id: string, origin = asked): RequestEvent {
+  return { type: "request", request_id: id, sequence: 0, emitted_at: at, state: "accepted", detail: null, question: origin };
+}
+
+function completed(id: string, sequence: number): RequestEvent {
+  return { type: "request", request_id: id, sequence, emitted_at: at, state: "completed", detail: null, question: null };
+}
+
+function failure(id: string, sequence: number): RequestEvent {
+  return { type: "request", request_id: id, sequence, emitted_at: at, state: "failed", detail: "The model took too long to answer.", question: null };
+}
 
 function stream(id: string): LiveEvent[] {
   return [
-    { type: "request", request_id: id, sequence: 0, emitted_at: at, state: "accepted", detail: null },
+    accepted(id),
     { type: "message", request_id: id, sequence: 1, emitted_at: at, message: question },
     { type: "answer", request_id: id, sequence: 2, emitted_at: at, delta: "A mutex " },
     { type: "answer", request_id: id, sequence: 3, emitted_at: at, delta: "is a lock." },
     { type: "message", request_id: id, sequence: 4, emitted_at: at, message: reply },
-    { type: "request", request_id: id, sequence: 5, emitted_at: at, state: "completed", detail: null },
+    completed(id, 5),
   ];
 }
 
-function failure(id: string, sequence: number): RequestEvent {
-  return { type: "request", request_id: id, sequence, emitted_at: at, state: "failed", detail: "The model took too long to answer." };
+function retried(id: string): LiveEvent[] {
+  return [
+    accepted(id),
+    { type: "answer", request_id: id, sequence: 1, emitted_at: at, delta: "A mutex is a lock." },
+    { type: "message", request_id: id, sequence: 2, emitted_at: at, message: reply },
+    completed(id, 3),
+  ];
 }
 
-function play(events: readonly LiveEvent[], state: ConversationState = initialConversation): ConversationState {
+function play(events: readonly ConversationEvent[], state: ConversationState = initialConversation): ConversationState {
   return reduceConversation(state, { type: "events", events });
 }
 
@@ -57,6 +78,10 @@ function pick(events: readonly LiveEvent[], ...positions: number[]): LiveEvent[]
   });
 }
 
+function load(state: ConversationState, history: MessageHistory, replay: readonly ConversationEvent[] = []): ConversationState {
+  return reduceConversation(state, { type: "history", history, replay });
+}
+
 describe("conversation state", () => {
   it("merges messages without duplicates, oldest first", () => {
     const later = message("01a12c54-0000-7000-8000-000000000003", "user", "later", "2026-10-25T10:00:05.000Z");
@@ -68,7 +93,7 @@ describe("conversation state", () => {
   it("streams an answer under its question and replaces it with the saved reply", () => {
     const events = stream(requestId);
     const streaming = play(events.slice(0, 4));
-    expect(streaming.answers.get(requestId)).toMatchObject({ askedId: question.id, text: "A mutex is a lock.", failure: null });
+    expect(streaming.answers.get(requestId)).toMatchObject({ origin: requestId, askedId: question.id, text: "A mutex is a lock.", failure: null });
     expect(isAnswering(streaming)).toBe(true);
     expect(arrange(streaming).placed[0]?.answers.map((answer) => answer.text)).toEqual(["A mutex is a lock."]);
 
@@ -106,50 +131,35 @@ describe("conversation state", () => {
     expect(heldRequests(closed)).toEqual([]);
   });
 
-  it("shows a failed answer under its question and moves it to the retry", () => {
+  it("shows a failed answer under its question, and lets a retry from any device take its place", () => {
     const failed = play([...stream(requestId).slice(0, 3), failure(requestId, 3)]);
     expect(failed.answers.get(requestId)).toMatchObject({ askedId: question.id, failure: "The model took too long to answer." });
     expect(isAnswering(failed)).toBe(false);
 
-    const retrying = reduceConversation(failed, { type: "retrying", from: requestId, to: retryId });
+    const retrying = play(retried(retryId).slice(0, 1), failed);
     expect(retrying.answers.has(requestId)).toBe(false);
     expect(retrying.answers.get(retryId)).toMatchObject({ origin: requestId, askedId: question.id, text: "", failure: null });
 
-    const answered = play(
-      [
-        { type: "request", request_id: retryId, sequence: 0, emitted_at: at, state: "accepted", detail: null },
-        { type: "answer", request_id: retryId, sequence: 1, emitted_at: at, delta: "A mutex is a lock." },
-        { type: "message", request_id: retryId, sequence: 2, emitted_at: at, message: reply },
-        { type: "request", request_id: retryId, sequence: 3, emitted_at: at, state: "completed", detail: null },
-      ],
-      retrying,
-    );
+    const answered = play(retried(retryId).slice(1), retrying);
     expect(answered.answers.size).toBe(0);
     expect(answered.messages.at(-1)).toEqual(reply);
   });
 
-  it("does not leave a stuck answer when the retry finished before its reply arrived", () => {
-    const failed = play([...stream(requestId).slice(0, 2), failure(requestId, 2)]);
-    const finishedFirst = play(
-      [
-        { type: "request", request_id: retryId, sequence: 0, emitted_at: at, state: "accepted", detail: null },
-        { type: "message", request_id: retryId, sequence: 1, emitted_at: at, message: reply },
-        { type: "request", request_id: retryId, sequence: 2, emitted_at: at, state: "completed", detail: null },
-      ],
-      failed,
-    );
-    const settled = reduceConversation(finishedFirst, { type: "retrying", from: requestId, to: retryId });
-    expect(settled.answers.size).toBe(0);
+  it("places a retry under its question even on a device that never saw the failure", () => {
+    const elsewhere = load(initialConversation, { messages: [question], pending: [] });
+    const writing = play(retried(retryId).slice(0, 2), elsewhere);
+    expect(arrange(writing).placed[0]?.answers.map((answer) => answer.text)).toEqual(["A mutex is a lock."]);
+    expect(arrange(writing).loose).toEqual([]);
   });
 
-  it("shows a request that failed before saving the message as a notice", () => {
-    const failed = play([...pick(stream(requestId), 0), { ...failure(requestId, 1), detail: "VENOM could not save this message." }]);
+  it("shows a request that failed before naming its question as a notice", () => {
+    const failed = play([{ ...accepted(requestId), question: null }, { ...failure(requestId, 1), detail: "VENOM could not save this message." }]);
     expect(failed.answers.size).toBe(0);
     expect(failed.notice).toBe("VENOM could not save this message.");
     expect(reduceConversation(failed, { type: "dismiss" }).notice).toBeNull();
   });
 
-  it("leaves power and device updates to their own panels", () => {
+  it("follows chat and forgetting, and leaves power and devices to their own panels", () => {
     const power = {
       type: "power",
       request_id: retryId,
@@ -166,28 +176,76 @@ describe("conversation state", () => {
         answers_left_exact: true,
       },
     } as const;
-    expect(isLiveEvent(power)).toBe(false);
+    expect(isConversationEvent(power)).toBe(false);
+    expect(isConversationEvent({ type: "devices", request_id: retryId, sequence: 0, emitted_at: at, devices: [] })).toBe(false);
+    expect(isConversationEvent({ type: "forgotten", request_id: retryId, sequence: 0, emitted_at: at, item_id: question.id, message_ids: [] })).toBe(true);
+    expect(isConversationEvent(completed(retryId, 1))).toBe(true);
   });
 
-  it("replaces its copy with the cloud history after a reconnect", () => {
+  it("replaces its copy with the cloud's after a reconnect, answers still being written included", () => {
     const streaming = play(stream(requestId).slice(0, 3));
-    const failedElsewhere = play([...stream(retryId).slice(0, 2), failure(retryId, 2)]);
-    const both: ConversationState = { ...streaming, answers: new Map([...streaming.answers, ...failedElsewhere.answers]) };
-    const replaced = reduceConversation(both, { type: "history", messages: [reply, question] });
+    const failedLocally = play([...stream(retryId).slice(0, 2), failure(retryId, 2)]);
+    const both: ConversationState = { ...streaming, answers: new Map([...streaming.answers, ...failedLocally.answers]) };
+    const writing = { request_id: otherId, question: { request_id: otherId, message_id: question.id }, sequence: 3, text: "Half", failure: null };
 
+    const replaced = load(both, { messages: [reply, question], pending: [writing] });
     expect(replaced.messages).toEqual([question, reply]);
-    expect([...replaced.answers.keys()]).toEqual([retryId]);
-    expect(replaced.ordering.size).toBe(0);
+    expect([...replaced.answers.keys()]).toEqual([otherId]);
+    expect(replaced.answers.get(otherId)).toMatchObject({ origin: otherId, askedId: question.id, text: "Half", failure: null });
+
+    const continued = play([{ type: "answer", request_id: otherId, sequence: 4, emitted_at: at, delta: " way" }], replaced);
+    expect(continued.answers.get(otherId)?.text).toBe("Half way");
   });
 
-  it("removes forgotten messages and their answers, and never treats memory events as chat", () => {
-    const answered = reduceConversation(initialConversation, { type: "events", events: stream(requestId) });
-    expect(answered.messages).toHaveLength(2);
+  it("replays what arrived while the history was loading, without doubling anything", () => {
+    const events = stream(requestId);
+    const snapshot: MessageHistory = {
+      messages: [question],
+      pending: [{ request_id: requestId, question: asked, sequence: 2, text: "A mutex ", failure: null }],
+    };
+    const caughtUp = load(initialConversation, snapshot, pick(events, 2, 3, 4, 5));
+    expect(caughtUp.messages).toEqual([question, reply]);
+    expect(caughtUp.answers.size).toBe(0);
 
-    const forgotten = reduceConversation(answered, { type: "forgotten", messageIds: [question.id, reply.id] });
+    const halfway = load(initialConversation, snapshot, pick(events, 2, 3));
+    expect(halfway.answers.get(requestId)?.text).toBe("A mutex is a lock.");
+
+    const forgotten = load(initialConversation, snapshot, [{ type: "forgotten", request_id: retryId, sequence: 0, emitted_at: at, item_id: question.id, message_ids: [question.id] }]);
     expect(forgotten.messages).toEqual([]);
-    expect(reduceConversation(forgotten, { type: "forgotten", messageIds: [question.id] })).toBe(forgotten);
+    expect(forgotten.answers.size).toBe(0);
+  });
 
-    expect(isLiveEvent({ type: "forgotten", request_id: retryId, sequence: 0, emitted_at: at, item_id: question.id, message_ids: [] })).toBe(false);
+  it("does not bring back an answer it already saw finish", () => {
+    const done = play(stream(requestId));
+    const stale = load(done, { messages: [question], pending: [{ request_id: requestId, question: asked, sequence: 3, text: "A mutex is a lock.", failure: null }] });
+    expect(stale.answers.size).toBe(0);
+  });
+
+  it("removes forgotten messages and their answers", () => {
+    const answered = play(stream(requestId));
+    expect(answered.messages).toHaveLength(2);
+    const forget: ForgottenEvent = { type: "forgotten", request_id: retryId, sequence: 0, emitted_at: at, item_id: question.id, message_ids: [question.id, reply.id] };
+
+    const forgotten = play([forget], answered);
+    expect(forgotten.messages).toEqual([]);
+    expect(play([forget], forgotten)).toBe(forgotten);
+  });
+
+  it("says which device a question came from, except for this device and for VENOM", () => {
+    const phone: Device = {
+      id: "01a12a2d-0000-7000-8000-000000000009",
+      account_id: base.account_id,
+      type: "phone",
+      name: "Pixel",
+      platform: "android",
+      capabilities: { screen_control: false, microphone: true, speaker: true, shortcuts: false, notifications: true, network: true },
+      status: "active",
+      last_seen_at: at,
+    };
+    const fromPhone = { ...question, device_id: phone.id };
+    expect(sentFrom(question, [phone], base.device_id)).toBeNull();
+    expect(sentFrom({ ...reply, device_id: phone.id }, [phone], base.device_id)).toBeNull();
+    expect(sentFrom(fromPhone, [phone], base.device_id)).toBe("From Pixel");
+    expect(sentFrom(fromPhone, [], base.device_id)).toBe("From another device");
   });
 });

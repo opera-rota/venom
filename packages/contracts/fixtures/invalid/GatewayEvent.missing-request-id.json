@@ -3,5 +3,6 @@
   "sequence": 0,
   "emitted_at": "2026-10-11T09:31:00.120Z",
   "state": "accepted",
-  "detail": null
+  "detail": null,
+  "question": null
 }

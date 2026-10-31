@@ -1,10 +1,10 @@
-import type { Message } from "@venom/contracts";
+import type { Device, Message } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import type { ConversationStore } from "../conversation-store.ts";
-import { arrange, type Answer } from "../conversation.ts";
-import { button, surface, text } from "../ui.ts";
+import { arrange, sentFrom, type Answer } from "../conversation.ts";
+import { button, mark, surface, text } from "../ui.ts";
 import { LogoMark } from "./Header.tsx";
 import { Icon } from "./Icon.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -13,9 +13,16 @@ const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute:
 const caret = "▍";
 const nearBottom = 96;
 
-function Byline({ mine, time }: { readonly mine: boolean; readonly time: string | null }) {
+interface BylineProps {
+  readonly mine: boolean;
+  readonly time: string | null;
+  readonly from?: string | null;
+}
+
+function Byline({ mine, time, from = null }: BylineProps) {
   return (
     <div className={`flex items-baseline gap-2 ${text.detail}`}>
+      {from !== null && <span className={mark.tag}>{from}</span>}
       <span className="text-ink-muted">{mine ? "You" : "VENOM"}</span>
       {time !== null && (
         <time className="tabular text-ink-faint" dateTime={time}>
@@ -26,11 +33,17 @@ function Byline({ mine, time }: { readonly mine: boolean; readonly time: string 
   );
 }
 
-const MessageItem = memo(function MessageItem({ message, onOpenLink }: { readonly message: Message; readonly onOpenLink: (url: string) => void }) {
+interface MessageItemProps {
+  readonly message: Message;
+  readonly from: string | null;
+  readonly onOpenLink: (url: string) => void;
+}
+
+const MessageItem = memo(function MessageItem({ message, from, onOpenLink }: MessageItemProps) {
   const mine = message.speaker === "user";
   return (
     <article className={`flex flex-col gap-1.5 ${mine ? "items-end" : "items-start"}`}>
-      <Byline mine={mine} time={message.created_at} />
+      <Byline mine={mine} time={message.created_at} from={from} />
       {mine ? (
         <p className={`max-w-[85%] px-3.5 py-2.5 whitespace-pre-wrap break-words text-ink ${surface.bubble}`}>{message.text}</p>
       ) : (
@@ -106,10 +119,12 @@ function EmptyState() {
 
 export interface MessageListProps {
   readonly store: StoreApi<ConversationStore>;
+  readonly devices: readonly Device[];
+  readonly deviceId: string;
   readonly onOpenLink: (url: string) => void;
 }
 
-export function MessageList({ store, onOpenLink }: MessageListProps) {
+export function MessageList({ store, devices, deviceId, onOpenLink }: MessageListProps) {
   const messages = useStore(store, (state) => state.messages);
   const answers = useStore(store, (state) => state.answers);
   const retry = useStore(store, (state) => state.retry);
@@ -162,7 +177,7 @@ export function MessageList({ store, onOpenLink }: MessageListProps) {
         <ol className="mx-auto flex max-w-[72ch] flex-col gap-5 px-5 py-6" aria-label="Conversation">
           {placed.map(({ message, answers: pending }) => (
             <li key={message.id} className="flex flex-col gap-5">
-              <MessageItem message={message} onOpenLink={onOpenLink} />
+              <MessageItem message={message} from={sentFrom(message, devices, deviceId)} onOpenLink={onOpenLink} />
               {pending.map((answer) => (
                 <AnswerItem key={answer.requestId} answer={answer} onRetry={retry} onOpenLink={onOpenLink} />
               ))}

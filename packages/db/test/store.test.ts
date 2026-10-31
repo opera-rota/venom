@@ -28,8 +28,8 @@ describe("message store", () => {
     const second = await store.recordMessage({ device, requestId, speaker: "venom", text: "second" });
 
     expect(first).toMatchObject({ speaker: "user", text: "first", device_id: device.id });
-    expect((await store.listMessages(device.account_id, 50)).map((m) => m.id)).toEqual([first.id, second.id]);
-    expect((await store.listMessages(device.account_id, 1)).map((m) => m.id)).toEqual([second.id]);
+    expect((await store.listConversation(device.account_id, 50)).messages.map((m) => m.id)).toEqual([first.id, second.id]);
+    expect((await store.listConversation(device.account_id, 1)).messages.map((m) => m.id)).toEqual([second.id]);
 
     const owner = connect(database.migratorUrl, { max: 1 });
     const audit = await owner`
@@ -40,6 +40,24 @@ describe("message store", () => {
       { action: "message.recorded", subject_id: first.id, detail: { speaker: "user", characters: 5 } },
       { action: "message.recorded", subject_id: second.id, detail: { speaker: "venom", characters: 6 } },
     ]);
+  });
+
+  it("lists the questions VENOM has not answered yet, within the listed messages", async () => {
+    const owner = connect(database.migratorUrl, { max: 1 });
+    const fresh = await insertAccountWithDevice(owner);
+    await owner.end();
+    const asker = { id: fresh.deviceId, account_id: fresh.accountId };
+
+    const answeredId = uuidv7();
+    await store.recordMessage({ device: asker, requestId: answeredId, speaker: "user", text: "Answered question" });
+    await store.recordMessage({ device: asker, requestId: answeredId, speaker: "venom", text: "The answer" });
+    const waitingId = uuidv7();
+    const waiting = await store.recordMessage({ device: asker, requestId: waitingId, speaker: "user", text: "Waiting question" });
+
+    const conversation = await store.listConversation(asker.account_id, 50);
+    expect(conversation.messages.map((message) => message.text)).toEqual(["Answered question", "The answer", "Waiting question"]);
+    expect(conversation.unanswered).toEqual([{ request_id: waitingId, message_id: waiting.id }]);
+    expect((await store.listConversation(device.account_id, 50)).unanswered.every((question) => question.request_id !== waitingId)).toBe(true);
   });
 
   it("refuses a message for a device that belongs to another account", async () => {

@@ -161,6 +161,9 @@ type OpaqueMessage = Annotated[
 ]
 
 
+type Failure = Annotated[str, Field(min_length=1)]
+
+
 type PersonName = Annotated[str, Field(max_length=120, min_length=1, pattern="\\S")]
 
 
@@ -185,6 +188,14 @@ type ProficiencyLevel = Annotated[int, Field(ge=1, le=5)]
 
 
 type PromptRole = Literal["understand", "plan", "reply"]
+
+
+class QuestionRef(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
+    message_id: UUID
 
 
 class ReasoningDelta(BaseModel):
@@ -603,11 +614,15 @@ class MessageEvent(BaseModel):
     message: Message
 
 
-class MessageHistory(BaseModel):
+class PendingAnswer(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    messages: list[Message]
+    request_id: UUID
+    question: QuestionRef
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+    failure: Failure | None
 
 
 class PowerEvent(BaseModel):
@@ -690,6 +705,7 @@ class RequestEvent(BaseModel):
     emitted_at: AwareDatetime
     state: RequestState
     detail: str | None
+    question: QuestionRef | None
 
 
 class RouteDecision(BaseModel):
@@ -870,6 +886,14 @@ class MemoryEvent(BaseModel):
     item: MemoryItem
 
 
+class MessageHistory(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    messages: list[Message]
+    pending: list[PendingAnswer]
+
+
 type ReasoningEvent = Annotated[
     ReasoningDelta | ReasoningDone | ReasoningFailed, Field(discriminator="type")
 ]
@@ -884,7 +908,7 @@ class Session(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | Intent | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | PowerEvent | PowerStatus | Proficiency | Prompt | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | Capabilities | CapabilityReport | ChooseEngine | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | Intent | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | PendingAnswer | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RetryAnswer | RouteDecision | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | Step | StepTemplate | StopAll | StopDevice | StopSignal | StopTask | StructuredOutput | Task | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest,
     Field(title="Contract"),
 ]
 

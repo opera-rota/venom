@@ -29,9 +29,27 @@ export const RetryAnswer = z
   })
   .register(contracts, { id: "RetryAnswer" });
 
+export const QuestionRef = z
+  .strictObject({
+    request_id: Id,
+    message_id: Id,
+  })
+  .register(contracts, { id: "QuestionRef" });
+
+export const PendingAnswer = z
+  .strictObject({
+    request_id: Id,
+    question: QuestionRef,
+    sequence: z.int().nonnegative(),
+    text: z.string(),
+    failure: z.string().min(1).nullable(),
+  })
+  .register(contracts, { id: "PendingAnswer" });
+
 export const MessageHistory = z
   .strictObject({
     messages: z.array(Message),
+    pending: z.array(PendingAnswer),
   })
   .register(contracts, { id: "MessageHistory" });
 
@@ -59,6 +77,7 @@ export const RequestEvent = z
     ...eventFields,
     state: RequestState,
     detail: z.string().nullable(),
+    question: QuestionRef.nullable(),
   })
   .register(contracts, { id: "RequestEvent" });
 
@@ -111,6 +130,8 @@ export type MessageText = z.infer<typeof MessageText>;
 export type SendMessage = z.infer<typeof SendMessage>;
 export type SendMessageAccepted = z.infer<typeof SendMessageAccepted>;
 export type RetryAnswer = z.infer<typeof RetryAnswer>;
+export type QuestionRef = z.infer<typeof QuestionRef>;
+export type PendingAnswer = z.infer<typeof PendingAnswer>;
 export type MessageHistory = z.infer<typeof MessageHistory>;
 export type RequestState = z.infer<typeof RequestState>;
 export type MessageEvent = z.infer<typeof MessageEvent>;

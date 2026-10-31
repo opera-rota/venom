@@ -130,6 +130,9 @@
       "$ref": "#/$defs/MessageHistory"
     },
     {
+      "$ref": "#/$defs/PendingAnswer"
+    },
+    {
       "$ref": "#/$defs/PowerEvent"
     },
     {
@@ -140,6 +143,9 @@
     },
     {
       "$ref": "#/$defs/Prompt"
+    },
+    {
+      "$ref": "#/$defs/QuestionRef"
     },
     {
       "$ref": "#/$defs/ReasoningDelta"
@@ -1504,10 +1510,17 @@
           "items": {
             "$ref": "#/$defs/Message"
           }
+        },
+        "pending": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PendingAnswer"
+          }
         }
       },
       "required": [
-        "messages"
+        "messages",
+        "pending"
       ],
       "additionalProperties": false
     },
@@ -1527,6 +1540,45 @@
       "minLength": 16,
       "maxLength": 8192,
       "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "PendingAnswer": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question": {
+          "$ref": "#/$defs/QuestionRef"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "request_id",
+        "question",
+        "sequence",
+        "text",
+        "failure"
+      ],
+      "additionalProperties": false
     },
     "PersonName": {
       "type": "string",
@@ -1693,6 +1745,24 @@
         "plan",
         "reply"
       ]
+    },
+    "QuestionRef": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "request_id",
+        "message_id"
+      ],
+      "additionalProperties": false
     },
     "ReasoningDelta": {
       "type": "object",
@@ -1896,6 +1966,16 @@
             "string",
             "null"
           ]
+        },
+        "question": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuestionRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1904,7 +1984,8 @@
         "sequence",
         "emitted_at",
         "state",
-        "detail"
+        "detail",
+        "question"
       ],
       "additionalProperties": false
     },

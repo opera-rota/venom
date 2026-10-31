@@ -25,6 +25,8 @@ export const notFound = (message: string) => new GatewayError(404, "not_found", 
 
 export const conflict = (message: string) => new GatewayError(409, "conflict", message);
 
+export const unsaved = () => new GatewayError(500, "internal", "VENOM could not save this message. Try sending it again.");
+
 export function installErrorHandling(app: FastifyInstance): void {
   app.setNotFoundHandler((_request, reply) => {
     return reply.code(404).send(ApiError.parse({ error: "not_found", message: "There is nothing at this address." }));

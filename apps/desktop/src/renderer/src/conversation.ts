@@ -1,6 +1,8 @@
-import type { GatewayEvent, Message } from "@venom/contracts";
+import type { Device, ForgottenEvent, GatewayEvent, Message, MessageHistory, PendingAnswer, QuestionRef } from "@venom/contracts";
 
-export type LiveEvent = Exclude<GatewayEvent, { readonly type: "devices" | "power" | "memory" | "forgotten" }>;
+export type LiveEvent = Extract<GatewayEvent, { readonly type: "message" | "answer" | "request" }>;
+
+export type ConversationEvent = LiveEvent | ForgottenEvent;
 
 export interface Answer {
   readonly requestId: string;
@@ -24,11 +26,9 @@ export interface ConversationState {
 }
 
 export type ConversationAction =
-  | { readonly type: "history"; readonly messages: readonly Message[] }
-  | { readonly type: "events"; readonly events: readonly LiveEvent[] }
+  | { readonly type: "history"; readonly history: MessageHistory; readonly replay: readonly ConversationEvent[] }
+  | { readonly type: "events"; readonly events: readonly ConversationEvent[] }
   | { readonly type: "gap"; readonly requestId: string }
-  | { readonly type: "retrying"; readonly from: string; readonly to: string }
-  | { readonly type: "forgotten"; readonly messageIds: readonly string[] }
   | { readonly type: "notice"; readonly reason: string }
   | { readonly type: "dismiss" };
 
@@ -44,6 +44,8 @@ const rememberedRequests = 200;
 
 const unfinished = "VENOM could not finish this request.";
 
+const conversationEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["message", "answer", "request", "forgotten"]);
+
 function byTime(left: Message, right: Message): number {
   return left.created_at === right.created_at ? left.id.localeCompare(right.id) : left.created_at.localeCompare(right.created_at);
 }
@@ -54,8 +56,8 @@ export function mergeMessages(current: readonly Message[], incoming: readonly Me
   return fresh.length === 0 ? current : [...current, ...fresh].sort(byTime);
 }
 
-export function isLiveEvent(event: GatewayEvent): event is LiveEvent {
-  return event.type === "message" || event.type === "answer" || event.type === "request";
+export function isConversationEvent(event: GatewayEvent): event is ConversationEvent {
+  return conversationEvents.has(event.type);
 }
 
 function withAnswer(answers: ReadonlyMap<string, Answer>, answer: Answer): ReadonlyMap<string, Answer> {
@@ -75,6 +77,24 @@ function answerFor(state: ConversationState, requestId: string): Answer {
   return state.answers.get(requestId) ?? { requestId, origin: requestId, askedId: null, text: "", failure: null };
 }
 
+function remember(finished: ReadonlySet<string>, requestId: string): ReadonlySet<string> {
+  const next = [...finished, requestId];
+  return new Set(next.slice(-rememberedRequests));
+}
+
+function release(state: ConversationState, requestId: string): ConversationState {
+  const ordering = new Map(state.ordering);
+  ordering.delete(requestId);
+  return { ...state, answers: withoutAnswer(state.answers, requestId), ordering, finished: remember(state.finished, requestId) };
+}
+
+function accept(state: ConversationState, requestId: string, question: QuestionRef): ConversationState {
+  const superseded = [...state.answers.values()].filter((answer) => answer.requestId !== requestId && answer.askedId === question.message_id);
+  const cleared = superseded.reduce((current, answer) => release(current, answer.requestId), state);
+  const answer = answerFor(cleared, requestId);
+  return { ...cleared, answers: withAnswer(cleared.answers, { ...answer, origin: question.request_id, askedId: question.message_id }) };
+}
+
 function apply(state: ConversationState, event: LiveEvent): ConversationState {
   const requestId = event.request_id;
   switch (event.type) {
@@ -92,7 +112,9 @@ function apply(state: ConversationState, event: LiveEvent): ConversationState {
     case "request":
       switch (event.state) {
         case "accepted":
-          return { ...state, answers: withAnswer(state.answers, answerFor(state, requestId)) };
+          return event.question === null
+            ? { ...state, answers: withAnswer(state.answers, answerFor(state, requestId)) }
+            : accept(state, requestId, event.question);
         case "completed":
           return { ...state, answers: withoutAnswer(state.answers, requestId) };
         case "failed": {
@@ -105,11 +127,6 @@ function apply(state: ConversationState, event: LiveEvent): ConversationState {
         }
       }
   }
-}
-
-function remember(finished: ReadonlySet<string>, requestId: string): ReadonlySet<string> {
-  const next = [...finished, requestId];
-  return new Set(next.slice(-rememberedRequests));
 }
 
 function settle(state: ConversationState, requestId: string, ordering: Ordering): ConversationState {
@@ -146,6 +163,19 @@ function receive(state: ConversationState, event: LiveEvent): ConversationState 
   return settle(current, requestId, { next, held });
 }
 
+function forget(state: ConversationState, messageIds: readonly string[]): ConversationState {
+  const removed = new Set(messageIds);
+  if (!state.messages.some((message) => removed.has(message.id))) {
+    return state;
+  }
+  const answers = new Map([...state.answers].filter(([, answer]) => answer.askedId === null || !removed.has(answer.askedId)));
+  return { ...state, messages: state.messages.filter((message) => !removed.has(message.id)), answers };
+}
+
+function step(state: ConversationState, event: ConversationEvent): ConversationState {
+  return event.type === "forgotten" ? forget(state, event.message_ids) : receive(state, event);
+}
+
 function closeGap(state: ConversationState, requestId: string): ConversationState {
   const ordering = state.ordering.get(requestId);
   if (ordering === undefined || ordering.held.length === 0) {
@@ -156,59 +186,29 @@ function closeGap(state: ConversationState, requestId: string): ConversationStat
   return settle(current, requestId, { next: last + 1, held: [] });
 }
 
-function retrying(state: ConversationState, from: string, to: string): ConversationState {
-  const previous = state.answers.get(from);
-  if (previous === undefined) {
-    return state;
-  }
-  const answers = new Map(state.answers);
-  answers.delete(from);
-  const ordering = new Map(state.ordering);
-  ordering.delete(from);
-  const released = { ...state, answers, ordering, finished: remember(state.finished, from) };
-  if (state.finished.has(to)) {
-    return released;
-  }
-  const replacement = state.answers.get(to);
-  answers.set(to, {
-    requestId: to,
-    origin: previous.origin,
-    askedId: previous.askedId,
-    text: replacement?.text ?? "",
-    failure: replacement?.failure ?? null,
-  });
-  return released;
+function pendingAnswer({ request_id, question, text, failure }: PendingAnswer): Answer {
+  return { requestId: request_id, origin: question.request_id, askedId: question.message_id, text, failure };
 }
 
-function fromHistory(state: ConversationState, messages: readonly Message[]): ConversationState {
-  const known = new Set(messages.map((message) => message.id));
-  const answers = new Map(
-    [...state.answers].filter(([, answer]) => answer.failure !== null && answer.askedId !== null && known.has(answer.askedId)),
-  );
-  return { ...state, messages: [...messages].sort(byTime), answers, ordering: new Map() };
-}
-
-function forget(state: ConversationState, messageIds: readonly string[]): ConversationState {
-  const removed = new Set(messageIds);
-  if (!state.messages.some((message) => removed.has(message.id))) {
-    return state;
-  }
-  const answers = new Map([...state.answers].filter(([, answer]) => answer.askedId === null || !removed.has(answer.askedId)));
-  return { ...state, messages: state.messages.filter((message) => !removed.has(message.id)), answers };
+function fromHistory(state: ConversationState, history: MessageHistory, replay: readonly ConversationEvent[]): ConversationState {
+  const pending = history.pending.filter((entry) => !state.finished.has(entry.request_id));
+  const replaced: ConversationState = {
+    ...state,
+    messages: [...history.messages].sort(byTime),
+    answers: new Map(pending.map((entry) => [entry.request_id, pendingAnswer(entry)])),
+    ordering: new Map(pending.map((entry) => [entry.request_id, { next: entry.sequence + 1, held: [] }])),
+  };
+  return replay.reduce(step, replaced);
 }
 
 export function reduceConversation(state: ConversationState, action: ConversationAction): ConversationState {
   switch (action.type) {
     case "history":
-      return fromHistory(state, action.messages);
+      return fromHistory(state, action.history, action.replay);
     case "events":
-      return action.events.reduce(receive, state);
+      return action.events.reduce(step, state);
     case "gap":
       return closeGap(state, action.requestId);
-    case "retrying":
-      return retrying(state, action.from, action.to);
-    case "forgotten":
-      return forget(state, action.messageIds);
     case "notice":
       return { ...state, notice: action.reason };
     case "dismiss":
@@ -222,6 +222,14 @@ export function heldRequests(state: ConversationState): string[] {
 
 export function isAnswering(state: ConversationState): boolean {
   return [...state.answers.values()].some((answer) => answer.failure === null);
+}
+
+export function sentFrom(message: Message, devices: readonly Device[], currentDeviceId: string): string | null {
+  if (message.speaker !== "user" || message.device_id === currentDeviceId) {
+    return null;
+  }
+  const device = devices.find((candidate) => candidate.id === message.device_id);
+  return device === undefined ? "From another device" : `From ${device.name}`;
 }
 
 export interface Placed {
