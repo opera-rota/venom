@@ -7,6 +7,7 @@ import { createEphemeralServerSetup, createIdentity } from "@venom/identity";
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
 import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
+import { createCommandSigner, createTasks, createTrust, newKeyPair } from "@venom/safety";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { Api } from "../src/main/api.ts";
@@ -27,6 +28,7 @@ export async function createBackend(): Promise<Backend> {
   const mailer = recordingMailer();
   const serverSetup = await createEphemeralServerSetup();
   const brain = scriptedBrain();
+  const commandKey = newKeyPair();
   let running: { app: FastifyInstance; store: Store; sql: Sql } | null = null;
   let lastPort = 0;
 
@@ -51,7 +53,10 @@ export async function createBackend(): Promise<Backend> {
       const identity = createIdentity({ sql, mailer, serverSetup });
       const power = createPower({ sql });
       const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
-      const app = await buildGateway({ store, identity, brain, power, memory, logger: false });
+      const signer = createCommandSigner(commandKey);
+      const tasks = createTasks({ sql });
+      const trust = createTrust({ sql, serverKey: signer.publicKey });
+      const app = await buildGateway({ store, identity, brain, power, memory, tasks, trust, signer, logger: false });
       await app.listen({ host: "127.0.0.1", port });
       const address = app.server.address();
       if (address === null || typeof address === "string") {

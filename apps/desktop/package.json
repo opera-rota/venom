@@ -16,6 +16,7 @@
     "@serenity-kit/opaque": "1.1.0",
     "@venom/contracts": "workspace:*",
     "@venom/identity": "workspace:*",
+    "@venom/safety": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {

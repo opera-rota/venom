@@ -79,8 +79,12 @@ export const Message = z
   .register(contracts, { id: "Message" });
 
 export const StepAction = z
-  .enum(["open_app", "type_text", "click", "run_script", "take_screenshot", "call_connector"])
+  .enum(["wait", "open_app", "type_text", "click", "run_script", "take_screenshot", "call_connector"])
   .register(contracts, { id: "StepAction" });
+
+export const Effect = z
+  .enum(["deletes", "pays", "posts", "uses_credential", "reaches_outside"])
+  .register(contracts, { id: "Effect" });
 
 export const DeviceTarget = z
   .strictObject({ kind: z.literal("device"), device_id: Id })
@@ -99,12 +103,13 @@ export const FailurePolicy = z
   .register(contracts, { id: "FailurePolicy" });
 
 export const StepStatus = z
-  .enum(["pending", "running", "done", "failed", "skipped"])
+  .enum(["pending", "waiting", "running", "done", "failed", "skipped", "stopped"])
   .register(contracts, { id: "StepStatus" });
 
 const stepFields = {
   action: StepAction,
   target: StepTarget,
+  effects: z.array(Effect).max(5),
   requires_confirmation: z.boolean(),
   reversible: z.boolean(),
   on_failure: FailurePolicy,
@@ -119,6 +124,7 @@ export const Step = z
     id: Id,
     task_id: Id,
     order: z.int().nonnegative(),
+    summary: z.string().min(1).max(300),
     ...stepFields,
     status: StepStatus,
     output: z.string().nullable(),
@@ -126,7 +132,7 @@ export const Step = z
   .register(contracts, { id: "Step" });
 
 export const TaskStatus = z
-  .enum(["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled"])
+  .enum(["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled", "stopped"])
   .register(contracts, { id: "TaskStatus" });
 
 export const Task = z
@@ -222,6 +228,7 @@ export type Device = z.infer<typeof Device>;
 export type Speaker = z.infer<typeof Speaker>;
 export type Message = z.infer<typeof Message>;
 export type StepAction = z.infer<typeof StepAction>;
+export type Effect = z.infer<typeof Effect>;
 export type DeviceTarget = z.infer<typeof DeviceTarget>;
 export type ConnectorTarget = z.infer<typeof ConnectorTarget>;
 export type StepTarget = z.infer<typeof StepTarget>;

@@ -1,0 +1,17 @@
+{
+  "tasks": [],
+  "confirmations": [
+    {
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+      "step_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
+      "plain_language": "Pretend to delete a file (nothing is really deleted) on RS-APP-CED. This cannot be undone.",
+      "target_name": "RS-APP-CED",
+      "reversible": false,
+      "risk": "high",
+      "reasons": [
+        "deletes"
+      ],
+      "asked_at": "2026-10-31T19:00:05.000Z"
+    }
+  ]
+}

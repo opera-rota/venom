@@ -2,6 +2,7 @@ import { ApiError, type ApiErrorCode } from "@venom/contracts";
 import { IdentityError } from "@venom/identity";
 import { MemoryError } from "@venom/memory";
 import { PowerError } from "@venom/power";
+import { SafetyError } from "@venom/safety";
 import type { FastifyError, FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -32,7 +33,7 @@ export function installErrorHandling(app: FastifyInstance): void {
     return reply.code(404).send(ApiError.parse({ error: "not_found", message: "There is nothing at this address." }));
   });
 
-  app.setErrorHandler<FastifyError | z.ZodError | GatewayError | IdentityError | PowerError | MemoryError>((error, request, reply) => {
+  app.setErrorHandler<FastifyError | z.ZodError | GatewayError | IdentityError | PowerError | MemoryError | SafetyError>((error, request, reply) => {
     if (error instanceof z.ZodError) {
       return reply.code(400).send(
         ApiError.parse({
@@ -42,7 +43,7 @@ export function installErrorHandling(app: FastifyInstance): void {
         }),
       );
     }
-    if (error instanceof GatewayError || error instanceof IdentityError || error instanceof PowerError || error instanceof MemoryError) {
+    if (error instanceof GatewayError || error instanceof IdentityError || error instanceof PowerError || error instanceof MemoryError || error instanceof SafetyError) {
       return reply.code(error.statusCode).send(ApiError.parse({ error: error.code, message: error.message }));
     }
     const statusCode = error.statusCode ?? 500;

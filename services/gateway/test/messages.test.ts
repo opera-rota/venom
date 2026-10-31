@@ -31,9 +31,11 @@ function label(event: GatewayEvent): string {
     case "power":
       return "power";
     case "memory":
-      return "memory";
     case "forgotten":
-      return "forgotten";
+    case "task":
+    case "confirmation":
+    case "halt":
+      return event.type;
   }
 }
 

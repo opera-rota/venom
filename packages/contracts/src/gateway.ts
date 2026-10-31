@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { ConfirmRequest } from "./messages.ts";
 import { PowerStatus } from "./power.ts";
 import { Id, Timestamp } from "./primitives.ts";
-import { Device, MemoryItem, Message } from "./records.ts";
+import { Device, MemoryItem, Message, Task } from "./records.ts";
+import { ConfirmationAnswered } from "./safety.ts";
 import { contracts } from "./registry.ts";
 
 export const MessageText = z
@@ -122,8 +124,46 @@ export const ForgottenEvent = z
   })
   .register(contracts, { id: "ForgottenEvent" });
 
+export const TaskEvent = z
+  .strictObject({
+    type: z.literal("task"),
+    ...eventFields,
+    task: Task,
+  })
+  .register(contracts, { id: "TaskEvent" });
+
+export const ConfirmationEvent = z
+  .strictObject({
+    type: z.literal("confirmation"),
+    ...eventFields,
+    request: ConfirmRequest,
+    answered: ConfirmationAnswered.nullable(),
+  })
+  .register(contracts, { id: "ConfirmationEvent" });
+
+export const HaltEvent = z
+  .strictObject({
+    type: z.literal("halt"),
+    ...eventFields,
+    stop_id: Id,
+    stopped_at: Timestamp,
+    tasks: z.array(Task),
+  })
+  .register(contracts, { id: "HaltEvent" });
+
 export const GatewayEvent = z
-  .discriminatedUnion("type", [MessageEvent, AnswerEvent, RequestEvent, DevicesEvent, PowerEvent, MemoryEvent, ForgottenEvent])
+  .discriminatedUnion("type", [
+    MessageEvent,
+    AnswerEvent,
+    RequestEvent,
+    DevicesEvent,
+    PowerEvent,
+    MemoryEvent,
+    ForgottenEvent,
+    TaskEvent,
+    ConfirmationEvent,
+    HaltEvent,
+  ])
   .register(contracts, { id: "GatewayEvent" });
 
 export type MessageText = z.infer<typeof MessageText>;
@@ -141,4 +181,7 @@ export type DevicesEvent = z.infer<typeof DevicesEvent>;
 export type PowerEvent = z.infer<typeof PowerEvent>;
 export type MemoryEvent = z.infer<typeof MemoryEvent>;
 export type ForgottenEvent = z.infer<typeof ForgottenEvent>;
+export type TaskEvent = z.infer<typeof TaskEvent>;
+export type ConfirmationEvent = z.infer<typeof ConfirmationEvent>;
+export type HaltEvent = z.infer<typeof HaltEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

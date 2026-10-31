@@ -1,10 +1,24 @@
-import { GatewayEvent, type Device, type MemoryForgotten, type MemoryItem, type Message, type PowerStatus, type QuestionRef } from "@venom/contracts";
+import {
+  GatewayEvent,
+  type CommandFrame,
+  type ConfirmationAnswered,
+  type ConfirmRequest,
+  type Device,
+  type MemoryForgotten,
+  type MemoryItem,
+  type Message,
+  type PowerStatus,
+  type QuestionRef,
+  type StopReceipt,
+  type Task,
+} from "@venom/contracts";
 import type { LiveRequests } from "./requests.ts";
 
 export interface LiveConnection {
   readonly deviceId: string;
   readonly accountId: string;
-  send(event: GatewayEvent): void;
+  readonly signed: boolean;
+  send(frame: GatewayEvent | CommandFrame): void;
   close(code: number, reason: string): void;
 }
 
@@ -61,6 +75,25 @@ export class LiveHub {
     }
   }
 
+  sendCommand(deviceId: string, frame: CommandFrame): number {
+    let delivered = 0;
+    for (const connection of this.#byDevice.get(deviceId) ?? []) {
+      if (connection.signed) {
+        connection.send(frame);
+        delivered += 1;
+      }
+    }
+    return delivered;
+  }
+
+  canAct(deviceId: string): boolean {
+    return [...(this.#byDevice.get(deviceId) ?? [])].some((connection) => connection.signed);
+  }
+
+  devicesOf(accountId: string): readonly string[] {
+    return [...(this.#byAccount.get(accountId) ?? [])];
+  }
+
   disconnectDevice(deviceId: string, code: number, reason: string): void {
     for (const connection of [...(this.#byDevice.get(deviceId) ?? [])]) {
       connection.close(code, reason);
@@ -90,6 +123,18 @@ export function memoryEvent(requestId: string, item: MemoryItem): GatewayEvent {
 
 export function forgottenEvent(requestId: string, forgotten: MemoryForgotten): GatewayEvent {
   return GatewayEvent.parse({ type: "forgotten", ...stamp(requestId, 0), ...forgotten });
+}
+
+export function taskEvent(requestId: string, task: Task): GatewayEvent {
+  return GatewayEvent.parse({ type: "task", ...stamp(requestId, 0), task });
+}
+
+export function confirmationEvent(requestId: string, request: ConfirmRequest, answered: ConfirmationAnswered | null): GatewayEvent {
+  return GatewayEvent.parse({ type: "confirmation", ...stamp(requestId, 0), request, answered });
+}
+
+export function haltEvent(requestId: string, receipt: StopReceipt): GatewayEvent {
+  return GatewayEvent.parse({ type: "halt", ...stamp(requestId, 0), ...receipt });
 }
 
 export class RequestTrace {

@@ -10,6 +10,7 @@ def step(action: str) -> dict[str, object]:
     return {
         "action": action,
         "target": {"kind": "connector", "connector_id": CONNECTOR_ID},
+        "effects": ["reaches_outside"],
         "requires_confirmation": True,
         "reversible": False,
         "on_failure": "abort",

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
+import { ConfirmationStrictness, ConfirmDecision, DrillKind } from "@venom/contracts";
+import { app, BrowserWindow, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channels, type AuthView } from "../shared/bridge.ts";
@@ -6,6 +7,8 @@ import { Api } from "./api.ts";
 import { loadConfig } from "./config.ts";
 import { describeThisComputer } from "./device-info.ts";
 import { GatewayClient } from "./gateway-client.ts";
+import { HaltController } from "./halt.ts";
+import { Hands } from "./hands.ts";
 import { Onboarding } from "./onboarding.ts";
 import { expiredNotice, removedNotice, SessionManager } from "./session-manager.ts";
 import { CredentialVault } from "./vault.ts";
@@ -25,6 +28,8 @@ if (process.platform === "win32") {
 const rendererDevUrl = process.env["ELECTRON_RENDERER_URL"];
 const rendererFile = join(import.meta.dirname, "../renderer/index.html");
 const trustedOrigin = rendererDevUrl === undefined ? "file://" : new URL(rendererDevUrl).origin;
+const haltShortcut = "CommandOrControl+Shift+Backspace";
+const unreadable = { ok: false, code: "invalid_request", reason: "VENOM could not read that request." } as const;
 
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -95,7 +100,19 @@ function wire(): void {
     decrypt: (sealed) => safeStorage.decryptString(sealed),
   });
   const sessions = new SessionManager({ api, vault });
-  const gateway = new GatewayClient({ api });
+  const gateway = new GatewayClient({
+    api,
+    trust: async () => {
+      await sessions.ensureKeys();
+      return sessions.trust;
+    },
+  });
+  const hands = new Hands({
+    trust: () => sessions.trust,
+    report: (report) => gateway.report(report),
+    refused: (reason) => console.warn(`[venom] ${reason}`),
+  });
+  const halt = new HaltController({ send: (stopId) => gateway.halt(stopId), haltLocally: () => hands.haltAll() });
   const device = () => describeThisComputer(config.profile);
   const onboarding = new Onboarding({ api, device, complete: (session) => sessions.signIn(session) });
   let reported: string | null = null;
@@ -113,6 +130,8 @@ function wire(): void {
 
   sessions.onChange(follow);
   gateway.onEvent((event) => broadcast(channels.event, event));
+  gateway.onCommand((frame) => hands.receive(frame));
+  halt.onChange((view) => broadcast(channels.haltChanged, view));
   gateway.onState((state) => {
     broadcast(channels.connectionChanged, state);
     const view = sessions.view;
@@ -144,10 +163,42 @@ function wire(): void {
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
   handle(channels.retry, (requestId) => gateway.retry(requestId));
+  handle(channels.stop, () => {
+    if (sessions.view.kind === "signed_in") {
+      halt.press();
+    }
+  });
+  handle(channels.halt, () => halt.view);
+  handle(channels.tasks, () => gateway.tasks());
+  handle(channels.drill, (kind) => {
+    const parsed = DrillKind.safeParse(kind);
+    return parsed.success ? gateway.drill(parsed.data) : unreadable;
+  });
+  handle(channels.confirm, (taskId, stepId, decision) => {
+    const parsed = ConfirmDecision.safeParse(decision);
+    return parsed.success && typeof taskId === "string" && typeof stepId === "string" ? gateway.confirm(taskId, stepId, parsed.data) : unreadable;
+  });
+  handle(channels.safety, () => gateway.safety());
+  handle(channels.setSafety, (strictness) => {
+    const parsed = ConfirmationStrictness.safeParse(strictness);
+    return parsed.success ? gateway.setSafety(parsed.data) : unreadable;
+  });
   handle(channels.openLink, (url) => openLink(url));
+
+  if (!globalShortcut.register(haltShortcut, () => {
+    if (sessions.view.kind === "signed_in") {
+      halt.press();
+    }
+  })) {
+    console.warn(`[venom] the stop shortcut ${haltShortcut} is taken by another app; use the Stop switch instead`);
+  }
   handle(channels.connection, () => gateway.state);
 
-  app.on("before-quit", () => gateway.stop());
+  app.on("before-quit", () => {
+    halt.close();
+    gateway.stop();
+  });
+  app.on("will-quit", () => globalShortcut.unregisterAll());
   void sessions.start();
 }
 

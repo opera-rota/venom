@@ -6,6 +6,7 @@ import { beginSecretWordLogin, beginSecretWordRegistration } from "@venom/identi
 import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identity/testing";
 import { createMemory, type Memory } from "@venom/memory";
 import { createPower, type Power } from "@venom/power";
+import { createCommandSigner, createTasks, createTrust, newKeyPair, type CommandSigner, type Tasks } from "@venom/safety";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { brainEmbedder, buildGateway } from "../src/app.ts";
@@ -25,6 +26,8 @@ export interface RunningGateway {
   readonly brain: ScriptedBrain;
   readonly power: Power;
   readonly memory: Memory;
+  readonly tasks: Tasks;
+  readonly signer: CommandSigner;
   stop(): Promise<void>;
 }
 
@@ -47,18 +50,34 @@ export interface GatewayStart {
   readonly heartbeatMs?: number;
   readonly brain?: ScriptedBrain;
   readonly freeDailyAnswers?: number;
+  readonly commandGraceMs?: number;
 }
 
 export async function startGateway(
   environment: Environment,
-  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100 }: GatewayStart = {},
+  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100, commandGraceMs }: GatewayStart = {},
 ): Promise<RunningGateway> {
   const store: Store = createStore(environment.database.appUrl);
   const sql = connect(environment.database.appUrl);
   const identity = createIdentity({ sql, mailer: environment.mailer, serverSetup: environment.serverSetup });
   const power = createPower({ sql, freeDailyAnswers });
   const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
-  const app = await buildGateway({ store, identity, brain, power, memory, logger: false, ...(heartbeatMs === undefined ? {} : { heartbeatMs }) });
+  const signer = createCommandSigner(newKeyPair());
+  const tasks = createTasks({ sql });
+  const trust = createTrust({ sql, serverKey: signer.publicKey });
+  const app = await buildGateway({
+    store,
+    identity,
+    brain,
+    power,
+    memory,
+    tasks,
+    trust,
+    signer,
+    logger: false,
+    ...(heartbeatMs === undefined ? {} : { heartbeatMs }),
+    ...(commandGraceMs === undefined ? {} : { commandGraceMs }),
+  });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 
   return {
@@ -68,6 +87,8 @@ export async function startGateway(
     brain,
     power,
     memory,
+    tasks,
+    signer,
     async stop() {
       await app.close();
       await Promise.all([store.close(), sql.end()]);

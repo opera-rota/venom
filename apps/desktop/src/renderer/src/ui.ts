@@ -11,6 +11,8 @@ export const button = {
     "inline-flex items-center justify-center gap-2 rounded-control border border-line border-l-4 border-l-status-wait bg-surface-2 px-3.5 py-2 text-[13px] font-medium text-ink transition-colors duration-140 ease-ui hover:border-line-strong disabled:text-ink-faint",
   compact:
     "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-control border border-line bg-surface-2 px-3.5 py-2 text-[13px] font-medium text-ink transition-colors duration-140 ease-ui hover:border-line-strong disabled:text-ink-faint",
+  halt:
+    "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-red-500 px-4 py-1.5 text-sm font-semibold text-white shadow-accent transition-colors duration-140 ease-ui hover:bg-red-400 disabled:opacity-80",
   gateCancel:
     "inline-flex items-center justify-center gap-2 rounded-control border border-line bg-surface-2 px-3.5 py-2 text-[13px] font-medium text-ink transition-colors duration-140 ease-ui hover:border-line-strong",
 } as const;
@@ -20,6 +22,7 @@ export const surface = {
   cardActive: "rounded-control border border-(--line-accent) bg-surface-1 shadow-card",
   bubble: "rounded-control border border-line bg-surface-2",
   panel: "border-l border-line-subtle bg-surface-1",
+  overlay: "rounded-overlay border border-line bg-surface-3 shadow-overlay",
 } as const;
 
 export const field = {
@@ -39,6 +42,7 @@ export const mark = {
   logo: "grid shrink-0 place-items-center rounded-full bg-green-500 font-bold text-on-accent ring-2 ring-mint-200 shadow-mark",
   tag: "inline-flex shrink-0 items-center whitespace-nowrap rounded-tag bg-(--tint-accent) px-2 py-0.5 text-[11.5px] font-medium text-green-300",
   divider: "h-px w-full bg-line-subtle",
+  caution: "inline-flex shrink-0 items-center whitespace-nowrap rounded-tag border border-status-wait/40 px-2 py-0.5 text-[11.5px] font-medium text-status-wait",
 } as const;
 
 export const text = {

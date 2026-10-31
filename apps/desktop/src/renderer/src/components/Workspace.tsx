@@ -7,12 +7,17 @@ import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
+import { taskInView } from "../tasks-state.ts";
+import { useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
+import { ConfirmationGate } from "./ConfirmationGate.tsx";
 import { DevicesPanel } from "./DevicesPanel.tsx";
 import { Header, type SidePanel } from "./Header.tsx";
 import { MemoryPanel } from "./MemoryPanel.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { engineName, PowerPanel } from "./PowerPanel.tsx";
+import { SafetyPanel } from "./SafetyPanel.tsx";
+import { TaskStrip } from "./TaskStrip.tsx";
 
 const screenScheduler: Scheduler = {
   frame: (run) => {
@@ -41,6 +46,8 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const devices = useDevices(bridge, device.id, connection);
   const power = usePower(bridge, connection);
   const memory = useMemory(bridge, connection);
+  const tasks = useTasks(bridge, connection);
+  const inView = taskInView(tasks.state);
   const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
 
@@ -56,13 +63,25 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
           engineName={power.power === null ? null : engineName(power.engines, power.power)}
           panel={panel}
           onTogglePanel={(next) => setPanel((open) => (open === next ? null : next))}
+          halt={tasks.halt}
+          onStop={tasks.stop}
         />
+        {inView !== null && <TaskStrip task={inView} deviceId={device.id} devices={devices.devices} onDismiss={tasks.dismiss} />}
         <MessageList store={store} devices={devices.devices} deviceId={device.id} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
       </main>
       {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}
       {panel === "power" && <PowerPanel state={power} onClose={() => setPanel(null)} />}
       {panel === "memory" && <MemoryPanel state={memory} onClose={() => setPanel(null)} />}
+      {panel === "safety" && <SafetyPanel handle={tasks} onClose={() => setPanel(null)} />}
+      <ConfirmationGate
+        queue={tasks.state.queue}
+        closed={tasks.state.closed}
+        deviceId={device.id}
+        sending={tasks.sending}
+        onAnswer={(request, decision) => void tasks.answer(request, decision)}
+        onSeen={tasks.seen}
+      />
     </div>
   );
 }

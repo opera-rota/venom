@@ -32,6 +32,9 @@ importers:
       '@venom/identity':
         specifier: workspace:*
         version: link:../../services/identity
+      '@venom/safety':
+        specifier: workspace:*
+        version: link:../../services/safety
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -142,6 +145,9 @@ importers:
       '@venom/power':
         specifier: workspace:*
         version: link:../power
+      '@venom/safety':
+        specifier: workspace:*
+        version: link:../safety
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -204,6 +210,22 @@ importers:
         version: 14.0.2
 
   services/power:
+    dependencies:
+      '@venom/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@venom/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+    devDependencies:
+      uuid:
+        specifier: 14.0.2
+        version: 14.0.2
+
+  services/safety:
     dependencies:
       '@venom/contracts':
         specifier: workspace:*

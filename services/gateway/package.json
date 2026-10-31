@@ -20,6 +20,7 @@
     "@venom/identity": "workspace:*",
     "@venom/memory": "workspace:*",
     "@venom/power": "workspace:*",
+    "@venom/safety": "workspace:*",
     "fastify": "5.12.5",
     "uuid": "14.0.2",
     "zod": "4.6.5"

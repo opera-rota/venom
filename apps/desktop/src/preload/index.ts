@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { GatewayEvent } from "@venom/contracts";
-import { channels, type AuthView, type ConnectionState, type VenomBridge } from "../shared/bridge.ts";
+import { channels, type AuthView, type ConnectionState, type HaltView, type VenomBridge } from "../shared/bridge.ts";
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
   const handler = (_event: IpcRendererEvent, payload: T) => listener(payload);
@@ -36,6 +36,14 @@ const bridge: VenomBridge = {
   history: () => ipcRenderer.invoke(channels.history),
   send: (text) => ipcRenderer.invoke(channels.send, text),
   retry: (requestId) => ipcRenderer.invoke(channels.retry, requestId),
+  stop: () => ipcRenderer.invoke(channels.stop),
+  halt: () => ipcRenderer.invoke(channels.halt),
+  onHalt: (listener) => subscribe<HaltView>(channels.haltChanged, listener),
+  tasks: () => ipcRenderer.invoke(channels.tasks),
+  drill: (kind) => ipcRenderer.invoke(channels.drill, kind),
+  confirm: (taskId, stepId, decision) => ipcRenderer.invoke(channels.confirm, taskId, stepId, decision),
+  safety: () => ipcRenderer.invoke(channels.safety),
+  setSafety: (strictness) => ipcRenderer.invoke(channels.setSafety, strictness),
   openLink: (url) => ipcRenderer.invoke(channels.openLink, url),
   connection: () => ipcRenderer.invoke(channels.connection),
   onEvent: (listener) => subscribe<GatewayEvent>(channels.event, listener),

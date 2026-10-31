@@ -155,6 +155,8 @@ export const ApiErrorCode = z
     "mail_unavailable",
     "out_of_power",
     "memory_full",
+    "device_key_missing",
+    "already_answered",
     "internal",
   ])
   .register(contracts, { id: "ApiErrorCode" });

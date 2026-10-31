@@ -1,6 +1,7 @@
 import type { PowerStatus } from "@venom/contracts";
-import type { ConnectionState } from "../../../shared/bridge.ts";
+import type { ConnectionState, HaltView } from "../../../shared/bridge.ts";
 import { button, mark, text } from "../ui.ts";
+import { HaltSwitch } from "./HaltSwitch.tsx";
 import { Icon, type IconName } from "./Icon.tsx";
 
 const connectionView: Record<ConnectionState, { readonly label: string; readonly icon: IconName; readonly tone: string; readonly dot: string }> = {
@@ -17,7 +18,13 @@ export function LogoMark({ size }: { readonly size: number }) {
   );
 }
 
-export type SidePanel = "devices" | "power" | "memory";
+export type SidePanel = "devices" | "power" | "memory" | "safety";
+
+const panelButtons: readonly { readonly panel: Exclude<SidePanel, "power">; readonly label: string; readonly icon: IconName }[] = [
+  { panel: "memory", label: "Memory", icon: "memory" },
+  { panel: "devices", label: "Devices", icon: "devices" },
+  { panel: "safety", label: "Safety", icon: "shield" },
+];
 
 export interface HeaderProps {
   readonly connection: ConnectionState;
@@ -26,6 +33,8 @@ export interface HeaderProps {
   readonly engineName: string | null;
   readonly panel: SidePanel | null;
   readonly onTogglePanel: (panel: SidePanel) => void;
+  readonly halt: HaltView;
+  readonly onStop: () => void;
 }
 
 function gaugeLabel(power: PowerStatus, engineName: string): string {
@@ -35,7 +44,7 @@ function gaugeLabel(power: PowerStatus, engineName: string): string {
   return `${engineName} · ${new Intl.NumberFormat().format(power.balance)} power`;
 }
 
-export function Header({ connection, accountName, power, engineName, panel, onTogglePanel }: HeaderProps) {
+export function Header({ connection, accountName, power, engineName, panel, onTogglePanel, halt, onStop }: HeaderProps) {
   const view = connectionView[connection];
 
   return (
@@ -45,7 +54,7 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
         <h1 className={text.section}>VENOM</h1>
         <span className={`truncate ${text.support}`}>{accountName}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         <div role="status" aria-live="polite" className={`flex items-center gap-2 ${text.detail} ${view.tone}`}>
           <span className={`${mark.dot} ${view.dot}`} />
           <Icon name={view.icon} />
@@ -59,27 +68,24 @@ export function Header({ connection, accountName, power, engineName, panel, onTo
             className={`${button.ghost} tabular-nums ${panel === "power" ? "text-green-400" : ""}`}
           >
             <Icon name="bolt" className="h-4 w-4" />
-            <span>{gaugeLabel(power, engineName)}</span>
+            <span className="whitespace-nowrap">{gaugeLabel(power, engineName)}</span>
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => onTogglePanel("memory")}
-          aria-pressed={panel === "memory"}
-          className={`${button.ghost} ${panel === "memory" ? "text-green-400" : ""}`}
-        >
-          <Icon name="memory" className="h-4 w-4" />
-          <span>Memory</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onTogglePanel("devices")}
-          aria-pressed={panel === "devices"}
-          className={`${button.ghost} ${panel === "devices" ? "text-green-400" : ""}`}
-        >
-          <Icon name="devices" className="h-4 w-4" />
-          <span>Devices</span>
-        </button>
+        {panelButtons.map((entry) => (
+          <button
+            key={entry.panel}
+            type="button"
+            onClick={() => onTogglePanel(entry.panel)}
+            aria-pressed={panel === entry.panel}
+            aria-label={entry.label}
+            title={entry.label}
+            className={`${button.ghost} ${panel === entry.panel ? "text-green-400" : ""}`}
+          >
+            <Icon name={entry.icon} className="h-4 w-4" />
+            <span className="hidden xl:inline">{entry.label}</span>
+          </button>
+        ))}
+        <HaltSwitch view={halt} onStop={onStop} />
       </div>
     </header>
   );

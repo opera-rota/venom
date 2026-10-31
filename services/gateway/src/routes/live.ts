@@ -1,11 +1,27 @@
+import { ApiError, Id, Signature } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
-import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { closeCodes, type GatewayContext } from "../context.ts";
 
 export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
-  const { hub, identity, heartbeatMs, track, isClosing, broadcastDevices } = context;
+  const { hub, identity, trust, runner, heartbeatMs, track, isClosing, broadcastDevices } = context;
   const queue = new Map<string, Promise<void>>();
+  const proven = new WeakSet<FastifyRequest>();
+
+  async function prove(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const device = request.device;
+    if (device === null || !(await trust.hasKey(device))) {
+      return;
+    }
+    const challengeId = Id.safeParse(request.headers["x-venom-challenge"]);
+    const signature = Signature.safeParse(request.headers["x-venom-signature"]);
+    if (challengeId.success && signature.success && (await trust.prove(device, challengeId.data, signature.data))) {
+      proven.add(request);
+      return;
+    }
+    await reply.code(403).send(ApiError.parse({ error: "forbidden", message: "This device must sign a fresh challenge to open its live link." }));
+  }
 
   function presence(device: DeviceRef, online: boolean, log: FastifyBaseLogger): void {
     const previous = queue.get(device.id) ?? Promise.resolve();
@@ -26,17 +42,22 @@ export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
     });
   }
 
-  app.get("/v1/live", { websocket: true }, (socket, request) => {
+  app.get("/v1/live", { websocket: true, preValidation: prove }, (socket, request) => {
     const device = request.device;
     if (device === null) {
       socket.close(closeCodes.unauthorized, "not signed in");
+      return;
+    }
+    if (isClosing()) {
+      socket.close(1012, "gateway restarting");
       return;
     }
 
     const attachment = hub.attach({
       deviceId: device.id,
       accountId: device.account_id,
-      send: (event) => socket.send(JSON.stringify(event)),
+      signed: proven.has(request),
+      send: (frame) => socket.send(JSON.stringify(frame)),
       close: (code, reason) => socket.close(code, reason),
     });
     if (attachment.first) {
@@ -59,6 +80,7 @@ export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
     socket.on("close", () => {
       clearInterval(heartbeat);
       if (attachment.detach().last) {
+        runner.deviceLost(device.id);
         presence(device, false, request.log);
       }
     });

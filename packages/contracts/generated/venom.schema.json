@@ -46,6 +46,24 @@
       "$ref": "#/$defs/ChooseEngine"
     },
     {
+      "$ref": "#/$defs/CommandFrame"
+    },
+    {
+      "$ref": "#/$defs/CommandPayload"
+    },
+    {
+      "$ref": "#/$defs/CommandReport"
+    },
+    {
+      "$ref": "#/$defs/ConfirmAnswer"
+    },
+    {
+      "$ref": "#/$defs/ConfirmationAnswered"
+    },
+    {
+      "$ref": "#/$defs/ConfirmationEvent"
+    },
+    {
       "$ref": "#/$defs/ConfirmRequest"
     },
     {
@@ -62,6 +80,12 @@
     },
     {
       "$ref": "#/$defs/DeviceInfo"
+    },
+    {
+      "$ref": "#/$defs/DeviceKey"
+    },
+    {
+      "$ref": "#/$defs/DeviceKeyEnrolled"
     },
     {
       "$ref": "#/$defs/DeviceList"
@@ -97,7 +121,13 @@
       "$ref": "#/$defs/ForgottenEvent"
     },
     {
+      "$ref": "#/$defs/HaltEvent"
+    },
+    {
       "$ref": "#/$defs/Intent"
+    },
+    {
+      "$ref": "#/$defs/LiveChallenge"
     },
     {
       "$ref": "#/$defs/LiveEvent"
@@ -169,6 +199,12 @@
       "$ref": "#/$defs/RouteDecision"
     },
     {
+      "$ref": "#/$defs/RunStepCommand"
+    },
+    {
+      "$ref": "#/$defs/SafetySettings"
+    },
+    {
       "$ref": "#/$defs/SecretWordRegistration"
     },
     {
@@ -182,6 +218,9 @@
     },
     {
       "$ref": "#/$defs/Session"
+    },
+    {
+      "$ref": "#/$defs/SignedCommand"
     },
     {
       "$ref": "#/$defs/SignupFinish"
@@ -208,7 +247,16 @@
       "$ref": "#/$defs/StopAll"
     },
     {
+      "$ref": "#/$defs/StopCommand"
+    },
+    {
       "$ref": "#/$defs/StopDevice"
+    },
+    {
+      "$ref": "#/$defs/StopReceipt"
+    },
+    {
+      "$ref": "#/$defs/StopRequest"
     },
     {
       "$ref": "#/$defs/StopSignal"
@@ -221,6 +269,15 @@
     },
     {
       "$ref": "#/$defs/Task"
+    },
+    {
+      "$ref": "#/$defs/TaskDrill"
+    },
+    {
+      "$ref": "#/$defs/TaskEvent"
+    },
+    {
+      "$ref": "#/$defs/TaskList"
     },
     {
       "$ref": "#/$defs/TextOutput"
@@ -239,6 +296,9 @@
     },
     {
       "$ref": "#/$defs/TurnRequest"
+    },
+    {
+      "$ref": "#/$defs/WaitAction"
     }
   ],
   "$defs": {
@@ -366,6 +426,8 @@
         "mail_unavailable",
         "out_of_power",
         "memory_full",
+        "device_key_missing",
+        "already_answered",
         "internal"
       ]
     },
@@ -556,11 +618,230 @@
       ],
       "additionalProperties": false
     },
+    "CommandBody": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RunStepCommand"
+        },
+        {
+          "$ref": "#/$defs/StopCommand"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "CommandFrame": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "command"
+        },
+        "command": {
+          "$ref": "#/$defs/SignedCommand"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "CommandOutcome": {
+      "type": "string",
+      "enum": [
+        "done",
+        "stopped",
+        "failed",
+        "refused"
+      ]
+    },
+    "CommandPayload": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "body": {
+          "$ref": "#/$defs/CommandBody"
+        }
+      },
+      "required": [
+        "command_id",
+        "account_id",
+        "device_id",
+        "issued_at",
+        "expires_at",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "CommandReport": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "command_id",
+        "outcome",
+        "detail"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmAnswer": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/ConfirmDecision"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmationAnswered": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/ConfirmationOutcome"
+        },
+        "device_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "outcome",
+        "device_id",
+        "device_name",
+        "answered_at"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmationEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "confirmation"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request": {
+          "$ref": "#/$defs/ConfirmRequest"
+        },
+        "answered": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfirmationAnswered"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "request",
+        "answered"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmationOutcome": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "declined",
+        "stopped"
+      ]
+    },
     "ConfirmationStrictness": {
       "type": "string",
       "enum": [
         "standard",
         "strict"
+      ]
+    },
+    "ConfirmDecision": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "decline"
       ]
     },
     "ConfirmRequest": {
@@ -576,17 +857,41 @@
         },
         "plain_language": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "target_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "reversible": {
+          "type": "boolean"
         },
         "risk": {
           "$ref": "#/$defs/Risk"
+        },
+        "reasons": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
+        "asked_at": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "required": [
         "task_id",
         "step_id",
         "plain_language",
-        "risk"
+        "target_name",
+        "reversible",
+        "risk",
+        "reasons",
+        "asked_at"
       ],
       "additionalProperties": false
     },
@@ -730,6 +1035,16 @@
       ],
       "additionalProperties": false
     },
+    "DeviceAction": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WaitAction"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "name"
+      }
+    },
     "DeviceInfo": {
       "type": "object",
       "properties": {
@@ -753,6 +1068,35 @@
         "name",
         "platform",
         "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceKey": {
+      "type": "object",
+      "properties": {
+        "public_key": {
+          "$ref": "#/$defs/PublicKey"
+        }
+      },
+      "required": [
+        "public_key"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceKeyEnrolled": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "server_key": {
+          "$ref": "#/$defs/PublicKey"
+        }
+      },
+      "required": [
+        "device_id",
+        "server_key"
       ],
       "additionalProperties": false
     },
@@ -870,6 +1214,23 @@
         "phone",
         "tv",
         "watch"
+      ]
+    },
+    "DrillKind": {
+      "type": "string",
+      "enum": [
+        "wait",
+        "sensitive"
+      ]
+    },
+    "Effect": {
+      "type": "string",
+      "enum": [
+        "deletes",
+        "pays",
+        "posts",
+        "uses_credential",
+        "reaches_outside"
       ]
     },
     "EmbeddingFailure": {
@@ -1151,11 +1512,66 @@
         },
         {
           "$ref": "#/$defs/ForgottenEvent"
+        },
+        {
+          "$ref": "#/$defs/TaskEvent"
+        },
+        {
+          "$ref": "#/$defs/ConfirmationEvent"
+        },
+        {
+          "$ref": "#/$defs/HaltEvent"
         }
       ],
       "discriminator": {
         "propertyName": "type"
       }
+    },
+    "HaltEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "halt"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stop_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "stop_id",
+        "stopped_at",
+        "tasks"
+      ],
+      "additionalProperties": false
     },
     "Intent": {
       "type": "object",
@@ -1182,6 +1598,28 @@
         "wake_word",
         "press_to_talk"
       ]
+    },
+    "LiveChallenge": {
+      "type": "object",
+      "properties": {
+        "challenge_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "nonce": {
+          "$ref": "#/$defs/PublicKey"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "challenge_id",
+        "nonce",
+        "expires_at"
+      ],
+      "additionalProperties": false
     },
     "LiveEvent": {
       "type": "object",
@@ -1746,6 +2184,10 @@
         "reply"
       ]
     },
+    "PublicKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
     "QuestionRef": {
       "type": "object",
       "properties": {
@@ -2052,6 +2494,45 @@
         "script"
       ]
     },
+    "RunStepCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "run_step"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "step_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "$ref": "#/$defs/DeviceAction"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id",
+        "step_id",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "SafetySettings": {
+      "type": "object",
+      "properties": {
+        "confirmation_strictness": {
+          "$ref": "#/$defs/ConfirmationStrictness"
+        }
+      },
+      "required": [
+        "confirmation_strictness"
+      ],
+      "additionalProperties": false
+    },
     "SecretWord": {
       "type": "string",
       "minLength": 8,
@@ -2125,6 +2606,28 @@
       "required": [
         "account",
         "device"
+      ],
+      "additionalProperties": false
+    },
+    "Signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{86}$"
+    },
+    "SignedCommand": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 4096
+        },
+        "signature": {
+          "$ref": "#/$defs/Signature"
+        }
+      },
+      "required": [
+        "payload",
+        "signature"
       ],
       "additionalProperties": false
     },
@@ -2299,11 +2802,23 @@
           "minimum": 0,
           "maximum": 9007199254740991
         },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
         "action": {
           "$ref": "#/$defs/StepAction"
         },
         "target": {
           "$ref": "#/$defs/StepTarget"
+        },
+        "effects": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
         },
         "requires_confirmation": {
           "type": "boolean"
@@ -2328,8 +2843,10 @@
         "id",
         "task_id",
         "order",
+        "summary",
         "action",
         "target",
+        "effects",
         "requires_confirmation",
         "reversible",
         "on_failure",
@@ -2341,6 +2858,7 @@
     "StepAction": {
       "type": "string",
       "enum": [
+        "wait",
         "open_app",
         "type_text",
         "click",
@@ -2353,10 +2871,12 @@
       "type": "string",
       "enum": [
         "pending",
+        "waiting",
         "running",
         "done",
         "failed",
-        "skipped"
+        "skipped",
+        "stopped"
       ]
     },
     "StepTarget": {
@@ -2381,6 +2901,13 @@
         "target": {
           "$ref": "#/$defs/StepTarget"
         },
+        "effects": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
         "requires_confirmation": {
           "type": "boolean"
         },
@@ -2394,6 +2921,7 @@
       "required": [
         "action",
         "target",
+        "effects",
         "requires_confirmation",
         "reversible",
         "on_failure"
@@ -2413,6 +2941,24 @@
       ],
       "additionalProperties": false
     },
+    "StopCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "stop"
+        },
+        "stop_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "stop_id"
+      ],
+      "additionalProperties": false
+    },
     "StopDevice": {
       "type": "object",
       "properties": {
@@ -2428,6 +2974,48 @@
       "required": [
         "kind",
         "device_id"
+      ],
+      "additionalProperties": false
+    },
+    "StopReceipt": {
+      "type": "object",
+      "properties": {
+        "stop_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          }
+        }
+      },
+      "required": [
+        "stop_id",
+        "stopped_at",
+        "tasks"
+      ],
+      "additionalProperties": false
+    },
+    "StopRequest": {
+      "type": "object",
+      "properties": {
+        "stop_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "#/$defs/StopScope"
+        }
+      },
+      "required": [
+        "stop_id",
+        "scope"
       ],
       "additionalProperties": false
     },
@@ -2575,6 +3163,74 @@
       ],
       "additionalProperties": false
     },
+    "TaskDrill": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DrillKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "TaskEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "task"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "task"
+      ],
+      "additionalProperties": false
+    },
+    "TaskList": {
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          }
+        },
+        "confirmations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfirmRequest"
+          }
+        }
+      },
+      "required": [
+        "tasks",
+        "confirmations"
+      ],
+      "additionalProperties": false
+    },
     "TaskStatus": {
       "type": "string",
       "enum": [
@@ -2584,7 +3240,8 @@
         "awaiting_confirmation",
         "completed",
         "failed",
-        "cancelled"
+        "cancelled",
+        "stopped"
       ]
     },
     "TextOutput": {
@@ -2781,6 +3438,25 @@
     "VerificationCode": {
       "type": "string",
       "pattern": "^\\d{6}$"
+    },
+    "WaitAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "wait"
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "name",
+        "seconds"
+      ],
+      "additionalProperties": false
     }
   }
 }

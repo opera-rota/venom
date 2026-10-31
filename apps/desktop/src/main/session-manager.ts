@@ -1,4 +1,5 @@
-import { Session, type DeviceSession } from "@venom/contracts";
+import { DeviceKeyEnrolled, Session, type DeviceSession } from "@venom/contracts";
+import { newKeyPair, type KeyPair } from "@venom/safety/device";
 import type { AuthView, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
 import type { CredentialVault, StoredCredential } from "./vault.ts";
@@ -11,6 +12,12 @@ export interface SessionManagerOptions {
 export const removedNotice = "This device was removed from your VENOM. Attach it again with your email and secret word.";
 
 export const expiredNotice = "This device is no longer signed in to VENOM. Attach it again with your email and secret word.";
+
+export interface DeviceTrust {
+  readonly deviceId: string;
+  readonly pair: KeyPair;
+  readonly serverKey: string | null;
+}
 
 export class SessionManager {
   readonly #api: Api;
@@ -30,6 +37,42 @@ export class SessionManager {
 
   get token(): string | null {
     return this.#credential?.device_token ?? null;
+  }
+
+  get trust(): DeviceTrust | null {
+    const credential = this.#credential;
+    if (credential?.keys === undefined) {
+      return null;
+    }
+    const { private_key, public_key, server_key } = credential.keys;
+    return { deviceId: credential.session.device.id, pair: { privateKey: private_key, publicKey: public_key }, serverKey: server_key };
+  }
+
+  async ensureKeys(): Promise<boolean> {
+    let credential = this.#credential;
+    if (credential === null || credential.keys?.server_key != null) {
+      return false;
+    }
+    if (credential.keys === undefined) {
+      const pair = newKeyPair();
+      credential = { ...credential, keys: { private_key: pair.privateKey, public_key: pair.publicKey, server_key: null } };
+      this.#credential = credential;
+      this.#vault.write(credential);
+    }
+    const keys = credential.keys;
+    if (keys === undefined) {
+      return false;
+    }
+    const enrolled = await this.#api.request("POST", "/v1/devices/current/key", {
+      schema: DeviceKeyEnrolled,
+      body: { public_key: keys.public_key },
+      token: credential.device_token,
+    });
+    if (this.#credential !== credential || !enrolled.ok) {
+      return false;
+    }
+    this.#adopt({ ...credential, keys: { ...keys, server_key: enrolled.value.server_key } });
+    return true;
   }
 
   onChange(listener: (view: AuthView) => void): () => void {
@@ -58,7 +101,7 @@ export class SessionManager {
       return;
     }
     if (current.ok) {
-      this.#adopt({ device_token: credential.device_token, session: current.value });
+      this.#adopt({ ...credential, session: current.value });
     } else if (current.code === "unauthorized") {
       this.forget(expiredNotice);
     }

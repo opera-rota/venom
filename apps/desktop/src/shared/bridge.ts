@@ -1,6 +1,14 @@
 import type {
   Account,
   ApiErrorCode,
+  ConfirmationAnswered,
+  ConfirmationStrictness,
+  ConfirmDecision,
+  DrillKind,
+  SafetySettings,
+  StopReceipt,
+  Task,
+  TaskList,
   Device,
   DeviceList,
   EngineId,
@@ -34,6 +42,22 @@ export type PowerResult = { readonly ok: true; readonly power: PowerStatus } | F
 export type MemoryResult = { readonly ok: true; readonly list: MemoryList } | Failure;
 
 export type MemoryItemResult = { readonly ok: true; readonly item: MemoryItem } | Failure;
+
+export type TasksResult = { readonly ok: true; readonly list: TaskList } | Failure;
+
+export type TaskResult = { readonly ok: true; readonly task: Task } | Failure;
+
+export type AnswerResult = { readonly ok: true; readonly answered: ConfirmationAnswered } | Failure;
+
+export type SafetyResult = { readonly ok: true; readonly settings: SafetySettings } | Failure;
+
+export type HaltView =
+  | { readonly kind: "idle" }
+  | { readonly kind: "stopping" }
+  | { readonly kind: "waiting" }
+  | { readonly kind: "local" }
+  | { readonly kind: "stopped"; readonly receipt: StopReceipt }
+  | { readonly kind: "failed"; readonly reason: string };
 
 export type AuthView =
   | { readonly kind: "loading" }
@@ -70,6 +94,14 @@ export interface VenomBridge {
   history(): Promise<MessageHistory>;
   send(text: string): Promise<SendResult>;
   retry(requestId: string): Promise<SendResult>;
+  stop(): Promise<void>;
+  halt(): Promise<HaltView>;
+  onHalt(listener: (view: HaltView) => void): () => void;
+  tasks(): Promise<TasksResult>;
+  drill(kind: DrillKind): Promise<TaskResult>;
+  confirm(taskId: string, stepId: string, decision: ConfirmDecision): Promise<AnswerResult>;
+  safety(): Promise<SafetyResult>;
+  setSafety(strictness: ConfirmationStrictness): Promise<SafetyResult>;
   openLink(url: string): Promise<void>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
@@ -98,6 +130,14 @@ export const channels = {
   history: "venom:history",
   send: "venom:send",
   retry: "venom:retry",
+  stop: "venom:stop",
+  halt: "venom:halt",
+  haltChanged: "venom:halt-changed",
+  tasks: "venom:tasks",
+  drill: "venom:drill",
+  confirm: "venom:confirm",
+  safety: "venom:safety",
+  setSafety: "venom:set-safety",
   openLink: "venom:open-link",
   connection: "venom:connection",
   event: "venom:event",

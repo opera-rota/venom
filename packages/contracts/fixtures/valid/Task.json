@@ -9,8 +9,13 @@
       "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e04",
       "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
       "order": 0,
+      "summary": "Open the Notes app",
       "action": "open_app",
-      "target": { "kind": "device", "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02" },
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
       "requires_confirmation": false,
       "reversible": true,
       "on_failure": "retry",
@@ -21,8 +26,13 @@
       "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
       "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
       "order": 1,
+      "summary": "Type today's date into the note",
       "action": "type_text",
-      "target": { "kind": "device", "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02" },
+      "target": {
+        "kind": "device",
+        "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+      },
+      "effects": [],
       "requires_confirmation": false,
       "reversible": true,
       "on_failure": "abort",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Id, Timestamp } from "./primitives.ts";
-import { Capabilities, DeviceType, Platform, StepTarget } from "./records.ts";
+import { Capabilities, DeviceType, Effect, Platform, StepTarget } from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const DeviceInfo = z
@@ -33,8 +33,12 @@ export const ConfirmRequest = z
   .strictObject({
     task_id: Id,
     step_id: Id,
-    plain_language: z.string().min(1),
+    plain_language: z.string().min(1).max(600),
+    target_name: z.string().min(1).max(80),
+    reversible: z.boolean(),
     risk: Risk,
+    reasons: z.array(Effect).max(5),
+    asked_at: Timestamp,
   })
   .register(contracts, { id: "ConfirmRequest" });
 

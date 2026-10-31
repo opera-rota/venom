@@ -1,0 +1,53 @@
+{
+  "type": "task",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e40",
+  "sequence": 0,
+  "emitted_at": "2026-10-31T19:00:15.000Z",
+  "task": {
+    "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+    "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+    "origin_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+    "target_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+    "request_text": "Safety drill: wait thirty seconds",
+    "plan": [
+      {
+        "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e04",
+        "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+        "order": 0,
+        "summary": "Wait 3 seconds to get ready",
+        "action": "wait",
+        "target": {
+          "kind": "device",
+          "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+        },
+        "effects": [],
+        "requires_confirmation": false,
+        "reversible": true,
+        "on_failure": "abort",
+        "status": "done",
+        "output": "Waited 3 seconds."
+      },
+      {
+        "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
+        "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+        "order": 1,
+        "summary": "Wait 30 seconds",
+        "action": "wait",
+        "target": {
+          "kind": "device",
+          "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
+        },
+        "effects": [],
+        "requires_confirmation": false,
+        "reversible": true,
+        "on_failure": "abort",
+        "status": "stopped",
+        "output": "Stopped after 12 of 30 seconds."
+      }
+    ],
+    "status": "stopped",
+    "result": "Stopped. 1 finished, 1 stopped, 0 never started.",
+    "created_at": "2026-10-31T19:00:00.000Z",
+    "updated_at": "2026-10-31T19:00:15.000Z"
+  }
+}

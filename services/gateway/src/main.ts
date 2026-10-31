@@ -2,6 +2,7 @@ import { connect, createStore } from "@venom/db";
 import { createIdentity, createSmtpMailer, loadServerSetup } from "@venom/identity";
 import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
+import { createCommandSigner, createTasks, createTrust, loadCommandKey } from "@venom/safety";
 import { v7 as uuidv7 } from "uuid";
 import { brainEmbedder, buildGateway, createBrainClient } from "./app.ts";
 import { loadConfig } from "./config.ts";
@@ -13,6 +14,10 @@ const mailer = createSmtpMailer({ url: config.smtpUrl, from: config.mailFrom });
 const serverSetup = await loadServerSetup(config.identityKeyFile);
 const identity = createIdentity({ sql: serviceSql, mailer, serverSetup: serverSetup.value });
 
+const commandKey = await loadCommandKey(config.commandKeyFile);
+const signer = createCommandSigner(commandKey.pair);
+const trust = createTrust({ sql: serviceSql, serverKey: signer.publicKey });
+const tasks = createTasks({ sql: serviceSql });
 const power = createPower({ sql: serviceSql, freeDailyAnswers: config.freeDailyAnswers });
 const brain = createBrainClient({ url: config.brainUrl });
 const memory = createMemory({
@@ -28,6 +33,9 @@ const app = await buildGateway({
   brain,
   power,
   memory,
+  tasks,
+  trust,
+  signer,
   logger: {
     level: config.logLevel,
     ...(process.stdout.isTTY && {
@@ -50,6 +58,10 @@ async function backfill(): Promise<void> {
 const backfillTimer = setInterval(() => void backfill(), backfillEveryMs);
 backfillTimer.unref();
 
+if (commandKey.created) {
+  app.log.warn({ file: config.commandKeyFile }, "created a new command key; back this file up, every device trusts it");
+}
+
 if (serverSetup.created) {
   app.log.warn({ file: config.identityKeyFile }, "created a new identity key; back this file up, accounts depend on it");
 }
@@ -68,6 +80,10 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await store.ping();
 await identity.resetPresence();
+const interrupted = await tasks.interruptAll();
+if (interrupted > 0) {
+  app.log.warn({ tasks: interrupted }, "marked tasks that were running before the gateway restarted as failed");
+}
 await app.listen({ host: config.host, port: config.port });
 await checkBrain();
 await backfill();
