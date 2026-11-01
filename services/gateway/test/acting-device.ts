@@ -44,13 +44,17 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
   const reports: Report[] = [];
   const stops: string[] = [];
   const waiters = new Set<() => void>();
-  let running: { readonly abort: AbortController; readonly taskId: string } | null = null;
+  let running: { readonly abort: AbortController; readonly taskId: string; readonly timer: NodeJS.Timeout } | null = null;
+  let shut = false;
 
   const wake = () => {
     for (const check of [...waiters]) check();
   };
 
   async function report(commandId: string, stepId: string, outcome: CommandOutcome, detail: string): Promise<void> {
+    if (shut) {
+      return;
+    }
     reports.push({ stepId, outcome, at: Date.now() });
     wake();
     await call(base, "POST", "/v1/commands/report", { token: session.device_token, body: { command_id: commandId, outcome, detail } });
@@ -72,11 +76,11 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     }
     const abort = new AbortController();
     const started = Date.now();
-    running = { abort, taskId: body.task_id };
     const timer = setTimeout(() => {
       running = null;
       void report(command_id, body.step_id, "done", `Waited ${body.action.seconds} seconds.`);
     }, (body.action.seconds * 1000) / speed);
+    running = { abort, taskId: body.task_id, timer };
     abort.signal.addEventListener("abort", () => {
       clearTimeout(timer);
       running = null;
@@ -123,6 +127,13 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     closed,
     until: (match) => waitFor(() => events.find(match)),
     reported: (stepId) => waitFor(() => reports.find((entry) => entry.stepId === stepId)),
-    close: () => socket.close(),
+    close: () => {
+      shut = true;
+      if (running !== null) {
+        clearTimeout(running.timer);
+        running = null;
+      }
+      socket.close();
+    },
   };
 }

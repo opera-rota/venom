@@ -2,6 +2,7 @@
   "type": "done",
   "intent": "question",
   "text": "A mutex is a lock that lets one thread at a time use a shared resource.",
+  "plan": null,
   "model": "anthropic/claude-sonnet-5.5",
   "usage": {
     "input_tokens": 1840,

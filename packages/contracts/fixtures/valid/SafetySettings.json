@@ -1,0 +1,6 @@
+{
+  "confirmation_strictness": "standard",
+  "skip_asking": [
+    "posts"
+  ]
+}

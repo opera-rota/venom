@@ -1,0 +1,60 @@
+{
+  "type": "done",
+  "intent": "task",
+  "text": "Here is my plan.",
+  "plan": {
+    "title": "Shopping list on the desktop",
+    "steps": [
+      {
+        "summary": "Open Notepad",
+        "spec": {
+          "name": "open_app",
+          "app": "Notepad"
+        },
+        "effects": [],
+        "reversible": true
+      },
+      {
+        "summary": "Type the shopping list",
+        "spec": {
+          "name": "type_text",
+          "text": "Milk\nBread\nEggs",
+          "into": "the Notepad window"
+        },
+        "effects": [],
+        "reversible": true
+      },
+      {
+        "summary": "Save the list on the desktop",
+        "spec": {
+          "name": "run_script",
+          "language": "powershell",
+          "purpose": "Save the open list as shopping.txt on the desktop",
+          "code": "Set-Content -Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'shopping.txt') -Value \"Milk`nBread`nEggs\""
+        },
+        "effects": [],
+        "reversible": false
+      },
+      {
+        "summary": "Email the list to Alex",
+        "spec": {
+          "name": "call_connector",
+          "service": "mail",
+          "operation": "send an email",
+          "details": "To Alex, subject Shopping list, the three items in the body"
+        },
+        "effects": [
+          "posts"
+        ],
+        "reversible": false
+      }
+    ],
+    "cannot": null
+  },
+  "model": "meta-llama/llama-4-scout:free",
+  "usage": {
+    "input_tokens": 812,
+    "output_tokens": 240,
+    "cost_micro_usd": 0
+  }
+}

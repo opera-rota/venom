@@ -3,6 +3,7 @@ export * from "./gateway.ts";
 export * from "./identity.ts";
 export * from "./memory.ts";
 export * from "./messages.ts";
+export * from "./plan.ts";
 export * from "./power.ts";
 export * from "./primitives.ts";
 export * from "./progress.ts";

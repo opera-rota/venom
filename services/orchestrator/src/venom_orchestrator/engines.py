@@ -72,7 +72,7 @@ async def refresh(catalogue: EngineCatalogue, lister: Lister) -> None:
     if missing := catalogue.missing():
         log.warning("models not offered by OpenRouter right now: %s", ", ".join(missing))
     if not catalogue.understand_models():
-        log.error("no understanding model with tool support is offered; every message will be treated as a question")
+        log.error("no understanding model with tool support is offered; every message will fail until one is offered")
 
 
 async def keep_fresh(catalogue: EngineCatalogue, lister: Lister, every: float = REFRESH_SECONDS) -> None:

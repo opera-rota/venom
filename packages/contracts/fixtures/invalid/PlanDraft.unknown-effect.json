@@ -1,0 +1,17 @@
+{
+  "title": "Open Notepad",
+  "steps": [
+    {
+      "summary": "Open Notepad",
+      "spec": {
+        "name": "open_app",
+        "app": "Notepad"
+      },
+      "effects": [
+        "harmless"
+      ],
+      "reversible": true
+    }
+  ],
+  "cannot": null
+}

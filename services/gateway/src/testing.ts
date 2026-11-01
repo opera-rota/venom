@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { EngineId, type EmbeddingRequest, type TokenUsage, type TurnEvent, type TurnRequest } from "@venom/contracts";
+import { EngineId, type EmbeddingRequest, type PlanDraft, type TokenUsage, type TurnEvent, type TurnRequest } from "@venom/contracts";
 import { wordVector } from "@venom/memory/testing";
 import { BrainError, type Brain, type BrainProblem } from "./brain.ts";
 
@@ -24,8 +24,12 @@ export function answerWith(reply: (text: string) => string, chunk = 6, usage: To
     for (let start = 0; start < text.length; start += chunk) {
       deltas.push({ type: "delta", text: text.slice(start, start + chunk) });
     }
-    return [...deltas, { type: "done", intent: "question", text, model: "scripted-model", usage }];
+    return [...deltas, { type: "done", intent: "question", text, plan: null, model: "scripted-model", usage }];
   };
+}
+
+export function planWith(plan: PlanDraft | null, usage: TokenUsage = scriptedUsage): BrainScript {
+  return () => [{ type: "done", intent: "task", text: plan === null ? "My plan came back broken. Nothing was done." : plan.title, plan, model: plan === null ? null : "scripted-model", usage }];
 }
 
 export const echoAnswers = answerWith((text) => `You asked: ${text}`);

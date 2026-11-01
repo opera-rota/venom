@@ -98,7 +98,7 @@ describe("sync spine", () => {
       { type: "delta", text: "60 miles" },
       { hold: gate.hold },
       { type: "delta", text: "." },
-      { type: "done", intent: "question", text: "About 60 miles.", model: "scripted-model", usage: scriptedUsage },
+      { type: "done", intent: "question", text: "About 60 miles.", plan: null, model: "scripted-model", usage: scriptedUsage },
     ];
     const gateway = await startGateway(environment);
     gateway.brain.script = () => steps;

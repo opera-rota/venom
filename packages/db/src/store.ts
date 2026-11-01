@@ -11,6 +11,7 @@ export interface RecordMessage {
   readonly requestId: string;
   readonly speaker: Speaker;
   readonly text: string;
+  readonly taskId?: string;
   readonly answer?: { readonly model: string | null; readonly intent: IntentKind };
 }
 
@@ -52,11 +53,12 @@ interface MessageRow {
   device_id: string;
   speaker: string;
   text: string;
+  task_id: string | null;
   created_at: Date;
 }
 
-function toMessage({ id, account_id, device_id, speaker, text, created_at }: MessageRow): Message {
-  return Message.parse({ id, account_id, device_id, speaker, text, created_at: created_at.toISOString() });
+function toMessage({ id, account_id, device_id, speaker, text, task_id, created_at }: MessageRow): Message {
+  return Message.parse({ id, account_id, device_id, speaker, text, task_id, created_at: created_at.toISOString() });
 }
 
 export function connect(url: string, options: { max?: number } = {}): Sql {
@@ -73,12 +75,12 @@ export function createStore(url: string): Store {
   const sql = connect(url);
 
   return {
-    async recordMessage({ device, requestId, speaker, text, answer }) {
+    async recordMessage({ device, requestId, speaker, text, taskId = null, answer }) {
       return sql.begin(async (tx) => {
         const [row] = await tx<MessageRow[]>`
-          insert into messages (account_id, device_id, request_id, speaker, text)
-          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${text})
-          returning id, account_id, device_id, speaker, text, created_at
+          insert into messages (account_id, device_id, request_id, speaker, text, task_id)
+          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${text}, ${taskId})
+          returning id, account_id, device_id, speaker, text, task_id, created_at
         `;
         if (row === undefined) {
           throw new Error("Message insert returned no row");
@@ -87,7 +89,7 @@ export function createStore(url: string): Store {
           insert into audit_log (account_id, device_id, request_id, actor, action, subject_id, detail)
           values (
             ${device.account_id}, ${device.id}, ${requestId}, ${speaker}, 'message.recorded', ${row.id},
-            ${tx.json({ speaker, characters: text.length, ...answer })}
+            ${tx.json({ speaker, characters: text.length, ...(taskId === null ? {} : { task_id: taskId }), ...answer })}
           )
         `;
         return toMessage(row);
@@ -97,7 +99,7 @@ export function createStore(url: string): Store {
     async listConversation(accountId, limit) {
       const rows = await sql<ConversationRow[]>`
         select
-          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.text, latest.created_at,
+          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.text, latest.task_id, latest.created_at,
           latest.speaker = 'venom' or exists (
             select 1 from messages reply
             where reply.account_id = latest.account_id and reply.request_id = latest.request_id and reply.speaker = 'venom'
@@ -137,7 +139,7 @@ export function createStore(url: string): Store {
     async findRequest(accountId, requestId) {
       const [row] = await sql<RequestRow[]>`
         select
-          question.id, question.account_id, question.device_id, question.speaker, question.text, question.created_at,
+          question.id, question.account_id, question.device_id, question.speaker, question.text, question.task_id, question.created_at,
           exists (
             select 1 from messages reply
             where reply.request_id = question.request_id and reply.speaker = 'venom'

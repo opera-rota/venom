@@ -1,8 +1,10 @@
 import {
+  ActionSpec,
   ConfirmationAnswered,
   ConfirmRequest,
   DeviceAction,
   progressOf,
+  SafetySettings,
   safetyLimits,
   StopReceipt,
   Task,
@@ -23,6 +25,7 @@ import type { DeviceRef } from "@venom/db";
 import { assess, drills, plainLanguage } from "@venom/safety";
 import type { Sql, TransactionSql } from "postgres";
 import { refuseTasks } from "./errors.ts";
+import type { RoutedPlan } from "./router.ts";
 import { openTaskStatuses, repeatable, resumableTaskStatuses } from "./machine.ts";
 
 export const activeTaskLimit = 3;
@@ -66,6 +69,7 @@ export interface Controlled {
 
 export interface Tasks {
   drill(device: DeviceRef, kind: DrillKind, requestId: string): Promise<Task>;
+  plan(device: DeviceRef, requestText: string, plan: RoutedPlan, requestId: string): Promise<Task>;
   get(accountId: string, taskId: string): Promise<Task | null>;
   list(accountId: string): Promise<TaskList>;
   next(accountId: string, taskId: string): Promise<Next>;
@@ -78,8 +82,8 @@ export interface Tasks {
   control(device: DeviceRef, taskId: string, control: TaskControl, requestId: string): Promise<Controlled>;
   stop(device: DeviceRef, request: StopRequest, requestId: string): Promise<Stopped>;
   interruptAll(): Promise<number>;
-  strictness(accountId: string): Promise<ConfirmationStrictness>;
-  setStrictness(device: DeviceRef, strictness: ConfirmationStrictness, requestId: string): Promise<ConfirmationStrictness>;
+  settings(accountId: string): Promise<SafetySettings>;
+  saveSettings(device: DeviceRef, settings: SafetySettings, requestId: string): Promise<SafetySettings>;
 }
 
 interface TaskRow {
@@ -151,7 +155,9 @@ function describe(status: TaskStatus, steps: readonly StepRow[]): string | null 
     case "stopped":
       return `Stopped. ${done} finished, ${stopped + running} stopped${running > 0 ? " (stopping now)" : ""}, ${waiting} never started${aside}.`;
     case "cancelled":
-      return `Cancelled because you declined a step. ${done} finished before that, ${waiting} never started${aside}.`;
+      return steps.some((step) => step.status === "stopped" && step.answered_at !== null)
+        ? `Cancelled because you declined a step. ${done} finished before that, ${waiting} never started${aside}.`
+        : "Discarded. Nothing ran.";
     case "failed": {
       const failed = steps.find((step) => step.status === "failed");
       return `Failed. ${failed?.output ?? "A step did not finish."} ${done} finished before that${aside}.`;
@@ -174,6 +180,7 @@ function toTask(row: TaskRow, steps: readonly StepRow[]): Task {
       order: step.position,
       summary: step.summary,
       action: step.action,
+      spec: ActionSpec.parse({ ...step.params, name: step.action }),
       target: { kind: "device", device_id: step.target_device_id },
       effects: step.effects,
       requires_confirmation: step.requires_confirmation,
@@ -267,9 +274,23 @@ async function audit(db: Db, actor: Actor, requestId: string | null, kind: "user
   `;
 }
 
+async function readSettings(db: Db, accountId: string): Promise<SafetySettings> {
+  const [row] = await db<{ confirmation_strictness: ConfirmationStrictness; skip_asking: SafetySettings["skip_asking"] }[]>`
+    select confirmation_strictness, skip_asking from accounts where id = ${accountId}
+  `;
+  return SafetySettings.parse({ confirmation_strictness: row?.confirmation_strictness ?? "standard", skip_asking: row?.skip_asking ?? [] });
+}
+
 async function readStrictness(db: Db, accountId: string): Promise<ConfirmationStrictness> {
-  const [row] = await db<{ confirmation_strictness: ConfirmationStrictness }[]>`select confirmation_strictness from accounts where id = ${accountId}`;
-  return row?.confirmation_strictness ?? "standard";
+  return (await readSettings(db, accountId)).confirmation_strictness;
+}
+
+function runnable(step: StepRow): boolean {
+  return DeviceAction.safeParse({ ...step.params, name: step.action }).success;
+}
+
+function detailsOf({ name: _name, ...details }: ActionSpec): Record<string, string | number> {
+  return details;
 }
 
 async function holdActiveSlot(db: TransactionSql, accountId: string): Promise<void> {
@@ -381,6 +402,38 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
       });
     },
 
+    async plan(device, requestText, plan, requestId) {
+      return sql.begin(async (tx) => {
+        const { confirmation_strictness, skip_asking } = await readSettings(tx, device.account_id);
+        const [task] = await tx<TaskRow[]>`
+          insert into tasks (account_id, origin_device_id, target_device_id, request_text, status)
+          values (${device.account_id}, ${device.id}, ${plan.target.id}, ${requestText}, 'planned')
+          returning id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at
+        `;
+        if (task === undefined) {
+          throw new Error("Task insert returned no row");
+        }
+        let asking = 0;
+        for (const [position, step] of plan.steps.entries()) {
+          const { requiresConfirmation } = assess({ action: step.spec.name, effects: step.effects, reversible: step.reversible }, confirmation_strictness, skip_asking);
+          asking += requiresConfirmation ? 1 : 0;
+          await tx`
+            insert into steps (task_id, account_id, position, summary, action, params, target_device_id, effects, requires_confirmation, reversible, on_failure)
+            values (
+              ${task.id}, ${device.account_id}, ${position}, ${step.summary}, ${step.spec.name}, ${tx.json(detailsOf(step.spec))},
+              ${plan.target.id}, ${[...step.effects]}, ${requiresConfirmation}, ${step.reversible}, 'abort'
+            )
+          `;
+        }
+        await audit(tx, device, requestId, "venom", "task.planned", task.id, { steps: plan.steps.length, asking, elsewhere: plan.elsewhere });
+        const [loaded] = await loadTasks(tx, [task]);
+        if (loaded === undefined) {
+          throw new Error("Task vanished after insert");
+        }
+        return loaded;
+      });
+    },
+
     async get(accountId, taskId) {
       const row = await taskRow(sql, accountId, taskId);
       return row === null ? null : ((await loadTasks(sql, [row]))[0] ?? null);
@@ -409,6 +462,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         return { kind: "over" };
       }
       const steps = await loadSteps(sql, [row.id]);
+      const { confirmation_strictness, skip_asking } = await readSettings(sql, accountId);
       const step = steps.find((candidate) => candidate.status === "pending" || candidate.status === "waiting");
       if (step === undefined) {
         const skipped = steps.find((candidate) => candidate.status === "skipped");
@@ -424,7 +478,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           action: DeviceAction.parse({ name: step.action, ...step.params }),
           targetDeviceId: step.target_device_id,
           targetName: step.target_name,
-          requiresConfirmation: step.requires_confirmation,
+          requiresConfirmation: step.requires_confirmation || assess(step, confirmation_strictness, skip_asking).requiresConfirmation,
           approved: step.answered_at !== null,
           waiting: step.status === "waiting",
         },
@@ -585,6 +639,17 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           throw refuseTasks.taskNotFound();
         }
         const steps = await loadSteps(tx, [task.id]);
+        if (control.kind === "discard") {
+          if (task.status !== "planned") {
+            throw refuseTasks.cannotDiscard();
+          }
+          await tx`update tasks set status = 'cancelled', updated_at = clock_timestamp() where id = ${task.id}`;
+          await audit(tx, device, requestId, "user", "task.discarded", task.id);
+          return { task: await settled(tx, device.account_id, task.id), run: false };
+        }
+        if ((control.kind === "resume" || control.kind === "retry") && (task.status === "planned" || steps.some((step) => !runnable(step)))) {
+          throw refuseTasks.cannotRunYet();
+        }
         if (control.kind === "resume") {
           return resume(tx, device, task, steps, requestId);
         }
@@ -705,15 +770,19 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
       });
     },
 
-    async strictness(accountId) {
-      return readStrictness(sql, accountId);
+    async settings(accountId) {
+      return readSettings(sql, accountId);
     },
 
-    async setStrictness(device, strictness, requestId) {
+    async saveSettings(device, { confirmation_strictness, skip_asking }, requestId) {
       return sql.begin(async (tx) => {
-        await tx`update accounts set confirmation_strictness = ${strictness} where id = ${device.account_id}`;
-        await audit(tx, device, requestId, "user", "settings.safety_changed", device.account_id, { confirmation_strictness: strictness });
-        return strictness;
+        const listed = SafetySettings.parse({ confirmation_strictness, skip_asking }).skip_asking;
+        await tx`update accounts set confirmation_strictness = ${confirmation_strictness}, skip_asking = ${[...listed]} where id = ${device.account_id}`;
+        await audit(tx, device, requestId, "user", "settings.safety_changed", device.account_id, {
+          confirmation_strictness,
+          skip_asking: listed.join(",") || "nothing",
+        });
+        return readSettings(tx, device.account_id);
       });
     },
   };

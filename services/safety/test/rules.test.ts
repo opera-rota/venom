@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandGuard, commandText, createCommandSigner, newKeyPair, signText, verifyText, assess, drills, plainLanguage } from "../src/index.ts";
+import { CommandGuard, commandText, createCommandSigner, newKeyPair, signText, verifyText, assess, drills, effectsOf, plainLanguage, undoable } from "../src/index.ts";
 
 const device = { id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02", account_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01" };
 
@@ -20,6 +20,30 @@ describe("fixed rules decide what needs confirmation", () => {
 
   it("treats every connector call as reaching outside, whatever the plan claims", () => {
     expect(assess({ action: "call_connector", effects: [], reversible: true }, "standard").reasons).toEqual(["reaches_outside"]);
+  });
+
+  it("stops asking about deleting, posting and reaching outside when the user said so", () => {
+    const skip = ["deletes", "posts", "reaches_outside"] as const;
+    expect(assess({ action: "wait", effects: ["deletes", "posts"], reversible: true }, "standard", skip)).toEqual({
+      requiresConfirmation: false,
+      risk: "high",
+      reasons: ["deletes", "posts"],
+    });
+    expect(assess({ action: "call_connector", effects: [], reversible: true }, "standard", skip).requiresConfirmation).toBe(false);
+    expect(assess({ action: "wait", effects: ["posts"], reversible: true }, "standard", ["deletes"]).requiresConfirmation).toBe(true);
+  });
+
+  it.each(["pays", "uses_credential"] as const)("always asks before a step that %s, whatever the user said", (effect) => {
+    expect(assess({ action: "wait", effects: [effect, "posts"], reversible: true }, "standard", [effect, "posts"]).requiresConfirmation).toBe(true);
+  });
+
+  it("lets the plan add effects but never remove what an action always does", () => {
+    expect(effectsOf("call_connector", [])).toEqual(["reaches_outside"]);
+    expect(effectsOf("open_app", ["posts", "deletes"])).toEqual(["deletes", "posts"]);
+    expect(undoable("run_script", true)).toBe(false);
+    expect(undoable("call_connector", true)).toBe(false);
+    expect(undoable("open_app", true)).toBe(true);
+    expect(undoable("open_app", false)).toBe(false);
   });
 
   it("pauses on anything that cannot be undone only when strict", () => {

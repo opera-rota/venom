@@ -4,7 +4,8 @@ import { MemoryContext } from "./memory.ts";
 import { EngineId, ModelName } from "./power.ts";
 import { Id } from "./primitives.ts";
 import { PromptRole } from "./prompts.ts";
-import { Speaker } from "./records.ts";
+import { PlanDraft } from "./plan.ts";
+import { ConnectorService, Speaker } from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const ConversationEntry = z
@@ -23,6 +24,7 @@ export const TurnRequest = z
     history: z.array(ConversationEntry).max(40),
     memories: z.array(MemoryContext).max(40),
     remembered: MemoryContext.nullable(),
+    connectors: z.array(ConnectorService).max(2),
     text: MessageText,
   })
   .register(contracts, { id: "TurnRequest" });
@@ -42,7 +44,7 @@ export const TextOutput = z
   .register(contracts, { id: "TextOutput" });
 
 export const StructuredOutput = z
-  .strictObject({ kind: z.literal("structured"), contract: z.enum(["Intent"]) })
+  .strictObject({ kind: z.literal("structured"), contract: z.enum(["Intent", "PlanDraft"]) })
   .register(contracts, { id: "StructuredOutput" });
 
 export const ReasoningOutput = z
@@ -57,6 +59,7 @@ export const ReasoningRequest = z
     messages: z.array(ConversationEntry).min(1).max(41),
     memories: z.array(MemoryContext).max(40),
     remembered: MemoryContext.nullable(),
+    connectors: z.array(ConnectorService).max(2).nullable(),
     output: ReasoningOutput,
     max_output_tokens: z.int().min(1).max(8192),
   })
@@ -134,6 +137,7 @@ export const TurnDone = z
     type: z.literal("done"),
     intent: IntentKind,
     text: z.string().min(1).max(16_000),
+    plan: PlanDraft.nullable(),
     model: ModelName.nullable(),
     usage: TokenUsage,
   })

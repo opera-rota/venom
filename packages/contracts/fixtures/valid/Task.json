@@ -11,6 +11,10 @@
       "order": 0,
       "summary": "Open the Notes app",
       "action": "open_app",
+      "spec": {
+        "name": "open_app",
+        "app": "Notes"
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -30,6 +34,11 @@
       "order": 1,
       "summary": "Type today's date into the note",
       "action": "type_text",
+      "spec": {
+        "name": "type_text",
+        "text": "Saturday 31 October 2026",
+        "into": "the new note"
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"

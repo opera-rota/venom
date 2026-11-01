@@ -156,8 +156,8 @@ describe("Definition of done: a sensitive step pauses for confirmation", () => {
     await acting(here);
     expect((await drill(here, "wait")).plan.some((step) => step.requires_confirmation)).toBe(false);
     await stop(here);
-    const changed = await call(gateway.base, "PUT", "/v1/settings/safety", { token: here.device_token, body: { confirmation_strictness: "strict" } });
-    expect(await changed.json()).toEqual({ confirmation_strictness: "strict" });
+    const changed = await call(gateway.base, "PUT", "/v1/settings/safety", { token: here.device_token, body: { confirmation_strictness: "strict", skip_asking: [] } });
+    expect(await changed.json()).toEqual({ confirmation_strictness: "strict", skip_asking: [] });
     expect((await drill(here, "sensitive")).plan.map((step) => step.requires_confirmation)).toEqual([false, true, false]);
     await stop(here);
   });

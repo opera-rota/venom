@@ -1,4 +1,4 @@
-import { ConfirmationStrictness, ConfirmDecision, DrillKind, Id } from "@venom/contracts";
+import { ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
 import { app, BrowserWindow, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -189,10 +189,11 @@ function wire(): void {
     return parsed.success && typeof taskId === "string" && typeof stepId === "string" ? gateway.confirm(taskId, stepId, parsed.data) : unreadable;
   });
   handle(channels.safety, () => gateway.safety());
-  handle(channels.setSafety, (strictness) => {
-    const parsed = ConfirmationStrictness.safeParse(strictness);
+  handle(channels.setSafety, (settings) => {
+    const parsed = SafetySettings.safeParse(settings);
     return parsed.success ? gateway.setSafety(parsed.data) : unreadable;
   });
+  handle(channels.developer, () => process.env["VENOM_DEVELOPER"] === "1");
   handle(channels.openLink, (url) => openLink(url));
 
   if (!globalShortcut.register(haltShortcut, () => {

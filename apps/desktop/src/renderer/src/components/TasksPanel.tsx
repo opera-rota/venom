@@ -1,15 +1,16 @@
 import type { Device, Task, TaskControl } from "@venom/contracts";
 import { useState } from "react";
-import { isOpen, taskGroups, type TaskGroupName } from "../tasks-state.ts";
+import { isOpen, isPlanOnly, taskGroups, type TaskGroupName } from "../tasks-state.ts";
 import { controlKey, type TasksHandle } from "../use-tasks.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
-import { StepList, taskLook, type StepControls } from "./StepList.tsx";
+import { lookOfTask, StepList, type StepControls } from "./StepList.tsx";
 
 const groupTone: Record<TaskGroupName, string> = {
   needs_you: "text-status-wait",
   running: "text-status-ok",
+  planned: "text-ink-muted",
   finished: "text-ink-muted",
   failed: "text-status-fail",
   stopped: "text-ink-muted",
@@ -27,8 +28,11 @@ interface TaskCardProps {
 }
 
 function TaskCard({ task, expanded, onToggle, handle, deviceId, devices }: TaskCardProps) {
-  const look = taskLook[task.status];
+  const look = lookOfTask(task);
   const open = isOpen(task);
+  const planned = task.status === "planned";
+  const canResume = resumable.has(task.status) && !isPlanOnly(task);
+  const discarding = handle.controlling.has(controlKey(task.id, "discard"));
   const stopping = handle.controlling.has(controlKey(task.id, "stop"));
   const resuming = handle.controlling.has(controlKey(task.id, "resume"));
   const controls: StepControls = {
@@ -55,7 +59,7 @@ function TaskCard({ task, expanded, onToggle, handle, deviceId, devices }: TaskC
         <>
           <div className={mark.divider} />
           <StepList task={task} deviceId={deviceId} devices={devices} controls={controls} />
-          {(open || resumable.has(task.status)) && (
+          {(open || canResume || planned) && (
             <div className="flex flex-wrap gap-2 pt-1">
               {open && (
                 <button type="button" className={button.destructive} disabled={stopping} onClick={() => void handle.stopTask(task.id)}>
@@ -63,7 +67,13 @@ function TaskCard({ task, expanded, onToggle, handle, deviceId, devices }: TaskC
                   {stopping ? "Stopping…" : "Stop this task"}
                 </button>
               )}
-              {resumable.has(task.status) && (
+              {planned && (
+                <button type="button" className={button.compact} disabled={discarding} onClick={() => void handle.control(task.id, { kind: "discard" })}>
+                  <Icon name="cross" />
+                  {discarding ? "Discarding…" : "Discard plan"}
+                </button>
+              )}
+              {canResume && (
                 <button type="button" className={button.compact} disabled={resuming} onClick={() => void handle.control(task.id, { kind: "resume" })}>
                   <Icon name="play" />
                   {resuming ? "Sending…" : "Resume"}
@@ -108,19 +118,21 @@ export function TasksPanel({ handle, deviceId, devices, onClose }: TasksPanelPro
       </div>
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
         <p className={text.support}>Progress is counted by the cloud from finished steps, never guessed. Skip keeps a step counted for later; ignore stops counting it.</p>
-        <div className="flex flex-col gap-1.5">
-          <button type="button" className={button.primary} disabled={starting} onClick={() => void startDrill()}>
-            {starting ? "Starting…" : "Start the progress drill"}
-          </button>
-          <span className={text.support}>Five practice steps of 8 seconds on this computer. Ignore one while it runs and watch the total shrink.</span>
-        </div>
+        {handle.developer && (
+          <div className="flex flex-col gap-1.5">
+            <button type="button" className={button.compact} disabled={starting} onClick={() => void startDrill()}>
+              {starting ? "Starting…" : "Start the progress drill"}
+            </button>
+            <span className={text.support}>Developer drill: five practice steps of 8 seconds on this computer.</span>
+          </div>
+        )}
         {handle.failure !== null && (
           <p role="alert" className={field.error}>
             <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{handle.failure}</span>
           </p>
         )}
-        {groups.length === 0 && <p className={text.support}>No tasks yet. Start the progress drill to see one.</p>}
+        {groups.length === 0 && <p className={text.support}>No tasks yet. Ask VENOM to do something in the chat and its plan shows up here too.</p>}
         {groups.map((group) => (
           <section key={group.name} aria-label={group.title} className="flex flex-col gap-2.5">
             <h3 className={`${text.detail} ${groupTone[group.name]}`}>

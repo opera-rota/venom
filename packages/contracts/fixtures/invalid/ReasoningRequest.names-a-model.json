@@ -10,6 +10,7 @@
   ],
   "memories": [],
   "remembered": null,
+  "connectors": null,
   "output": {
     "kind": "text"
   },

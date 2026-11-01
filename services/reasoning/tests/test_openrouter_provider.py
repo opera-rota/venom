@@ -5,8 +5,9 @@ import httpx2
 import openai
 import pytest
 
+from venom_contracts.models import PlanDraft
 from venom_reasoning.errors import ReasoningError
-from venom_reasoning.openrouter_provider import ATTRIBUTION, OpenRouterProvider, listed_models
+from venom_reasoning.openrouter_provider import ATTRIBUTION, OpenRouterProvider, listed_models, portable
 from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk, Thinking, Turn
 
 pytestmark = pytest.mark.anyio
@@ -134,6 +135,42 @@ async def test_structured_output_uses_a_forced_function() -> None:
     body = json.loads(seen[0].content)
     assert body["tool_choice"] == {"type": "function", "function": {"name": "respond"}}
     assert body["tools"][0]["function"]["parameters"]["properties"]["kind"] == {"type": "string"}
+
+
+def written(content: str | None) -> Handler:
+    response = {
+        "id": "gen-3",
+        "object": "chat.completion",
+        "created": 1,
+        "model": "cohere/north-mini-code:free",
+        "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
+        "usage": {"prompt_tokens": 240, "completion_tokens": 8, "total_tokens": 248, "cost": 0},
+    }
+    return lambda _request: httpx2.Response(200, json=response)
+
+
+@pytest.mark.parametrize("content", ['{"kind": "task"}', '```json\n{"kind": "task"}\n```', ' ```\n{"kind": "task"}```\n'])
+async def test_accepts_the_shape_written_as_text_by_a_model_that_ignores_the_function(content: str) -> None:
+    events = await collect(provider(written(content), []), call({"type": "object"}))
+
+    final = events[-1]
+    assert isinstance(final, Completion)
+    assert final.text == '{"kind": "task"}'
+
+
+@pytest.mark.parametrize("content", [None, "", "It is a task.", "Sure! {\"kind\": \"task\"}"])
+async def test_refuses_an_answer_in_words(content: str | None) -> None:
+    with pytest.raises(ReasoningError) as raised:
+        await collect(provider(written(content), []), call({"type": "object"}))
+    assert raised.value.reason == "invalid_output"
+
+
+def test_sends_a_schema_every_provider_reads() -> None:
+    schema = PlanDraft.model_json_schema()
+    sent = json.dumps(portable(schema))
+    assert "oneOf" in json.dumps(schema) and "discriminator" in json.dumps(schema)
+    assert "oneOf" not in sent and "discriminator" not in sent
+    assert '"anyOf"' in sent
 
 
 async def test_an_error_in_the_middle_of_a_stream_is_not_hidden() -> None:

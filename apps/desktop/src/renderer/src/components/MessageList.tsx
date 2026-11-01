@@ -1,4 +1,4 @@
-import type { Device, Message } from "@venom/contracts";
+import type { Device, Message, Task } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
@@ -8,6 +8,7 @@ import { button, mark, surface, text } from "../ui.ts";
 import { LogoMark } from "./Header.tsx";
 import { Icon } from "./Icon.tsx";
 import { Markdown } from "./Markdown.tsx";
+import { PlanCard } from "./PlanCard.tsx";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const caret = "▍";
@@ -33,13 +34,24 @@ function Byline({ mine, time, from = null }: BylineProps) {
   );
 }
 
+export interface Plans {
+  readonly tasks: ReadonlyMap<string, Task>;
+  readonly deviceId: string;
+  readonly devices: readonly Device[];
+  discarding(taskId: string): boolean;
+  discard(taskId: string): void;
+}
+
 interface MessageItemProps {
   readonly message: Message;
   readonly from: string | null;
+  readonly plans: Plans;
+  readonly task: Task | undefined;
+  readonly discarding: boolean;
   readonly onOpenLink: (url: string) => void;
 }
 
-const MessageItem = memo(function MessageItem({ message, from, onOpenLink }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({ message, from, plans, task, discarding, onOpenLink }: MessageItemProps) {
   const mine = message.speaker === "user";
   return (
     <article className={`flex flex-col gap-1.5 ${mine ? "items-end" : "items-start"}`}>
@@ -49,6 +61,9 @@ const MessageItem = memo(function MessageItem({ message, from, onOpenLink }: Mes
       ) : (
         <div className={`max-w-[92%] px-4 py-3 ${surface.card}`}>
           <Markdown source={message.text} onOpenLink={onOpenLink} />
+          {message.task_id !== null && (
+            <PlanCard task={task} deviceId={plans.deviceId} devices={plans.devices} discarding={discarding} onDiscard={plans.discard} />
+          )}
         </div>
       )}
     </article>
@@ -121,10 +136,11 @@ export interface MessageListProps {
   readonly store: StoreApi<ConversationStore>;
   readonly devices: readonly Device[];
   readonly deviceId: string;
+  readonly plans: Plans;
   readonly onOpenLink: (url: string) => void;
 }
 
-export function MessageList({ store, devices, deviceId, onOpenLink }: MessageListProps) {
+export function MessageList({ store, devices, deviceId, plans, onOpenLink }: MessageListProps) {
   const messages = useStore(store, (state) => state.messages);
   const answers = useStore(store, (state) => state.answers);
   const retry = useStore(store, (state) => state.retry);
@@ -144,7 +160,7 @@ export function MessageList({ store, devices, deviceId, onOpenLink }: MessageLis
     } else {
       setUnseen(true);
     }
-  }, [messages, answers, pinned]);
+  }, [messages, answers, plans.tasks, pinned]);
 
   useEffect(() => {
     if (pinned) {
@@ -177,7 +193,14 @@ export function MessageList({ store, devices, deviceId, onOpenLink }: MessageLis
         <ol className="mx-auto flex max-w-[72ch] flex-col gap-5 px-5 py-6" aria-label="Conversation">
           {placed.map(({ message, answers: pending }) => (
             <li key={message.id} className="flex flex-col gap-5">
-              <MessageItem message={message} from={sentFrom(message, devices, deviceId)} onOpenLink={onOpenLink} />
+              <MessageItem
+                message={message}
+                from={sentFrom(message, devices, deviceId)}
+                plans={plans}
+                task={message.task_id === null ? undefined : plans.tasks.get(message.task_id)}
+                discarding={message.task_id !== null && plans.discarding(message.task_id)}
+                onOpenLink={onOpenLink}
+              />
               {pending.map((answer) => (
                 <AnswerItem key={answer.requestId} answer={answer} onRetry={retry} onOpenLink={onOpenLink} />
               ))}

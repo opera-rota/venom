@@ -1,9 +1,12 @@
+import re
 from collections.abc import AsyncGenerator, Mapping
+from typing import cast
 
 import openai
 from openai.types import CompletionUsage
 from openai.types.chat import (
     ChatCompletionChunk,
+    ChatCompletionMessage,
     ChatCompletionMessageParam,
     ChatCompletionNamedToolChoiceParam,
     ChatCompletionToolParam,
@@ -15,6 +18,7 @@ from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextC
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 RESPOND_TOOL = "respond"
+FENCED = re.compile(r"(?:```(?:json)?\s*)?(?P<body>\{.*\})(?:\s*```)?", re.DOTALL)
 ATTRIBUTION = {"HTTP-Referer": "https://github.com/opera-rota/venom", "X-Title": "VENOM"}
 
 
@@ -82,7 +86,7 @@ class OpenRouterProvider:
             "function": {
                 "name": RESPOND_TOOL,
                 "description": "Give the answer in exactly the required shape.",
-                "parameters": dict(schema),
+                "parameters": portable(schema),
             },
         }
         choice: ChatCompletionNamedToolChoiceParam = {"type": "function", "function": {"name": RESPOND_TOOL}}
@@ -96,17 +100,38 @@ class OpenRouterProvider:
         )
         input_tokens, output_tokens, cost = measured(response.usage)
         for option in response.choices:
-            for tool_call in option.message.tool_calls or ():
-                if tool_call.type == "function" and tool_call.function.name == RESPOND_TOOL:
-                    return Completion(
-                        text=tool_call.function.arguments,
-                        model=response.model or call.model,
-                        stop_reason=option.finish_reason,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        cost_micro_usd=cost,
-                    )
-        raise ReasoningError("invalid_output", "The model did not answer in the required shape.")
+            if (text := answered(option.message)) is not None:
+                return Completion(
+                    text=text,
+                    model=response.model or call.model,
+                    stop_reason=option.finish_reason,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_micro_usd=cost,
+                )
+        raise ReasoningError("invalid_output", "The model answered in words instead of the required shape.")
+
+
+def answered(message: ChatCompletionMessage) -> str | None:
+    for tool_call in message.tool_calls or ():
+        if tool_call.type == "function" and tool_call.function.name == RESPOND_TOOL:
+            return tool_call.function.arguments
+    written = FENCED.fullmatch((message.content or "").strip())
+    return written["body"] if written is not None else None
+
+
+def portable(schema: Mapping[str, object]) -> dict[str, object]:
+    return {("anyOf" if key == "oneOf" else key): plain(value) for key, value in schema.items() if key != "discriminator"}
+
+
+def plain(value: object) -> object:
+    match value:
+        case Mapping():
+            return portable(cast(Mapping[str, object], value))
+        case list():
+            return [plain(item) for item in cast(list[object], value)]
+        case _:
+            return value
 
 
 async def listed_models(client: openai.AsyncOpenAI) -> dict[str, bool]:

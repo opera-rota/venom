@@ -54,6 +54,8 @@ describe("upgrading a database that already holds Phase 2 data", () => {
     const legacy = await createTestDatabase();
     const sql = connect(legacy.migratorUrl, { max: 1 });
     try {
+      await sql.unsafe("alter table messages drop column task_id");
+      await sql.unsafe("alter table accounts drop column skip_asking");
       await sql.unsafe("drop table stops, steps, tasks, live_challenges");
       await sql.unsafe("drop function steps_moves_allowed, tasks_moves_allowed");
       await sql.unsafe("drop function steps_finished_work_stays");

@@ -75,6 +75,7 @@ export const Message = z
     device_id: Id,
     speaker: Speaker,
     text: z.string().min(1),
+    task_id: Id.nullable(),
     created_at: Timestamp,
   })
   .register(contracts, { id: "Message" });
@@ -82,6 +83,85 @@ export const Message = z
 export const StepAction = z
   .enum(["wait", "open_app", "type_text", "click", "run_script", "take_screenshot", "call_connector"])
   .register(contracts, { id: "StepAction" });
+
+export const actionLimits = {
+  waitSeconds: 600,
+  appName: 80,
+  typedText: 2000,
+  typedInto: 120,
+  clickOn: 160,
+  scriptPurpose: 300,
+  scriptCode: 4000,
+  connectorOperation: 120,
+  connectorDetails: 600,
+} as const;
+
+const said = (limit: number) => z.string().min(1).max(limit).regex(/\S/);
+
+export const ConnectorService = z
+  .enum(["mail", "calendar"])
+  .register(contracts, { id: "ConnectorService" });
+
+export const ScriptLanguage = z
+  .enum(["powershell", "python"])
+  .register(contracts, { id: "ScriptLanguage" });
+
+export const WaitAction = z
+  .strictObject({
+    name: z.literal("wait"),
+    seconds: z.int().min(1).max(actionLimits.waitSeconds),
+  })
+  .register(contracts, { id: "WaitAction" });
+
+export const OpenAppAction = z
+  .strictObject({
+    name: z.literal("open_app"),
+    app: said(actionLimits.appName),
+  })
+  .register(contracts, { id: "OpenAppAction" });
+
+export const TypeTextAction = z
+  .strictObject({
+    name: z.literal("type_text"),
+    text: said(actionLimits.typedText),
+    into: said(actionLimits.typedInto),
+  })
+  .register(contracts, { id: "TypeTextAction" });
+
+export const ClickAction = z
+  .strictObject({
+    name: z.literal("click"),
+    on: said(actionLimits.clickOn),
+  })
+  .register(contracts, { id: "ClickAction" });
+
+export const RunScriptAction = z
+  .strictObject({
+    name: z.literal("run_script"),
+    language: ScriptLanguage,
+    purpose: said(actionLimits.scriptPurpose),
+    code: said(actionLimits.scriptCode),
+  })
+  .register(contracts, { id: "RunScriptAction" });
+
+export const TakeScreenshotAction = z
+  .strictObject({
+    name: z.literal("take_screenshot"),
+  })
+  .register(contracts, { id: "TakeScreenshotAction" });
+
+export const CallConnectorAction = z
+  .strictObject({
+    name: z.literal("call_connector"),
+    service: ConnectorService,
+    operation: said(actionLimits.connectorOperation),
+    details: said(actionLimits.connectorDetails),
+  })
+  .register(contracts, { id: "CallConnectorAction" });
+
+export const ActionSpec = z
+  .discriminatedUnion("name", [WaitAction, OpenAppAction, TypeTextAction, ClickAction, RunScriptAction, TakeScreenshotAction, CallConnectorAction])
+  .register(contracts, { id: "ActionSpec" });
 
 export const Effect = z
   .enum(["deletes", "pays", "posts", "uses_credential", "reaches_outside"])
@@ -109,6 +189,7 @@ export const StepStatus = z
 
 const stepFields = {
   action: StepAction,
+  spec: ActionSpec,
   target: StepTarget,
   effects: z.array(Effect).max(5),
   requires_confirmation: z.boolean(),
@@ -123,8 +204,15 @@ export const SetAsideReason = z
   .regex(/\S/)
   .register(contracts, { id: "SetAsideReason" });
 
+function specMatchesAction(step: { readonly action: StepAction; readonly spec: ActionSpec }, context: z.core.$RefinementCtx): void {
+  if (step.spec.name !== step.action) {
+    context.addIssue({ code: "custom", path: ["spec"], message: "The step's details must be for the same action as the step." });
+  }
+}
+
 export const StepTemplate = z
   .strictObject(stepFields)
+  .superRefine(specMatchesAction)
   .register(contracts, { id: "StepTemplate" });
 
 export const Step = z
@@ -139,6 +227,7 @@ export const Step = z
     set_aside_reason: SetAsideReason.nullable(),
     repeatable: z.boolean(),
   })
+  .superRefine(specMatchesAction)
   .register(contracts, { id: "Step" });
 
 export const TaskStatus = z
@@ -222,10 +311,6 @@ export const MemoryItem = z
   })
   .register(contracts, { id: "MemoryItem" });
 
-export const ConnectorService = z
-  .enum(["mail", "calendar"])
-  .register(contracts, { id: "ConnectorService" });
-
 export const ConnectorStatus = z
   .enum(["connected", "expired", "disconnected"])
   .register(contracts, { id: "ConnectorStatus" });
@@ -257,6 +342,15 @@ export type Device = z.infer<typeof Device>;
 export type Speaker = z.infer<typeof Speaker>;
 export type Message = z.infer<typeof Message>;
 export type StepAction = z.infer<typeof StepAction>;
+export type ScriptLanguage = z.infer<typeof ScriptLanguage>;
+export type WaitAction = z.infer<typeof WaitAction>;
+export type OpenAppAction = z.infer<typeof OpenAppAction>;
+export type TypeTextAction = z.infer<typeof TypeTextAction>;
+export type ClickAction = z.infer<typeof ClickAction>;
+export type RunScriptAction = z.infer<typeof RunScriptAction>;
+export type TakeScreenshotAction = z.infer<typeof TakeScreenshotAction>;
+export type CallConnectorAction = z.infer<typeof CallConnectorAction>;
+export type ActionSpec = z.infer<typeof ActionSpec>;
 export type Effect = z.infer<typeof Effect>;
 export type DeviceTarget = z.infer<typeof DeviceTarget>;
 export type ConnectorTarget = z.infer<typeof ConnectorTarget>;

@@ -16,6 +16,10 @@
         "order": 0,
         "summary": "Wait 3 seconds to get ready",
         "action": "wait",
+        "spec": {
+          "name": "wait",
+          "seconds": 3
+        },
         "target": {
           "kind": "device",
           "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -35,6 +39,10 @@
         "order": 1,
         "summary": "Wait 30 seconds",
         "action": "wait",
+        "spec": {
+          "name": "wait",
+          "seconds": 30
+        },
         "target": {
           "kind": "device",
           "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"

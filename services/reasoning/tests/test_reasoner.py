@@ -5,8 +5,12 @@ from uuid import UUID
 import pytest
 
 from venom_contracts.models import (
+    ConnectorService,
     ConversationEntry,
+    DraftStep,
     MemoryContext,
+    OpenAppAction,
+    PlanDraft,
     PromptRole,
     ReasoningDelta,
     ReasoningDone,
@@ -28,6 +32,13 @@ pytestmark = pytest.mark.anyio
 REQUEST_ID = UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01")
 FAST = Limits(first_output=0.2, idle=0.2, total=2.0)
 MODELS: dict[PromptRole, tuple[str, ...]] = {"reply": ("primary", "fallback"), "understand": ("quick",)}
+PLANNERS = ("primary", "fallback")
+PLAN_OUTPUT = StructuredOutput(kind="structured", contract="PlanDraft")
+
+
+def plan_json(cannot: str | None = None) -> str:
+    step = DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad"), effects=[], reversible=True)
+    return PlanDraft(title="Open Notepad", steps=[step], cannot=cannot).model_dump_json()
 
 
 def request(
@@ -38,6 +49,7 @@ def request(
     version: int | None = None,
     memories: list[MemoryContext] | None = None,
     remembered: MemoryContext | None = None,
+    connectors: list[ConnectorService] | None = None,
 ) -> ReasoningRequest:
     return ReasoningRequest(
         request_id=REQUEST_ID,
@@ -46,14 +58,15 @@ def request(
         messages=[ConversationEntry(speaker="user", text=text)],
         memories=memories or [],
         remembered=remembered,
+        connectors=connectors,
         output=output or TextOutput(kind="text"),
         max_output_tokens=512,
     )
 
 
-async def run(provider: ScriptedProvider, ask: ReasoningRequest) -> list[ReasoningEvent]:
+async def run(provider: ScriptedProvider, ask: ReasoningRequest, models: Sequence[str] | None = None) -> list[ReasoningEvent]:
     reasoner = Reasoner(provider, FAST)
-    return [event async for event in reasoner.reason(ask, MODELS.get(ask.role, ()))]
+    return [event async for event in reasoner.reason(ask, MODELS.get(ask.role, ()) if models is None else models)]
 
 
 def deltas(events: Sequence[ReasoningEvent]) -> str:
@@ -151,6 +164,24 @@ async def test_refuses_structured_output_of_the_wrong_shape() -> None:
 
     assert isinstance(final, ReasoningFailed)
     assert final.reason == "invalid_output"
+
+
+async def test_refuses_a_plan_that_contradicts_itself_and_asks_the_next_model() -> None:
+    provider = ScriptedProvider({"primary": [structured(plan_json(cannot="I cannot do this."), "primary")], "fallback": [structured(plan_json(), "fallback")]})
+    final = (await run(provider, request("Open Notepad", role="plan", output=PLAN_OUTPUT, connectors=[]), PLANNERS))[-1]
+
+    assert isinstance(final, ReasoningDone)
+    assert final.model == "fallback"
+    assert [call.model for call in provider.calls] == ["primary", "fallback"]
+
+
+async def test_tells_the_planner_which_services_are_connected() -> None:
+    provider = ScriptedProvider({"primary": [structured(plan_json(), "primary")], "fallback": [structured(plan_json(), "fallback")]})
+    await run(provider, request("Open Notepad", role="plan", output=PLAN_OUTPUT, connectors=[]), PLANNERS)
+    await run(provider, request("Email Alex", role="plan", output=PLAN_OUTPUT, connectors=["mail"]), PLANNERS)
+
+    assert provider.calls[0].system.endswith("Connected services:\nnone")
+    assert provider.calls[1].system.endswith("Connected services:\n- mail (Mail)")
 
 
 async def test_refuses_an_unknown_prompt_version() -> None:

@@ -10,7 +10,7 @@ function id(n: number): string {
 }
 
 function message(n: number, createdAt: string): Message {
-  return { id: id(n), account_id: account, device_id: device, speaker: "user", text: `Question ${n}`, created_at: createdAt };
+  return { id: id(n), account_id: account, device_id: device, speaker: "user", text: `Question ${n}`, task_id: null, created_at: createdAt };
 }
 
 function event(requestId: string, sequence: number, body: Record<string, unknown>): GatewayEvent {

@@ -1,4 +1,4 @@
-import type { ConfirmationStrictness, ConfirmDecision, ConfirmRequest, DrillKind, TaskControl } from "@venom/contracts";
+import type { ConfirmDecision, ConfirmRequest, DrillKind, SafetySettings, TaskControl } from "@venom/contracts";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import type { ConnectionState, HaltView, VenomBridge } from "../../shared/bridge.ts";
 import { initialTasks, isSafetyEvent, reduceTasks, type TasksState } from "./tasks-state.ts";
@@ -9,8 +9,9 @@ export interface TasksHandle {
   readonly sending: ReadonlySet<string>;
   readonly controlling: ReadonlySet<string>;
   readonly failure: string | null;
-  readonly strictness: ConfirmationStrictness | null;
+  readonly settings: SafetySettings | null;
   readonly saving: boolean;
+  readonly developer: boolean;
   stop(): void;
   drill(kind: DrillKind): Promise<boolean>;
   answer(request: ConfirmRequest, decision: ConfirmDecision): Promise<void>;
@@ -18,7 +19,7 @@ export interface TasksHandle {
   stopTask(taskId: string): Promise<void>;
   dismiss(taskId: string): void;
   seen(stepId: string): void;
-  choose(strictness: ConfirmationStrictness): Promise<void>;
+  save(settings: SafetySettings): Promise<void>;
   clearFailure(): void;
 }
 
@@ -38,8 +39,17 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
   const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
   const [controlling, setControlling] = useState<ReadonlySet<string>>(new Set());
   const [failure, setFailure] = useState<string | null>(null);
-  const [strictness, setStrictness] = useState<ConfirmationStrictness | null>(null);
+  const [settings, setSettings] = useState<SafetySettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [developer, setDeveloper] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void bridge.developer().then((on) => active && setDeveloper(on));
+    return () => {
+      active = false;
+    };
+  }, [bridge]);
 
   useEffect(() => {
     let active = true;
@@ -68,7 +78,7 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
           setFailure(result.reason);
         }
       });
-      void bridge.safety().then((result) => active && result.ok && setStrictness(result.settings.confirmation_strictness));
+      void bridge.safety().then((result) => active && result.ok && setSettings(result.settings));
     }
     return () => {
       active = false;
@@ -135,13 +145,13 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
     [bridge],
   );
 
-  const choose = useCallback(
-    async (next: ConfirmationStrictness) => {
+  const save = useCallback(
+    async (next: SafetySettings) => {
       setSaving(true);
       const result = await bridge.setSafety(next);
       setSaving(false);
       if (result.ok) {
-        setStrictness(result.settings.confirmation_strictness);
+        setSettings(result.settings);
       }
       setFailure(result.ok ? null : result.reason);
     },
@@ -154,14 +164,15 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
     sending,
     controlling,
     failure,
-    strictness,
+    settings,
     saving,
+    developer,
     stop,
     drill,
     answer,
     control,
     stopTask,
-    choose,
+    save,
     dismiss: (taskId) => dispatch({ type: "dismiss", taskId }),
     seen: (stepId) => dispatch({ type: "seen", stepId }),
     clearFailure: () => setFailure(null),

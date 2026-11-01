@@ -5,10 +5,12 @@ from time import perf_counter
 
 from venom_contracts.engines import get_engine
 from venom_contracts.models import (
+    ConnectorService,
     ConversationEntry,
     Intent,
     IntentKind,
     MemoryContext,
+    PlanDraft,
     PromptRole,
     ReasoningDelta,
     ReasoningDone,
@@ -34,12 +36,12 @@ UNDERSTANDING_CONTEXT = 6
 HISTORY_CHARACTERS = 24_000
 ANSWER_TOKENS = 3000
 UNDERSTAND_TOKENS = 512
+PLAN_TOKENS = 4000
 ANSWER_CHARACTERS = 16_000
 CUT_NOTICE = "\n\n*The answer was cut here because it reached the length limit.*"
-TASK_REPLY = (
-    "That sounds like something you want me to do, not just answer. "
-    "I can't act on your devices yet, so I haven't changed anything. "
-    "If you like, I can explain how to do it yourself."
+BROKEN_PLAN = (
+    "I tried to plan that, but my plan came back broken, so I threw it away. "
+    "Nothing was done. Try again, or say it a little differently."
 )
 NOTHING_USED = TokenUsage(input_tokens=0, output_tokens=0, cost_micro_usd=0)
 
@@ -65,15 +67,20 @@ class Orchestrator:
 
         history = recent(turn.history, HISTORY_CHARACTERS)
         if turn.remembered is None:
-            intent, understood = await self._understand(turn, history)
+            understanding = await self._understand(turn, history)
+            if isinstance(understanding, ReasoningFailed):
+                log.warning("could not understand the message (%s), so nothing was done", understanding.reason, extra=context)
+                yield TurnFailed(type="failed", reason=understanding.reason, detail=not_understood(understanding.detail))
+                return
+            intent, understood = understanding
             log.info("understood the message as a %s", intent, extra=context)
         else:
             intent, understood = "question", NOTHING_USED
             log.info("the message asked me to remember something; answering with what was saved", extra=context)
 
         if intent == "task":
-            yield TurnDelta(type="delta", text=TASK_REPLY)
-            yield TurnDone(type="done", intent="task", text=TASK_REPLY, model=None, usage=understood)
+            async for event in self._plan(turn, history, models, understood):
+                yield event
             return
 
         request = self._request(
@@ -102,12 +109,45 @@ class Orchestrator:
                             total.cost_micro_usd,
                             extra=context,
                         )
-                        yield TurnDone(type="done", intent="question", text=fit(text), model=model, usage=total)
+                        yield TurnDone(type="done", intent="question", text=fit(text), plan=None, model=model, usage=total)
                     case ReasoningFailed(reason=reason, detail=detail):
                         log.warning("could not answer: %s", reason, extra=context)
                         yield TurnFailed(type="failed", reason=reason, detail=detail)
 
-    async def _understand(self, turn: TurnRequest, history: Sequence[ConversationEntry]) -> tuple[IntentKind, TokenUsage]:
+    async def _plan(
+        self,
+        turn: TurnRequest,
+        history: Sequence[ConversationEntry],
+        models: Sequence[str],
+        understood: TokenUsage,
+    ) -> AsyncGenerator[TurnEvent]:
+        context = {"request_id": str(turn.request_id)}
+        request = self._request(
+            turn,
+            "plan",
+            [*history[-UNDERSTANDING_CONTEXT:], current(turn)],
+            StructuredOutput(kind="structured", contract="PlanDraft"),
+            PLAN_TOKENS,
+            memories=turn.memories,
+            connectors=turn.connectors,
+        )
+        async with aclosing(self._reasoner.reason(request, models)) as events:
+            async for event in events:
+                match event:
+                    case ReasoningDone(text=text, model=model, usage=usage):
+                        plan = PlanDraft.model_validate_json(text)
+                        log.info("planned %d steps with %s", len(plan.steps), model, extra=context)
+                        yield TurnDone(type="done", intent="task", text=plan.cannot or plan.title, plan=plan, model=model, usage=combined(understood, usage))
+                    case ReasoningFailed(reason="invalid_output"):
+                        log.warning("the plan came back broken and was thrown away", extra=context)
+                        yield TurnDone(type="done", intent="task", text=BROKEN_PLAN, plan=None, model=None, usage=understood)
+                    case ReasoningFailed(reason=reason, detail=detail):
+                        log.warning("could not plan: %s", reason, extra=context)
+                        yield TurnFailed(type="failed", reason=reason, detail=detail)
+                    case ReasoningDelta():
+                        continue
+
+    async def _understand(self, turn: TurnRequest, history: Sequence[ConversationEntry]) -> tuple[IntentKind, TokenUsage] | ReasoningFailed:
         messages = [*history[-UNDERSTANDING_CONTEXT:], current(turn)]
         request = self._request(turn, "understand", messages, StructuredOutput(kind="structured", contract="Intent"), UNDERSTAND_TOKENS)
         async with aclosing(self._reasoner.reason(request, self._catalogue.understand_models())) as events:
@@ -115,12 +155,11 @@ class Orchestrator:
                 match event:
                     case ReasoningDone(text=text, usage=usage):
                         return Intent.model_validate_json(text).kind, usage
-                    case ReasoningFailed(reason=reason):
-                        log.warning("understanding failed (%s), answering as a question", reason, extra={"request_id": str(turn.request_id)})
-                        return "question", NOTHING_USED
+                    case ReasoningFailed():
+                        return event
                     case ReasoningDelta():
                         continue
-        return "question", NOTHING_USED
+        return ReasoningFailed(type="failed", reason="internal", detail="The understanding stage ended without a result.")
 
     @staticmethod
     def _request(
@@ -132,6 +171,7 @@ class Orchestrator:
         *,
         memories: Sequence[MemoryContext] = (),
         remembered: MemoryContext | None = None,
+        connectors: Sequence[ConnectorService] | None = None,
     ) -> ReasoningRequest:
         return ReasoningRequest(
             request_id=turn.request_id,
@@ -140,9 +180,14 @@ class Orchestrator:
             messages=messages,
             memories=list(memories),
             remembered=remembered,
+            connectors=None if connectors is None else list(connectors),
             output=output,
             max_output_tokens=max_output_tokens,
         )
+
+
+def not_understood(reason: str) -> str:
+    return f"I could not tell whether you wanted an answer or wanted something done, so I did nothing. {reason} Try again in a minute."
 
 
 def current(turn: TurnRequest) -> ConversationEntry:

@@ -1,7 +1,9 @@
-import { TurnRequest, type EngineId, type MemoryContext, type MemoryItem, type Message, type PowerStatus, type TokenUsage, type TurnDone } from "@venom/contracts";
+import { TurnRequest, type EngineId, type MemoryContext, type MemoryItem, type Message, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
 import type { DeviceRef, Store } from "@venom/db";
+import type { Identity } from "@venom/identity";
 import { addUsage, detect, MemoryError, nothingUsed, type Memory } from "@venom/memory";
 import type { Power } from "@venom/power";
+import { route, type RoutedPlan, type Tasks } from "@venom/tasks";
 import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
@@ -14,6 +16,8 @@ export interface Exchange {
   readonly brain: Brain;
   readonly power: Power;
   readonly memory: Memory;
+  readonly tasks: Tasks;
+  readonly identity: Pick<Identity, "devices">;
   readonly engine: EngineId;
   readonly trace: RequestTrace;
   readonly device: DeviceRef;
@@ -21,6 +25,12 @@ export interface Exchange {
   readonly log: FastifyBaseLogger;
   onPower(status: PowerStatus, requestId: string): void;
   onMemory(item: MemoryItem, requestId: string): void;
+  onTask(task: Task, requestId: string): void;
+}
+
+interface Reply {
+  readonly text: string;
+  readonly taskId: string | null;
 }
 
 export interface Question {
@@ -89,6 +99,7 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
     history,
     memories: recall.memories.filter((item) => item.content !== remembered?.context.content),
     remembered: remembered?.context ?? null,
+    connectors: [],
     text: asked.text,
   });
   const spentBeforeAnswer = addUsage(recall.usage, remembered?.usage ?? nothingUsed);
@@ -99,11 +110,13 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
         trace.answer(event.text);
         break;
       case "done": {
+        const { text, taskId } = event.plan === null ? { text: event.text, taskId: null } : await planned(exchange, asked, event.plan);
         const reply = await store.recordMessage({
           device,
           requestId: question.requestId,
           speaker: "venom",
-          text: event.text,
+          text,
+          ...(taskId === null ? {} : { taskId }),
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);
@@ -117,6 +130,45 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
     }
   }
   throw new BrainError("malformed", { cause: new Error("the brain stream ended without a result") });
+}
+
+function asks(asking: number, total: number): string {
+  if (asking === 0) {
+    return "";
+  }
+  if (asking === total) {
+    return total === 1 ? ", and I would ask you before it" : ", and I would ask you before each of them";
+  }
+  return `, and I would ask you before ${asking} of them`;
+}
+
+export function planReply(plan: RoutedPlan, task: Task): string {
+  const total = task.plan.length;
+  const asking = task.plan.filter((step) => step.requires_confirmation).length;
+  return [
+    `Here is my plan: ${plan.title}.`,
+    plan.elsewhere ? `This device cannot do it, so I planned it for ${plan.target.name}.` : "",
+    `It has ${total} ${total === 1 ? "step" : "steps"}${asks(asking, total)}.`,
+    plan.missing ?? "",
+    "I cannot run steps yet, so nothing has been done.",
+  ]
+    .filter((line) => line !== "")
+    .join(" ");
+}
+
+async function planned({ tasks, identity, device, trace, onTask }: Exchange, asked: Message, draft: PlanDraft): Promise<Reply> {
+  const devices = await identity.devices(device.account_id);
+  const origin = devices.find((candidate) => candidate.id === device.id);
+  if (origin === undefined) {
+    return { text: "I could not find this device in your VENOM, so I did not plan anything.", taskId: null };
+  }
+  const routing = route(draft, { origin, devices, connectors: [] });
+  if (routing.kind === "refused") {
+    return { text: routing.reason, taskId: null };
+  }
+  const task = await tasks.plan(device, asked.text, routing.plan, trace.requestId);
+  onTask(task, uuidv7());
+  return { text: planReply(routing.plan, task), taskId: task.id };
 }
 
 async function charge({ power, engine, device, trace, log, onPower }: Exchange, done: TurnDone, spentBeforeAnswer: TokenUsage): Promise<void> {

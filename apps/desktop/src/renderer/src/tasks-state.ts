@@ -110,8 +110,12 @@ export function reduceTasks(state: TasksState, action: TasksAction): TasksState 
   }
 }
 
+export function isPlanOnly(task: Task): boolean {
+  return task.status === "planned" || (task.status === "cancelled" && task.plan.every((step) => step.status === "pending"));
+}
+
 export function taskInView(state: TasksState): Task | null {
-  const candidates = [...state.tasks.values()].filter((task) => !state.dismissed.has(task.id));
+  const candidates = [...state.tasks.values()].filter((task) => !state.dismissed.has(task.id) && !isPlanOnly(task));
   const open = candidates.filter(isOpen).sort((left, right) => right.created_at.localeCompare(left.created_at));
   if (open[0] !== undefined) {
     return open[0];
@@ -120,7 +124,7 @@ export function taskInView(state: TasksState): Task | null {
   return latest ?? null;
 }
 
-export type TaskGroupName = "needs_you" | "running" | "finished" | "failed" | "stopped";
+export type TaskGroupName = "needs_you" | "running" | "planned" | "finished" | "failed" | "stopped";
 
 export interface TaskGroup {
   readonly name: TaskGroupName;
@@ -130,8 +134,8 @@ export interface TaskGroup {
 
 const groupOf: Record<Task["status"], TaskGroupName> = {
   awaiting_confirmation: "needs_you",
-  created: "running",
-  planned: "running",
+  created: "planned",
+  planned: "planned",
   running: "running",
   completed: "finished",
   failed: "failed",
@@ -142,6 +146,7 @@ const groupOf: Record<Task["status"], TaskGroupName> = {
 const groupTitles: readonly (readonly [TaskGroupName, string])[] = [
   ["needs_you", "Needs you"],
   ["running", "Running"],
+  ["planned", "Planned"],
   ["finished", "Finished"],
   ["failed", "Failed"],
   ["stopped", "Stopped"],

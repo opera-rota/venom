@@ -4,9 +4,22 @@ from uuid import UUID
 import pytest
 
 from venom_contracts.engines import get_engine
-from venom_contracts.models import ConversationEntry, EngineId, MemoryContext, TurnDelta, TurnDone, TurnEvent, TurnFailed, TurnRequest
+from venom_contracts.models import (
+    ConversationEntry,
+    DraftStep,
+    EngineId,
+    MemoryContext,
+    OpenAppAction,
+    PlanDraft,
+    TurnDelta,
+    TurnDone,
+    TurnEvent,
+    TurnFailed,
+    TurnRequest,
+    TypeTextAction,
+)
 from venom_orchestrator.engines import EngineCatalogue
-from venom_orchestrator.turns import ANSWER_CHARACTERS, TASK_REPLY, Orchestrator, fit, recent
+from venom_orchestrator.turns import ANSWER_CHARACTERS, BROKEN_PLAN, Orchestrator, fit, recent
 from venom_reasoning.errors import ReasoningError
 from venom_reasoning.reasoner import Limits, Reasoner
 from venom_reasoning.testing import ScriptedProvider, Step, answer, structured
@@ -32,6 +45,7 @@ def turn(
         history=history or [],
         memories=memories or [],
         remembered=remembered,
+        connectors=[],
         text=text,
     )
 
@@ -44,6 +58,25 @@ async def run(provider: ScriptedProvider, request: TurnRequest, catalogue: Engin
 
 def question() -> list[Step]:
     return structured('{"kind": "question"}', "quick")
+
+
+def task(cost_micro_usd: int = 40) -> list[Step]:
+    return structured('{"kind": "task"}', "quick", cost_micro_usd=cost_micro_usd)
+
+
+NOTEPAD_PLAN = PlanDraft(
+    title="Shopping list in Notepad",
+    steps=[
+        DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad"), effects=[], reversible=True),
+        DraftStep(
+            summary="Type the shopping list",
+            spec=TypeTextAction(name="type_text", text="Milk, bread, eggs", into="the Notepad window"),
+            effects=[],
+            reversible=True,
+        ),
+    ],
+    cannot=None,
+)
 
 
 async def test_answers_a_question_as_a_stream() -> None:
@@ -73,23 +106,65 @@ async def test_sends_the_conversation_so_far() -> None:
     ]
 
 
-async def test_does_not_pretend_to_do_a_task() -> None:
-    provider = ScriptedProvider({"quick": [structured('{"kind": "task"}', "quick")]})
-    events = await run(provider, turn("Open my notes app"))
+async def test_plans_a_task_without_doing_anything() -> None:
+    provider = ScriptedProvider({"quick": [task()], PRIMARY: [structured(NOTEPAD_PLAN.model_dump_json(), PRIMARY)]})
+    events = await run(provider, turn("Open Notepad and write my shopping list"))
 
     final = events[-1]
     assert isinstance(final, TurnDone)
-    assert (final.intent, final.text, final.model) == ("task", TASK_REPLY, None)
-    assert [call.model for call in provider.calls] == ["quick"]
+    assert (final.intent, final.plan, final.model, final.text) == ("task", NOTEPAD_PLAN, PRIMARY, "Shopping list in Notepad")
+    assert not any(isinstance(event, TurnDelta) for event in events)
+    plan_call = provider.calls[1]
+    assert plan_call.model == PRIMARY
+    assert plan_call.system.endswith("Connected services:\nnone")
+    assert plan_call.schema is not None
+    properties = plan_call.schema["properties"]
+    assert isinstance(properties, dict) and "steps" in properties
 
 
-async def test_treats_the_message_as_a_question_when_understanding_fails() -> None:
-    down: list[Step] = [ReasoningError("unavailable", "down")]
-    provider = ScriptedProvider({"quick": [down], PRIMARY: [answer("Here is the answer.", PRIMARY)]})
-    final = (await run(provider, turn("Hello")))[-1]
+async def test_says_plainly_when_a_task_cannot_be_planned() -> None:
+    cannot = PlanDraft(title="Book a flight", steps=[], cannot="Booking a flight needs a payment I cannot make for you yet.")
+    provider = ScriptedProvider({"quick": [task()], PRIMARY: [structured(cannot.model_dump_json(), PRIMARY)]})
+    final = (await run(provider, turn("Book me a flight to Nairobi")))[-1]
 
     assert isinstance(final, TurnDone)
-    assert final.intent == "question"
+    assert (final.text, final.plan) == ("Booking a flight needs a payment I cannot make for you yet.", cannot)
+
+
+async def test_throws_away_a_broken_plan_and_says_nothing_was_done() -> None:
+    broken = structured('{"title": "Clean up", "steps": [{"summary": "Delete files", "spec": {"name": "shell", "command": "rm -rf ~"}}]}', PRIMARY)
+    provider = ScriptedProvider({"quick": [task(cost_micro_usd=55)], PRIMARY: [broken], FALLBACK: [structured("not json at all", FALLBACK)]})
+    final = (await run(provider, turn("Clean up my computer")))[-1]
+
+    assert isinstance(final, TurnDone)
+    assert (final.intent, final.text, final.plan, final.model) == ("task", BROKEN_PLAN, None, None)
+    assert final.usage.cost_micro_usd == 55
+    assert [call.model for call in provider.calls] == ["quick", PRIMARY, FALLBACK]
+
+
+async def test_reports_a_planner_that_cannot_be_reached() -> None:
+    down: list[Step] = [ReasoningError("rate_limited", "Too many requests right now.")]
+    provider = ScriptedProvider({"quick": [task()], PRIMARY: [down], FALLBACK: [down]})
+    final = (await run(provider, turn("Open Notepad")))[-1]
+
+    assert isinstance(final, TurnFailed)
+    assert (final.reason, final.detail) == ("rate_limited", "Too many requests right now.")
+
+
+async def test_does_nothing_and_says_so_when_understanding_fails() -> None:
+    busy: list[Step] = [ReasoningError("rate_limited", "The model service is busy right now.")]
+    provider = ScriptedProvider({"quick": [busy], PRIMARY: [answer("How to do it yourself.", PRIMARY)]})
+    events = await run(provider, turn("Delete old-list.txt, then open Notepad"))
+
+    assert len(events) == 1
+    final = events[0]
+    assert isinstance(final, TurnFailed)
+    assert final.reason == "rate_limited"
+    assert final.detail == (
+        "I could not tell whether you wanted an answer or wanted something done, so I did nothing. "
+        "The model service is busy right now. Try again in a minute."
+    )
+    assert [call.model for call in provider.calls] == ["quick"]
 
 
 async def test_reports_a_failed_answer_in_plain_words() -> None:
@@ -110,12 +185,12 @@ async def test_reports_the_real_cost_of_understanding_and_answering() -> None:
     assert final.usage.input_tokens == 52
 
 
-async def test_a_task_reply_costs_only_the_understanding() -> None:
-    provider = ScriptedProvider({"quick": [structured('{"kind": "task"}', "quick", cost_micro_usd=55)]})
-    final = (await run(provider, turn("Open my notes app")))[-1]
+async def test_a_plan_costs_the_understanding_and_the_planning() -> None:
+    provider = ScriptedProvider({"quick": [task(cost_micro_usd=55)], PRIMARY: [structured(NOTEPAD_PLAN.model_dump_json(), PRIMARY, cost_micro_usd=900)]})
+    final = (await run(provider, turn("Open Notepad")))[-1]
 
     assert isinstance(final, TurnDone)
-    assert final.usage.cost_micro_usd == 55
+    assert final.usage.cost_micro_usd == 955
 
 
 async def test_answers_with_the_models_of_the_chosen_engine() -> None:

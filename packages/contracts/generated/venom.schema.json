@@ -37,6 +37,9 @@
       "$ref": "#/$defs/AvailableEngines"
     },
     {
+      "$ref": "#/$defs/CallConnectorAction"
+    },
+    {
       "$ref": "#/$defs/Capabilities"
     },
     {
@@ -44,6 +47,9 @@
     },
     {
       "$ref": "#/$defs/ChooseEngine"
+    },
+    {
+      "$ref": "#/$defs/ClickAction"
     },
     {
       "$ref": "#/$defs/CommandFrame"
@@ -98,6 +104,12 @@
     },
     {
       "$ref": "#/$defs/DeviceTarget"
+    },
+    {
+      "$ref": "#/$defs/DiscardPlan"
+    },
+    {
+      "$ref": "#/$defs/DraftStep"
     },
     {
       "$ref": "#/$defs/EmbeddingFailure"
@@ -163,7 +175,13 @@
       "$ref": "#/$defs/MessageHistory"
     },
     {
+      "$ref": "#/$defs/OpenAppAction"
+    },
+    {
       "$ref": "#/$defs/PendingAnswer"
+    },
+    {
+      "$ref": "#/$defs/PlanDraft"
     },
     {
       "$ref": "#/$defs/PowerEvent"
@@ -209,6 +227,9 @@
     },
     {
       "$ref": "#/$defs/RouteDecision"
+    },
+    {
+      "$ref": "#/$defs/RunScriptAction"
     },
     {
       "$ref": "#/$defs/RunStepCommand"
@@ -283,6 +304,9 @@
       "$ref": "#/$defs/StructuredOutput"
     },
     {
+      "$ref": "#/$defs/TakeScreenshotAction"
+    },
+    {
       "$ref": "#/$defs/Task"
     },
     {
@@ -314,6 +338,9 @@
     },
     {
       "$ref": "#/$defs/TurnRequest"
+    },
+    {
+      "$ref": "#/$defs/TypeTextAction"
     },
     {
       "$ref": "#/$defs/WaitAction"
@@ -368,6 +395,34 @@
         "confirmation_strictness"
       ],
       "additionalProperties": false
+    },
+    "ActionSpec": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WaitAction"
+        },
+        {
+          "$ref": "#/$defs/OpenAppAction"
+        },
+        {
+          "$ref": "#/$defs/TypeTextAction"
+        },
+        {
+          "$ref": "#/$defs/ClickAction"
+        },
+        {
+          "$ref": "#/$defs/RunScriptAction"
+        },
+        {
+          "$ref": "#/$defs/TakeScreenshotAction"
+        },
+        {
+          "$ref": "#/$defs/CallConnectorAction"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "name"
+      }
     },
     "AnswerEvent": {
       "type": "object",
@@ -575,6 +630,37 @@
       ],
       "additionalProperties": false
     },
+    "CallConnectorAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "call_connector"
+        },
+        "service": {
+          "$ref": "#/$defs/ConnectorService"
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "details": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "service",
+        "operation",
+        "details"
+      ],
+      "additionalProperties": false
+    },
     "Capabilities": {
       "type": "object",
       "properties": {
@@ -633,6 +719,26 @@
       },
       "required": [
         "engine"
+      ],
+      "additionalProperties": false
+    },
+    "ClickAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "click"
+        },
+        "on": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "on"
       ],
       "additionalProperties": false
     },
@@ -1233,6 +1339,50 @@
         "tv",
         "watch"
       ]
+    },
+    "DiscardPlan": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "discard"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "DraftStep": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "spec": {
+          "$ref": "#/$defs/ActionSpec"
+        },
+        "effects": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
+        "reversible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "summary",
+        "spec",
+        "effects",
+        "reversible"
+      ],
+      "additionalProperties": false
     },
     "DrillKind": {
       "type": "string",
@@ -1933,6 +2083,17 @@
           "type": "string",
           "minLength": 1
         },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "created_at": {
           "type": "string",
           "format": "date-time"
@@ -1944,6 +2105,7 @@
         "device_id",
         "speaker",
         "text",
+        "task_id",
         "created_at"
       ],
       "additionalProperties": false
@@ -2020,6 +2182,26 @@
       "maxLength": 8192,
       "pattern": "^[A-Za-z0-9_-]+$"
     },
+    "OpenAppAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "open_app"
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "app"
+      ],
+      "additionalProperties": false
+    },
     "PendingAnswer": {
       "type": "object",
       "properties": {
@@ -2064,6 +2246,43 @@
       "minLength": 1,
       "maxLength": 120,
       "pattern": "\\S"
+    },
+    "PlanDraft": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "steps": {
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DraftStep"
+          }
+        },
+        "cannot": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "steps",
+        "cannot"
+      ],
+      "additionalProperties": false
     },
     "Platform": {
       "type": "string",
@@ -2400,6 +2619,20 @@
             }
           ]
         },
+        "connectors": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConnectorService"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "output": {
           "$ref": "#/$defs/ReasoningOutput"
         },
@@ -2416,6 +2649,7 @@
         "messages",
         "memories",
         "remembered",
+        "connectors",
         "output",
         "max_output_tokens"
       ],
@@ -2584,6 +2818,37 @@
         "script"
       ]
     },
+    "RunScriptAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "run_script"
+        },
+        "language": {
+          "$ref": "#/$defs/ScriptLanguage"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "language",
+        "purpose",
+        "code"
+      ],
+      "additionalProperties": false
+    },
     "RunStepCommand": {
       "type": "object",
       "properties": {
@@ -2616,12 +2881,27 @@
       "properties": {
         "confirmation_strictness": {
           "$ref": "#/$defs/ConfirmationStrictness"
+        },
+        "skip_asking": {
+          "maxItems": 3,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkippableEffect"
+          }
         }
       },
       "required": [
-        "confirmation_strictness"
+        "confirmation_strictness",
+        "skip_asking"
       ],
       "additionalProperties": false
+    },
+    "ScriptLanguage": {
+      "type": "string",
+      "enum": [
+        "powershell",
+        "python"
+      ]
     },
     "SecretWord": {
       "type": "string",
@@ -2875,6 +3155,14 @@
         "retired"
       ]
     },
+    "SkippableEffect": {
+      "type": "string",
+      "enum": [
+        "deletes",
+        "posts",
+        "reaches_outside"
+      ]
+    },
     "SkipStep": {
       "type": "object",
       "properties": {
@@ -2928,6 +3216,9 @@
         "action": {
           "$ref": "#/$defs/StepAction"
         },
+        "spec": {
+          "$ref": "#/$defs/ActionSpec"
+        },
         "target": {
           "$ref": "#/$defs/StepTarget"
         },
@@ -2976,6 +3267,7 @@
         "order",
         "summary",
         "action",
+        "spec",
         "target",
         "effects",
         "requires_confirmation",
@@ -3032,6 +3324,9 @@
         "action": {
           "$ref": "#/$defs/StepAction"
         },
+        "spec": {
+          "$ref": "#/$defs/ActionSpec"
+        },
         "target": {
           "$ref": "#/$defs/StepTarget"
         },
@@ -3054,6 +3349,7 @@
       },
       "required": [
         "action",
+        "spec",
         "target",
         "effects",
         "requires_confirmation",
@@ -3231,13 +3527,27 @@
         "contract": {
           "type": "string",
           "enum": [
-            "Intent"
+            "Intent",
+            "PlanDraft"
           ]
         }
       },
       "required": [
         "kind",
         "contract"
+      ],
+      "additionalProperties": false
+    },
+    "TakeScreenshotAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "take_screenshot"
+        }
+      },
+      "required": [
+        "name"
       ],
       "additionalProperties": false
     },
@@ -3329,6 +3639,9 @@
         },
         {
           "$ref": "#/$defs/RestoreStep"
+        },
+        {
+          "$ref": "#/$defs/DiscardPlan"
         }
       ],
       "discriminator": {
@@ -3532,6 +3845,16 @@
           "minLength": 1,
           "maxLength": 16000
         },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "model": {
           "anyOf": [
             {
@@ -3550,6 +3873,7 @@
         "type",
         "intent",
         "text",
+        "plan",
         "model",
         "usage"
       ],
@@ -3635,6 +3959,13 @@
             }
           ]
         },
+        "connectors": {
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorService"
+          }
+        },
         "text": {
           "$ref": "#/$defs/MessageText"
         }
@@ -3647,7 +3978,35 @@
         "history",
         "memories",
         "remembered",
+        "connectors",
         "text"
+      ],
+      "additionalProperties": false
+    },
+    "TypeTextAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "type_text"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "into": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "text",
+        "into"
       ],
       "additionalProperties": false
     },

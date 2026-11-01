@@ -1,5 +1,5 @@
 import type { Account, Device } from "@venom/contracts";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 import type { VenomBridge } from "../../../shared/bridge.ts";
 import { createConversation, type Scheduler } from "../conversation-store.ts";
@@ -8,13 +8,13 @@ import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
 import { taskCount, taskInView } from "../tasks-state.ts";
-import { useTasks } from "../use-tasks.ts";
+import { controlKey, useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
 import { DevicesPanel } from "./DevicesPanel.tsx";
 import { Header, type SidePanel } from "./Header.tsx";
 import { MemoryPanel } from "./MemoryPanel.tsx";
-import { MessageList } from "./MessageList.tsx";
+import { MessageList, type Plans } from "./MessageList.tsx";
 import { engineName, PowerPanel } from "./PowerPanel.tsx";
 import { SafetyPanel } from "./SafetyPanel.tsx";
 import { TasksPanel } from "./TasksPanel.tsx";
@@ -51,6 +51,17 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const inView = taskInView(tasks.state);
   const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
+  const { control, controlling, state } = tasks;
+  const plans = useMemo<Plans>(
+    () => ({
+      tasks: state.tasks,
+      deviceId: device.id,
+      devices: devices.devices,
+      discarding: (taskId) => controlling.has(controlKey(taskId, "discard")),
+      discard: (taskId) => void control(taskId, { kind: "discard" }),
+    }),
+    [state.tasks, device.id, devices.devices, controlling, control],
+  );
 
   useEffect(() => conversation.connect(), [conversation]);
 
@@ -71,7 +82,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
         {inView !== null && panel !== "tasks" && (
           <TaskStrip task={inView} deviceId={device.id} devices={devices.devices} onDismiss={tasks.dismiss} onOpenTasks={() => setPanel("tasks")} />
         )}
-        <MessageList store={store} devices={devices.devices} deviceId={device.id} onOpenLink={openLink} />
+        <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
       </main>
       {panel === "tasks" && <TasksPanel handle={tasks} deviceId={device.id} devices={devices.devices} onClose={() => setPanel(null)} />}

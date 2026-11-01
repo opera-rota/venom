@@ -11,6 +11,10 @@
       "order": 0,
       "summary": "Practice step 1 of 5: wait 8 seconds",
       "action": "wait",
+      "spec": {
+        "name": "wait",
+        "seconds": 8
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -30,6 +34,10 @@
       "order": 1,
       "summary": "Practice step 2 of 5: wait 8 seconds",
       "action": "wait",
+      "spec": {
+        "name": "wait",
+        "seconds": 8
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -49,6 +57,10 @@
       "order": 2,
       "summary": "Practice step 3 of 5: wait 8 seconds",
       "action": "wait",
+      "spec": {
+        "name": "wait",
+        "seconds": 8
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -68,6 +80,10 @@
       "order": 3,
       "summary": "Practice step 4 of 5: wait 8 seconds",
       "action": "wait",
+      "spec": {
+        "name": "wait",
+        "seconds": 8
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"
@@ -87,6 +103,10 @@
       "order": 4,
       "summary": "Practice step 5 of 5: wait 8 seconds",
       "action": "wait",
+      "spec": {
+        "name": "wait",
+        "seconds": 8
+      },
       "target": {
         "kind": "device",
         "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"

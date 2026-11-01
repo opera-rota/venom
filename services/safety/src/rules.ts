@@ -1,4 +1,4 @@
-import type { ConfirmationStrictness, DrillKind, Effect, FailurePolicy, Risk, StepAction } from "@venom/contracts";
+import type { ConfirmationStrictness, DrillKind, Effect, FailurePolicy, Risk, SkippableEffect, StepAction } from "@venom/contracts";
 
 export interface Proposed {
   readonly action: StepAction;
@@ -30,9 +30,13 @@ const effectOrder: readonly Effect[] = ["deletes", "pays", "uses_credential", "p
 
 const highRisk: ReadonlySet<Effect> = new Set(["deletes", "pays", "uses_credential"]);
 
+const alwaysAsks: ReadonlySet<Effect> = new Set(["pays", "uses_credential"]);
+
 const inherentEffects: Partial<Record<StepAction, readonly Effect[]>> = {
   call_connector: ["reaches_outside"],
 };
+
+const neverUndoable: ReadonlySet<StepAction> = new Set(["run_script", "call_connector"]);
 
 export const effectWords: Record<Effect, string> = {
   deletes: "It deletes something.",
@@ -42,15 +46,30 @@ export const effectWords: Record<Effect, string> = {
   reaches_outside: "It reaches a service outside this device.",
 };
 
+export const skippableWords: Record<SkippableEffect, string> = {
+  deletes: "Deleting things",
+  posts: "Posting or sending things",
+  reaches_outside: "Reaching services outside this device",
+};
+
 export const strictnessWords: Record<ConfirmationStrictness, string> = {
   standard: "Pauses on anything that deletes, pays, posts, uses a password or reaches outside.",
   strict: "Also pauses on anything that cannot be undone.",
 };
 
-export function assess(step: Proposed, strictness: ConfirmationStrictness): Assessment {
-  const inherent = inherentEffects[step.action] ?? [];
-  const reasons = effectOrder.filter((effect) => step.effects.includes(effect) || inherent.includes(effect));
-  const requiresConfirmation = reasons.length > 0 || (strictness === "strict" && !step.reversible);
+export function effectsOf(action: StepAction, claimed: readonly Effect[]): Effect[] {
+  const inherent = inherentEffects[action] ?? [];
+  return effectOrder.filter((effect) => claimed.includes(effect) || inherent.includes(effect));
+}
+
+export function undoable(action: StepAction, claimed: boolean): boolean {
+  return claimed && !neverUndoable.has(action);
+}
+
+export function assess(step: Proposed, strictness: ConfirmationStrictness, skipAsking: readonly Effect[] = []): Assessment {
+  const reasons = effectsOf(step.action, step.effects);
+  const asking = reasons.filter((effect) => alwaysAsks.has(effect) || !skipAsking.includes(effect));
+  const requiresConfirmation = asking.length > 0 || (strictness === "strict" && !step.reversible);
   const risk: Risk = reasons.some((effect) => highRisk.has(effect)) ? "high" : reasons.length > 0 ? "medium" : "low";
   return { requiresConfirmation, risk, reasons };
 }

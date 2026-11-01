@@ -24,6 +24,7 @@ TURN: dict[str, object] = {
     "history": [],
     "memories": [],
     "remembered": None,
+    "connectors": [],
     "text": "Explain what a mutex is",
 }
 

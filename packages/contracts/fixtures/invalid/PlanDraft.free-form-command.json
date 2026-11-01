@@ -1,0 +1,17 @@
+{
+  "title": "Clean the disk",
+  "steps": [
+    {
+      "summary": "Delete temporary files",
+      "spec": {
+        "name": "shell",
+        "command": "rm -rf /tmp/*"
+      },
+      "effects": [
+        "deletes"
+      ],
+      "reversible": false
+    }
+  ],
+  "cannot": null
+}

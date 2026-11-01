@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ValidationError
 
 from venom_contracts.models import (
+    ConnectorService,
     ConversationEntry,
     Intent,
     MemoryContext,
+    PlanDraft,
     ReasoningDelta,
     ReasoningDone,
     ReasoningEvent,
@@ -24,7 +26,9 @@ from venom_reasoning.provider import Completion, ModelCall, Provider, ProviderEv
 
 log = logging.getLogger("venom.reasoning")
 
-STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent}
+STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent, "PlanDraft": PlanDraft}
+
+SERVICE_NAMES: Mapping[ConnectorService, str] = {"mail": "Mail", "calendar": "Calendar"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +59,7 @@ class Reasoner:
         for model in models:
             call = ModelCall(
                 model=model,
-                system=instructions(prompt.text, request.memories, request.remembered),
+                system=instructions(prompt.text, request.memories, request.remembered, request.connectors),
                 turns=turns,
                 max_output_tokens=request.max_output_tokens,
                 schema=None if shape is None else shape.model_json_schema(),
@@ -78,8 +82,10 @@ class Reasoner:
                 log.exception("reasoning failed unexpectedly", extra={"request_id": str(request.request_id), "model": model})
                 last = ReasoningError("internal", "Something unexpected went wrong while thinking.")
             log.warning(
-                "model attempt failed: %s",
+                "%s failed: %s (%s)",
+                model,
                 last.reason,
+                last.detail,
                 extra={"request_id": str(request.request_id), "model": model, "emitted": emitted},
             )
             if emitted or not last.retryable:
@@ -124,9 +130,12 @@ def done(completion: Completion, shape: type[BaseModel] | None) -> ReasoningDone
             raise ReasoningError("invalid_output", "The model returned an empty answer.")
     else:
         try:
-            text = shape.model_validate_json(text).model_dump_json()
+            value = shape.model_validate_json(text)
         except ValidationError:
             raise ReasoningError("invalid_output", "The model did not answer in the required shape.") from None
+        if not coherent(value):
+            raise ReasoningError("invalid_output", "The model's answer contradicted itself.")
+        text = value.model_dump_json()
     return ReasoningDone(
         type="done",
         text=text,
@@ -140,16 +149,31 @@ def done(completion: Completion, shape: type[BaseModel] | None) -> ReasoningDone
     )
 
 
+def coherent(value: BaseModel) -> bool:
+    match value:
+        case PlanDraft(steps=steps, cannot=cannot):
+            return (cannot is None) != (not steps)
+        case _:
+            return True
+
+
 def failed(error: ReasoningError) -> ReasoningFailed:
     return ReasoningFailed(type="failed", reason=error.reason, detail=error.detail)
 
 
-def instructions(rules: str, memories: Sequence[MemoryContext], remembered: MemoryContext | None) -> str:
+def instructions(
+    rules: str,
+    memories: Sequence[MemoryContext],
+    remembered: MemoryContext | None,
+    connectors: Sequence[ConnectorService] | None = None,
+) -> str:
     sections = [rules]
     if memories:
         sections.append("Remembered:\n" + "\n".join(listed(memory) for memory in memories))
     if remembered is not None:
         sections.append("Just saved:\n" + listed(remembered))
+    if connectors is not None:
+        sections.append("Connected services:\n" + ("\n".join(f"- {service} ({SERVICE_NAMES[service]})" for service in connectors) or "none"))
     return "\n\n".join(sections)
 
 

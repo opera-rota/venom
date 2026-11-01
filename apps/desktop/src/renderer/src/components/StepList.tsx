@@ -1,5 +1,7 @@
 import type { Device, Step, StepStatus, Task, TaskControl, TaskStatus } from "@venom/contracts";
 import { useState, type FormEvent } from "react";
+import { howItRuns, whyItAsks } from "../plan-words.ts";
+import { isPlanOnly } from "../tasks-state.ts";
 import { button, field, mark, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
 
@@ -31,6 +33,16 @@ export const taskLook: Record<TaskStatus, Look> = {
   cancelled: { ...stepLook.stopped, word: "Cancelled" },
   stopped: stepLook.stopped,
 };
+
+export function lookOfTask(task: Task): Look {
+  if (task.status === "planned") {
+    return { ...taskLook.planned, word: "Planned, not started" };
+  }
+  if (task.status === "cancelled" && isPlanOnly(task)) {
+    return { ...taskLook.cancelled, word: "Discarded" };
+  }
+  return taskLook[task.status];
+}
 
 export function routeTag(deviceId: string | null, thisDevice: string, devices: readonly Device[]): string {
   if (deviceId === null) {
@@ -122,6 +134,7 @@ export function StepList({ task, deviceId, devices, controls, compact = false }:
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className={`text-[13px] ${step.status === "ignored" ? "text-ink-faint line-through" : "text-ink"}`}>{step.summary}</span>
+                {!compact && <span className={`${text.support} break-words`}>{howItRuns(step.spec)}</span>}
                 {step.output !== null && <span className={text.support}>{step.output}</span>}
                 {step.set_aside_reason !== null && (
                   <span className={text.support}>
@@ -131,7 +144,7 @@ export function StepList({ task, deviceId, devices, controls, compact = false }:
                 {(showRoute || step.requires_confirmation) && (
                   <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     {showRoute && <span className={`${text.detail} text-ink-faint`}>{routeTag(stepTarget, deviceId, devices)}</span>}
-                    {step.requires_confirmation && <span className={mark.caution}>Needs confirmation</span>}
+                    {step.requires_confirmation && <span className={`${mark.caution} max-w-full whitespace-normal`}>{whyItAsks(step)}</span>}
                   </span>
                 )}
               </span>

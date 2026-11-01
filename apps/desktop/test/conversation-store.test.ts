@@ -11,6 +11,7 @@ const question: Message = {
   device_id: "01a12a2d-0000-7000-8000-000000000002",
   speaker: "user",
   text: "Explain what a mutex is",
+  task_id: null,
   created_at: at,
 };
 const asked = { request_id: requestId, message_id: question.id };

@@ -353,9 +353,9 @@ export class GatewayClient {
     return this.#call(this.#api.request("GET", "/v1/settings/safety", { schema: SafetySettings, token: this.#token }), (settings) => ({ ok: true, settings }));
   }
 
-  async setSafety(strictness: ConfirmationStrictness): Promise<SafetyResult> {
+  async setSafety(settings: SafetySettings): Promise<SafetyResult> {
     return this.#call(
-      this.#api.request("PUT", "/v1/settings/safety", { schema: SafetySettings, body: { confirmation_strictness: strictness }, token: this.#token }),
+      this.#api.request("PUT", "/v1/settings/safety", { schema: SafetySettings, body: settings, token: this.#token }),
       (settings) => ({ ok: true, settings }),
     );
   }

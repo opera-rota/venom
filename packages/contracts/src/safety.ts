@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { ConfirmRequest, StopScope } from "./messages.ts";
 import { Id, Timestamp } from "./primitives.ts";
-import { ConfirmationStrictness, Task } from "./records.ts";
+import { actionLimits, ConfirmationStrictness, Task, WaitAction } from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const safetyLimits = {
   commandLifetimeSeconds: 30,
   clockSkewSeconds: 30,
   challengeLifetimeSeconds: 60,
-  waitSeconds: 600,
+  waitSeconds: actionLimits.waitSeconds,
   recentTasks: 20,
 } as const;
 
@@ -42,13 +42,6 @@ export const LiveChallenge = z
     expires_at: Timestamp,
   })
   .register(contracts, { id: "LiveChallenge" });
-
-export const WaitAction = z
-  .strictObject({
-    name: z.literal("wait"),
-    seconds: z.int().min(1).max(safetyLimits.waitSeconds),
-  })
-  .register(contracts, { id: "WaitAction" });
 
 export const DeviceAction = z
   .discriminatedUnion("name", [WaitAction])
@@ -167,9 +160,17 @@ export const TaskList = z
   })
   .register(contracts, { id: "TaskList" });
 
+export const SkippableEffect = z
+  .enum(["deletes", "posts", "reaches_outside"])
+  .register(contracts, { id: "SkippableEffect" });
+
 export const SafetySettings = z
   .strictObject({
     confirmation_strictness: ConfirmationStrictness,
+    skip_asking: z
+      .array(SkippableEffect)
+      .max(3)
+      .refine((effects) => new Set(effects).size === effects.length, "Each kind of action can be listed once."),
   })
   .register(contracts, { id: "SafetySettings" });
 
@@ -178,7 +179,6 @@ export type Signature = z.infer<typeof Signature>;
 export type DeviceKey = z.infer<typeof DeviceKey>;
 export type DeviceKeyEnrolled = z.infer<typeof DeviceKeyEnrolled>;
 export type LiveChallenge = z.infer<typeof LiveChallenge>;
-export type WaitAction = z.infer<typeof WaitAction>;
 export type DeviceAction = z.infer<typeof DeviceAction>;
 export type RunStepCommand = z.infer<typeof RunStepCommand>;
 export type StopCommand = z.infer<typeof StopCommand>;
@@ -197,4 +197,5 @@ export type ConfirmAnswer = z.infer<typeof ConfirmAnswer>;
 export type ConfirmationOutcome = z.infer<typeof ConfirmationOutcome>;
 export type ConfirmationAnswered = z.infer<typeof ConfirmationAnswered>;
 export type TaskList = z.infer<typeof TaskList>;
+export type SkippableEffect = z.infer<typeof SkippableEffect>;
 export type SafetySettings = z.infer<typeof SafetySettings>;

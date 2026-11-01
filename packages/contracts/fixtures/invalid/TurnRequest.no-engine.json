@@ -14,5 +14,6 @@
   ],
   "memories": [],
   "remembered": null,
+  "connectors": [],
   "text": "Explain what a mutex is"
 }

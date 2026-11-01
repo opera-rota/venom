@@ -9,6 +9,7 @@ CONNECTOR_ID = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e06"
 def step(action: str) -> dict[str, object]:
     return {
         "action": action,
+        "spec": {"name": "call_connector", "service": "mail", "operation": "send an email", "details": "To Alex, about Friday"},
         "target": {"kind": "connector", "connector_id": CONNECTOR_ID},
         "effects": ["reaches_outside"],
         "requires_confirmation": True,

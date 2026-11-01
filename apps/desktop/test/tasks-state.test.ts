@@ -22,6 +22,7 @@ function task(status: Task["status"], stepStatus: Task["plan"][number]["status"]
         order: 0,
         summary: "Pretend to delete a file (nothing is really deleted)",
         action: "wait",
+        spec: { name: "wait", seconds: 5 },
         target: { kind: "device", device_id: deviceId },
         effects: ["deletes"],
         requires_confirmation: true,
@@ -124,6 +125,21 @@ describe("the Tasks view groups tasks by what they need", () => {
       ["Stopped", 1],
     ]);
     expect(taskCount(state)).toEqual({ open: 2, needsYou: true });
+  });
+
+  it("keeps plans in their own group, out of the strip and out of the count", () => {
+    const plan = task("planned", "pending", "2026-10-31T19:00:05.000Z");
+    const discarded = task("cancelled", "pending", "2026-10-31T19:00:06.000Z", otherDevice);
+    const state = play([
+      { type: "task", ...stamp, task: plan },
+      { type: "task", ...stamp, task: discarded },
+    ]);
+    expect(taskGroups(state).map((group) => [group.title, group.tasks.length])).toEqual([
+      ["Planned", 1],
+      ["Stopped", 1],
+    ]);
+    expect(taskInView(state)).toBeNull();
+    expect(taskCount(state)).toEqual({ open: 0, needsYou: false });
   });
 
   it("takes a task the cloud sent back after a control, unless a newer copy is already here", () => {

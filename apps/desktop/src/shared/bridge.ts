@@ -2,7 +2,6 @@ import type {
   Account,
   ApiErrorCode,
   ConfirmationAnswered,
-  ConfirmationStrictness,
   ConfirmDecision,
   DrillKind,
   SafetySettings,
@@ -106,7 +105,8 @@ export interface VenomBridge {
   stopTask(taskId: string): Promise<TaskStopResult>;
   confirm(taskId: string, stepId: string, decision: ConfirmDecision): Promise<AnswerResult>;
   safety(): Promise<SafetyResult>;
-  setSafety(strictness: ConfirmationStrictness): Promise<SafetyResult>;
+  setSafety(settings: SafetySettings): Promise<SafetyResult>;
+  developer(): Promise<boolean>;
   openLink(url: string): Promise<void>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
@@ -145,6 +145,7 @@ export const channels = {
   confirm: "venom:confirm",
   safety: "venom:safety",
   setSafety: "venom:set-safety",
+  developer: "venom:developer",
   openLink: "venom:open-link",
   connection: "venom:connection",
   event: "venom:event",

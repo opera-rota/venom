@@ -46,12 +46,11 @@ export function safetyRoutes(app: FastifyInstance, context: GatewayContext): voi
 
   app.get("/v1/settings/safety", async (request) => {
     const device = requireSignedIn(request);
-    return SafetySettings.parse({ confirmation_strictness: await tasks.strictness(device.account_id) });
+    return SafetySettings.parse(await tasks.settings(device.account_id));
   });
 
   app.put("/v1/settings/safety", async (request) => {
     const device = requireSignedIn(request);
-    const { confirmation_strictness } = SafetySettings.parse(request.body);
-    return SafetySettings.parse({ confirmation_strictness: await tasks.setStrictness(device, confirmation_strictness, request.id) });
+    return SafetySettings.parse(await tasks.saveSettings(device, SafetySettings.parse(request.body), request.id));
   });
 }
