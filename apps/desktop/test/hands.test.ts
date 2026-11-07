@@ -157,6 +157,23 @@ describe("the hands on this computer", () => {
     expect([report?.outcome, report?.detail, hands.busy]).toEqual(["stopped", "Stopped before it finished.", false]);
   });
 
+  it("keeps the output a script printed before it was stopped", async () => {
+    const { hands, reported } = bench(
+      (_request, { signal, onOutput }) =>
+        new Promise((resolve) => {
+          onOutput?.("1");
+          onOutput?.("2");
+          onOutput?.("3");
+          signal?.addEventListener("abort", () => resolve({ ok: false, stopped: true, detail: "Stopped.", data: {} }), { once: true });
+        }),
+    );
+    const task = randomUUID();
+    hands.receive(frame(task, script, true).frame);
+    hands.haltTask(task);
+    const [report] = await reported(1);
+    expect([report?.outcome, report?.output]).toEqual(["stopped", "1\n2\n3"]);
+  });
+
   it("says plainly when this computer has no hands, and keeps long answers short", async () => {
     const without = bench(null);
     without.hands.receive(frame(randomUUID(), { name: "take_screenshot" }).frame);

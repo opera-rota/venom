@@ -61,6 +61,7 @@ class OutputPump {
   readonly #commandId: string;
   readonly #flushMs: number;
   #waiting = "";
+  #seen = "";
   #sequence = 0;
   #timer: NodeJS.Timeout | undefined;
   #chain: Promise<unknown> = Promise.resolve();
@@ -72,15 +73,25 @@ class OutputPump {
   }
 
   push(text: string): void {
-    if (this.#send === undefined || text.length === 0) {
+    if (text.length === 0) {
       return;
     }
-    this.#waiting += text.endsWith("\n") ? text : `${text}\n`;
+    const line = text.endsWith("\n") ? text : `${text}\n`;
+    this.#seen = lastOf(this.#seen + line, safetyLimits.stepOutput);
+    if (this.#send === undefined) {
+      return;
+    }
+    this.#waiting += line;
     if (this.#waiting.length >= safetyLimits.outputChunk) {
       this.#flush();
     } else {
       this.#timer ??= setTimeout(() => this.#flush(), this.#flushMs);
     }
+  }
+
+  seen(): string | null {
+    const text = this.#seen.trimEnd();
+    return text.length === 0 ? null : text;
   }
 
   async close(): Promise<void> {
@@ -207,7 +218,7 @@ export class Hands {
     const result = await worker.send(this.#request(command), { signal, onOutput: (text) => pump.push(text), timeoutMs: timeLimitMs(command.action) });
     await pump.close();
     this.#remember(command.task_id, result);
-    const output = command.action.name === "run_script" ? this.#outputOf(result) : null;
+    const output = command.action.name === "run_script" ? (this.#outputOf(result) ?? pump.seen()) : null;
     if (result.stopped) {
       return { outcome: "stopped", detail: "Stopped before it finished.", output };
     }

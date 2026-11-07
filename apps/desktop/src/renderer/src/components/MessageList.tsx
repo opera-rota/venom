@@ -74,6 +74,9 @@ function answeredWords(task: Task | undefined, stepId: string | null): string {
   if (task.status === "cancelled" && step.status === "stopped") {
     return "You said no.";
   }
+  if (step.status === "stopped") {
+    return "You said yes, then the task was stopped.";
+  }
   if (task.status === "stopped") {
     return "Closed, because the task was stopped.";
   }

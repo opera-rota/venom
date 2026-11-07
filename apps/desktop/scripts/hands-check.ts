@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,7 @@ const page = [
   '<body style="font-family: sans-serif; padding: 48px">',
   "<h1>VENOM hands check</h1>",
   "<button onclick=\"document.title = 'Hello from VENOM'; this.textContent = 'Hello received'\">Say hello</button>",
+  '<div style="position: relative; margin-top: 24px"><button>Say hello</button><div style="position: absolute; inset: 0; background: white"></div></div>',
   "</body></html>",
 ].join("\n");
 
@@ -150,6 +152,26 @@ const checks: readonly Check[] = [
       await rm(outside, { force: true });
       console.log(`      reported as not done: ${result.ok ? "no" : "yes"}, the file outside is still there: ${kept ? "yes" : "no"}`);
       return !result.ok && kept ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Try to delete a file on your real Desktop from the sandbox",
+    run: async () => {
+      const desktop = execFileSync("powershell.exe", ["-NoProfile", "-Command", "[Environment]::GetFolderPath('Desktop')"], { encoding: "utf8" }).trim();
+      const target = join(desktop, "venom-hands-check-delete.txt");
+      await writeFile(target, "VENOM hands check\n", "utf8");
+      const code = [
+        "$path = Join-Path ([Environment]::GetFolderPath('Desktop')) 'venom-hands-check-delete.txt'",
+        "if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force; 'DELETED' } else { 'NOT FOUND' }",
+      ].join("\r\n");
+      const started = performance.now();
+      const result = await helper.send({ op: "run_script", language: "powershell", code, task, timeout_seconds: 30 }, { onOutput: live(started) });
+      const seconds = (performance.now() - started) / 1000;
+      say(result);
+      const kept = await readFile(target, "utf8").then(() => true, () => false);
+      await rm(target, { force: true });
+      console.log(`      answered in ${seconds.toFixed(1)}s, reported as not done: ${result.ok ? "no" : "yes"}, the Desktop file is still there: ${kept ? "yes" : "no"}`);
+      return !result.ok && kept && seconds < 20 ? "passed" : "failed";
     },
   },
   {

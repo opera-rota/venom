@@ -394,6 +394,18 @@ function Find-Clickable($Window, [string]$Needle) {
     return $partial.ToArray()
 }
 
+function Test-Showing($Element) {
+    $point = New-Object System.Windows.Point
+    if (-not $Element.TryGetClickablePoint([ref]$point)) { return $false }
+    try { $hit = $Automation::FromPoint($point) } catch { return $false }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    for ($depth = 0; $null -ne $hit -and $depth -lt 12; $depth++) {
+        if ([System.Windows.Automation.Automation]::Compare($hit, $Element)) { return $true }
+        $hit = $walker.GetParent($hit)
+    }
+    return $false
+}
+
 function Invoke-Click($Request) {
     $window = Resolve-Window $Request
     $on = [string](Get-Arg $Request 'on')
@@ -408,10 +420,16 @@ function Invoke-Click($Request) {
         Start-Sleep -Milliseconds 300
     }
     if ($found.Length -eq 0) { return New-Result $false "I could not find '$on' in '$title' within 10 seconds, so I clicked nothing." }
-    if ($found.Length -gt 1) { return New-Result $false "I found $($found.Length) things matching '$on' in '$title', so I clicked nothing." }
+    if (-not [Venom.Hands]::Focus($window.Handle)) { return New-Result $false "I could not bring '$title' to the front, so I clicked nothing." }
+    if ($found.Length -gt 1) {
+        $matching = $found.Length
+        Start-Sleep -Milliseconds 150
+        $found = @($found | Where-Object { Test-Showing $_ })
+        if ($found.Length -eq 0) { return New-Result $false "I found $matching things matching '$on' in '$title', but none of them is showing on the screen, so I clicked nothing." }
+        if ($found.Length -gt 1) { return New-Result $false "I found $($found.Length) things matching '$on' showing in '$title', so I clicked nothing." }
+    }
     $element = $found[0]
     $name = $element.Current.Name
-    if (-not [Venom.Hands]::Focus($window.Handle)) { return New-Result $false "I could not bring '$title' to the front, so I clicked nothing." }
     try { $element.GetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView() } catch { }
     Start-Sleep -Milliseconds 150
     $point = New-Object System.Windows.Point
