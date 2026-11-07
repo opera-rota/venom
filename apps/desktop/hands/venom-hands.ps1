@@ -522,7 +522,7 @@ function Invoke-RunScript([string]$Id, $Request) {
         'powershell' {
             $script = Join-Path $folder 'script.ps1'
             [IO.File]::WriteAllText($script, $code, (New-Object Text.UTF8Encoding $true))
-            $launcher = '$ProgressPreference = ''SilentlyContinue''; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; try { & ''.\script.ps1'' *>&1 | Out-String -Stream -Width 4096 } catch { [Console]::Out.WriteLine(($_ | Out-String -Width 4096).TrimEnd()); exit 1 }; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }'
+            $launcher = '$ErrorActionPreference = ''Stop''; $ProgressPreference = ''SilentlyContinue''; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; $Error.Clear(); try { & ''.\script.ps1'' *>&1 | Out-String -Stream -Width 4096 } catch { [Console]::Out.WriteLine(($_ | Out-String -Width 4096).TrimEnd()); exit 1 }; $hidden = @($Error | ForEach-Object { $_.Exception.Message } | Select-Object -Unique); if ($hidden.Count -gt 0) { $hidden | ForEach-Object { [Console]::Out.WriteLine(''VENOM saw an error: '' + $_) }; exit 5 }; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }'
             $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launcher))
             $command = "$(Quote $PowerShellPath) -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -OutputFormat Text -EncodedCommand $encoded"
         }
@@ -561,8 +561,9 @@ function Invoke-RunScript([string]$Id, $Request) {
     $note = if ($refused) { " Windows refused a change outside VENOM's work folder." } else { '' }
     $data = @{ exit_code = $exit; output = $state.Tail; refused_outside = [bool]$refused; folder = $folder; seconds = [Math]::Round($clock.Elapsed.TotalSeconds, 1) }
     if ($timedOut) { return New-Result $false "The script ran longer than $timeout seconds, so I stopped it.$note" $data }
-    if ($exit -ne 0) { return New-Result $false "The script stopped with exit code $exit.$note" $data }
-    return New-Result $true "The script finished.$note" $data
+    if ($refused) { return New-Result $false "Windows refused a change outside VENOM's work folder, so this step is not done." $data }
+    if ($exit -ne 0) { return New-Result $false "The script ran into an error (exit code $exit), so this step is not done." $data }
+    return New-Result $true 'The script finished.' $data
 }
 
 function Invoke-Describe($Request) {

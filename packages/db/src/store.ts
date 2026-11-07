@@ -133,6 +133,12 @@ export function createStore(url: string): Store {
             on earlier.account_id = pivot.account_id
            and (earlier.created_at, earlier.id) < (pivot.created_at, pivot.id)
           where pivot.id = ${messageId} and pivot.account_id = ${accountId}
+            and (
+              earlier.speaker = 'venom' or exists (
+                select 1 from messages reply
+                where reply.account_id = earlier.account_id and reply.request_id = earlier.request_id and reply.speaker = 'venom'
+              )
+            )
           order by earlier.created_at desc, earlier.id desc
           limit ${limit}
         ) recent

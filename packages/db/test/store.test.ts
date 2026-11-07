@@ -75,8 +75,9 @@ describe("message store", () => {
     await owner.end();
     const stranger = { id: other.deviceId, account_id: other.accountId };
 
-    const before = await store.recordMessage({ device, requestId: uuidv7(), speaker: "user", text: "What is a thread?" });
-    await store.recordMessage({ device, requestId: uuidv7(), speaker: "venom", text: "One path of execution." });
+    const threadId = uuidv7();
+    const before = await store.recordMessage({ device, requestId: threadId, speaker: "user", text: "What is a thread?" });
+    await store.recordMessage({ device, requestId: threadId, speaker: "venom", text: "One path of execution." });
     await store.recordMessage({ device: stranger, requestId: uuidv7(), speaker: "user", text: "Someone else" });
     const pivot = await store.recordMessage({ device, requestId: uuidv7(), speaker: "user", text: "And a mutex?" });
     await store.recordMessage({ device, requestId: uuidv7(), speaker: "user", text: "Later" });
@@ -88,6 +89,25 @@ describe("message store", () => {
     ]);
     expect(await store.conversationBefore(stranger.account_id, pivot.id, 10)).toEqual([]);
     expect(before.id).not.toBe(pivot.id);
+  });
+
+  it("leaves questions VENOM never answered out of the conversation before a message", async () => {
+    const owner = connect(database.migratorUrl, { max: 1 });
+    const fresh = await insertAccountWithDevice(owner);
+    await owner.end();
+    const asker = { id: fresh.deviceId, account_id: fresh.accountId };
+
+    const answeredId = uuidv7();
+    await store.recordMessage({ device: asker, requestId: answeredId, speaker: "user", text: "Open my Downloads folder" });
+    await store.recordMessage({ device: asker, requestId: answeredId, speaker: "venom", text: "Done." });
+    await store.recordMessage({ device: asker, requestId: uuidv7(), speaker: "user", text: "Delete old-list.txt from my desktop" });
+    await store.recordMessage({ device: asker, requestId: uuidv7(), speaker: "user", text: "Delete old-list.txt from my desktop" });
+    const pivot = await store.recordMessage({ device: asker, requestId: uuidv7(), speaker: "user", text: "Open Chrome on wikipedia.org" });
+
+    expect(await store.conversationBefore(asker.account_id, pivot.id, 20)).toEqual([
+      { speaker: "user", text: "Open my Downloads folder" },
+      { speaker: "venom", text: "Done." },
+    ]);
   });
 
   it("finds the question of a request and whether it was answered", async () => {

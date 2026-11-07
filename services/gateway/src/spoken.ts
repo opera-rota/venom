@@ -20,6 +20,8 @@ const skipping = /^(?:please )?(?:don't|do not|stop|no need to|you don't need to
 
 const reasking = /^(?:please )?(?:ask me again before|ask me before|always ask(?: me)? before|start asking(?: me)? before|go back to asking(?: me)? before) (.+)$/;
 
+const longestEffect = 5;
+
 const effects: readonly (readonly [Effect, RegExp])[] = [
   ["pays", /\b(pay|paying|payment|money|spend|spending|buy|buying|purchas\w*)\b/],
   ["uses_credential", /\b(password\w*|credential\w*|sign(?:ing)? ?in|log(?:ging)? ?in)\b/],
@@ -44,7 +46,15 @@ function effectIn(words: string): Effect | null {
   return effects.find(([, pattern]) => pattern.test(words))?.[0] ?? null;
 }
 
+function before(pattern: RegExp, said: string): string | null {
+  const tail = pattern.exec(said)?.[1];
+  return tail === undefined || tail.split(" ").length > longestEffect ? null : tail;
+}
+
 export function understand(text: string): Spoken | null {
+  if (/[\r\n]/.test(text.trim())) {
+    return null;
+  }
   const said = normalize(text);
   if (stopping.has(said)) {
     return { kind: "stop" };
@@ -58,13 +68,13 @@ export function understand(text: string): Spoken | null {
   if (refusing.has(said)) {
     return { kind: "no" };
   }
-  const skip = skipping.exec(said);
+  const skip = before(skipping, said);
   if (skip !== null) {
-    return { kind: "asking", ask: false, effect: effectIn(skip[1] ?? "") };
+    return { kind: "asking", ask: false, effect: effectIn(skip) };
   }
-  const again = reasking.exec(said);
+  const again = before(reasking, said);
   if (again !== null) {
-    return { kind: "asking", ask: true, effect: effectIn(again[1] ?? "") };
+    return { kind: "asking", ask: true, effect: effectIn(again) };
   }
   return null;
 }

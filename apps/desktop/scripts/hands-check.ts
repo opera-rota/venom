@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -107,7 +107,7 @@ const checks: readonly Check[] = [
       if (notepad === null) {
         return "skipped";
       }
-      const result = await helper.send({ op: "type_text", window: notepad, title: null, text: "Milk\nBread\nEggs\nTyped by the VENOM hands check\n" });
+      const result = await helper.send({ op: "type_text", window: notepad, title: null, text: "Milk\nBread\nEggs\nGet-ChildItem $HOME\\Desktop | Sort-Object Length -Descending\n100% @ #1 & (a+b)=c; \"quotes\" 'single' ~`^ {x} [y] <z> é\nTyped by the VENOM hands check\n" });
       say(result);
       console.log(`      read back: ${String(result.data["verified"])}`);
       return result.ok && result.data["verified"] === "match" ? "passed" : "failed";
@@ -135,7 +135,21 @@ const checks: readonly Check[] = [
       const kept = output.includes("Wrote allowed.txt") && inside;
       const refused = output.includes("Windows refused the write outside") && !output.includes("WROTE OUTSIDE");
       console.log(`      wrote inside the work folder: ${kept ? "yes" : "no"}, refused outside: ${refused ? "yes" : "no"}`);
-      return result.ok && kept && refused ? "passed" : "failed";
+      return !result.ok && result.data["refused_outside"] === true && kept && refused ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Report an error the script tried to hide as not done",
+    run: async () => {
+      const outside = join(work(), "..", "outside-check.txt");
+      await writeFile(outside, "VENOM hands check\n", "utf8");
+      const code = [`Remove-Item -LiteralPath '${outside}' -Force -ErrorAction SilentlyContinue`, '"AFTER THE HIDDEN ERROR"'].join("\r\n");
+      const result = await helper.send({ op: "run_script", language: "powershell", code, task, timeout_seconds: 60 }, { onOutput: live(performance.now()) });
+      say(result);
+      const kept = await readFile(outside, "utf8").then(() => true, () => false);
+      await rm(outside, { force: true });
+      console.log(`      reported as not done: ${result.ok ? "no" : "yes"}, the file outside is still there: ${kept ? "yes" : "no"}`);
+      return !result.ok && kept ? "passed" : "failed";
     },
   },
   {
@@ -149,6 +163,18 @@ const checks: readonly Check[] = [
       const result = await helper.send({ op: "run_script", language: "python", code, task, timeout_seconds: 60 }, { onOutput: live(performance.now()) });
       say(result);
       return result.ok ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Report a PowerShell script that hits an error as failed",
+    run: async () => {
+      const code = ['Remove-Item -Path (Join-Path $PWD "venom-missing-file.txt")', '"AFTER THE ERROR"'].join("\r\n");
+      const result = await helper.send({ op: "run_script", language: "powershell", code, task, timeout_seconds: 60 }, { onOutput: live(performance.now()) });
+      say(result);
+      const output = String(result.data["output"] ?? "");
+      const halted = output.includes("venom-missing-file.txt") && !output.includes("AFTER THE ERROR");
+      console.log(`      reported as failed: ${result.ok ? "no" : "yes"}, stopped at the error: ${halted ? "yes" : "no"}`);
+      return !result.ok && halted ? "passed" : "failed";
     },
   },
   {

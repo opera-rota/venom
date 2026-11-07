@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -210,6 +211,10 @@ namespace Venom
         [DllImport("user32.dll")] internal static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] internal static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
         [DllImport("user32.dll", SetLastError = true)] internal static extern uint SendInput(uint count, Input[] inputs, int size);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern short VkKeyScanEx(char character, IntPtr layout);
+        [DllImport("user32.dll")] internal static extern IntPtr GetKeyboardLayout(uint thread);
+        [DllImport("user32.dll")] internal static extern uint MapVirtualKeyEx(uint code, uint mapType, IntPtr layout);
+        [DllImport("user32.dll")] internal static extern short GetKeyState(int key);
         [DllImport("user32.dll")] internal static extern bool SetProcessDpiAwarenessContext(IntPtr context);
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
         [DllImport("dwmapi.dll")] internal static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect rect, int size);
@@ -246,6 +251,12 @@ namespace Venom
         private const ushort ReturnKey = 0x0D;
         private const ushort TabKey = 0x09;
         private const ushort AltKey = 0x12;
+        private const ushort ShiftKey = 0x10;
+        private const ushort ControlKey = 0x11;
+        private const int CapsLockKey = 0x14;
+        private const uint VirtualToScan = 0;
+        private const uint VirtualToCharacter = 2;
+        private const int ModifierPause = 30;
 
         public static void Init()
         {
@@ -323,6 +334,8 @@ namespace Venom
         public static int Type(long window, string text, int delay)
         {
             IntPtr target = new IntPtr(window);
+            uint process;
+            IntPtr layout = Native.GetKeyboardLayout(Native.GetWindowThreadProcessId(target, out process));
             for (int index = 0; index < text.Length; index++)
             {
                 if (Root(Native.GetForegroundWindow()) != target)
@@ -344,7 +357,7 @@ namespace Venom
                 }
                 else
                 {
-                    SendUnicode(next);
+                    SendCharacter(next, layout, target);
                 }
                 Settle(target);
                 if (next == '\n' || next == '\t')
@@ -550,6 +563,77 @@ namespace Venom
             inputs[1].Data.Keyboard.VirtualKey = key;
             inputs[1].Data.Keyboard.Flags = KeyUp;
             Native.SendInput(2, inputs, Marshal.SizeOf(typeof(Input)));
+        }
+
+        private static void SendCharacter(char character, IntPtr layout, IntPtr target)
+        {
+            short mapped = Native.VkKeyScanEx(character, layout);
+            int key = mapped & 0xFF;
+            int state = (mapped >> 8) & 0xFF;
+            if (!OnKeyboard(mapped, layout))
+            {
+                SendUnicode(character);
+                return;
+            }
+            bool shift = (state & 0x1) != 0;
+            if (char.IsLetter(character) && (Native.GetKeyState(CapsLockKey) & 0x1) != 0)
+            {
+                shift = !shift;
+            }
+            List<ushort> held = new List<ushort>();
+            if (shift)
+            {
+                held.Add(ShiftKey);
+            }
+            if ((state & 0x6) == 0x6)
+            {
+                held.Add(ControlKey);
+                held.Add(AltKey);
+            }
+            Input[] press = { KeyStroke((ushort)key, false, layout), KeyStroke((ushort)key, true, layout) };
+            if (held.Count == 0)
+            {
+                Send(press);
+                return;
+            }
+            Send(held.ConvertAll(modifier => KeyStroke(modifier, false, layout)).ToArray());
+            Settle(target);
+            Thread.Sleep(ModifierPause);
+            Send(press);
+            Settle(target);
+            Thread.Sleep(ModifierPause);
+            List<Input> release = held.ConvertAll(modifier => KeyStroke(modifier, true, layout));
+            release.Reverse();
+            Send(release.ToArray());
+        }
+
+        private static void Send(Input[] inputs)
+        {
+            Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input)));
+        }
+
+        private static bool OnKeyboard(short mapped, IntPtr layout)
+        {
+            if (mapped == -1)
+            {
+                return false;
+            }
+            int key = mapped & 0xFF;
+            int state = (mapped >> 8) & 0xFF;
+            bool plainModifiers = (state & ~0x7) == 0;
+            bool shortcutOnly = (state & 0x6) == 0x2 || (state & 0x6) == 0x4;
+            bool deadKey = (Native.MapVirtualKeyEx((uint)key, VirtualToCharacter, layout) & 0x80000000) != 0;
+            return key != 0xFF && plainModifiers && !shortcutOnly && !deadKey;
+        }
+
+        private static Input KeyStroke(ushort key, bool up, IntPtr layout)
+        {
+            Input input = new Input();
+            input.Type = KeyboardType;
+            input.Data.Keyboard.VirtualKey = key;
+            input.Data.Keyboard.Scan = (ushort)Native.MapVirtualKeyEx(key, VirtualToScan, layout);
+            input.Data.Keyboard.Flags = up ? KeyUp : 0;
+            return input;
         }
 
         private static void SendUnicode(char character)
