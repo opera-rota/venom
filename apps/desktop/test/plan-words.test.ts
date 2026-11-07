@@ -5,7 +5,8 @@ describe("every step says how it will run, in plain words", () => {
   it.each([
     [{ name: "wait", seconds: 1 }, "Waits 1 second"],
     [{ name: "wait", seconds: 30 }, "Waits 30 seconds"],
-    [{ name: "open_app", app: "Notepad" }, "Opens Notepad"],
+    [{ name: "open_app", app: "Notepad", open: null }, "Opens Notepad"],
+    [{ name: "open_app", app: "Chrome", open: "https://wikipedia.org" }, "Opens Chrome on https://wikipedia.org"],
     [{ name: "type_text", text: "Milk\nbread\neggs", into: "the Notepad window" }, 'Types "Milk bread eggs" into the Notepad window'],
     [{ name: "click", on: "the Save button" }, "Clicks the Save button"],
     [{ name: "run_script", language: "powershell", purpose: "Save the list on the desktop", code: "Set-Content list.txt 'Milk'" }, "Runs a PowerShell script: Save the list on the desktop"],
@@ -23,10 +24,12 @@ describe("every step says how it will run, in plain words", () => {
 
 describe("a step that asks says why", () => {
   it("names every reason the fixed rules found", () => {
-    expect(whyItAsks({ effects: ["deletes"], reversible: false })).toBe("Asks you first because it deletes something");
-    expect(whyItAsks({ effects: ["pays", "posts", "reaches_outside"], reversible: false })).toBe(
+    expect(whyItAsks({ action: "click", effects: ["deletes"], reversible: false })).toBe("Asks you first because it deletes something");
+    expect(whyItAsks({ action: "click", effects: ["pays", "posts", "reaches_outside"], reversible: false })).toBe(
       "Asks you first because it spends money, it sends or posts something and it reaches outside this computer",
     );
-    expect(whyItAsks({ effects: [], reversible: false })).toBe("Asks you first because it cannot be undone");
+    expect(whyItAsks({ action: "click", effects: [], reversible: false })).toBe("Asks you first because it cannot be undone");
+    expect(whyItAsks({ action: "run_script", effects: [], reversible: false })).toBe("Asks you first because it runs a script");
+    expect(whyItAsks({ action: "run_script", effects: ["deletes"], reversible: false })).toBe("Asks you first because it runs a script and it deletes something");
   });
 });

@@ -1,4 +1,4 @@
-import type { ConfirmationStrictness, DrillKind, Effect, FailurePolicy, Risk, SkippableEffect, StepAction } from "@venom/contracts";
+import type { ActionSpec, ConfirmationStrictness, RunStepCommand, DrillKind, Effect, FailurePolicy, Risk, SkippableEffect, StepAction } from "@venom/contracts";
 
 export interface Proposed {
   readonly action: StepAction;
@@ -38,6 +38,10 @@ const inherentEffects: Partial<Record<StepAction, readonly Effect[]>> = {
 
 const neverUndoable: ReadonlySet<StepAction> = new Set(["run_script", "call_connector"]);
 
+const alwaysAsksAction: ReadonlySet<StepAction> = new Set(["run_script"]);
+
+const localPlace = /^(?:[a-z]:[\\/]|\\\\|%[a-z_]+%|(?:(?:my|the)\s+)?(?:desktop|documents|downloads|pictures|music|videos)(?:\s+folder)?$)/i;
+
 export const effectWords: Record<Effect, string> = {
   deletes: "It deletes something.",
   pays: "It spends money.",
@@ -62,6 +66,20 @@ export function effectsOf(action: StepAction, claimed: readonly Effect[]): Effec
   return effectOrder.filter((effect) => claimed.includes(effect) || inherent.includes(effect));
 }
 
+export function opensOutside(spec: ActionSpec): boolean {
+  return spec.name === "open_app" && spec.open !== null && !localPlace.test(spec.open.trim());
+}
+
+export const unconfirmedScriptWords = "This computer refused to run a script you had not said yes to.";
+
+export function refusesUnconfirmed(command: Pick<RunStepCommand, "action" | "confirmed">): boolean {
+  return command.action.name === "run_script" && !command.confirmed;
+}
+
+export function effectsOfSpec(spec: ActionSpec, claimed: readonly Effect[]): Effect[] {
+  return effectsOf(spec.name, opensOutside(spec) ? [...claimed, "reaches_outside"] : claimed);
+}
+
 export function undoable(action: StepAction, claimed: boolean): boolean {
   return claimed && !neverUndoable.has(action);
 }
@@ -69,8 +87,8 @@ export function undoable(action: StepAction, claimed: boolean): boolean {
 export function assess(step: Proposed, strictness: ConfirmationStrictness, skipAsking: readonly Effect[] = []): Assessment {
   const reasons = effectsOf(step.action, step.effects);
   const asking = reasons.filter((effect) => alwaysAsks.has(effect) || !skipAsking.includes(effect));
-  const requiresConfirmation = asking.length > 0 || (strictness === "strict" && !step.reversible);
-  const risk: Risk = reasons.some((effect) => highRisk.has(effect)) ? "high" : reasons.length > 0 ? "medium" : "low";
+  const requiresConfirmation = asking.length > 0 || alwaysAsksAction.has(step.action) || (strictness === "strict" && !step.reversible);
+  const risk: Risk = reasons.some((effect) => highRisk.has(effect)) ? "high" : reasons.length > 0 || alwaysAsksAction.has(step.action) ? "medium" : "low";
   return { requiresConfirmation, risk, reasons };
 }
 

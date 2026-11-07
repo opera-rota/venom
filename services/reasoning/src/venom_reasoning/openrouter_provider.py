@@ -109,15 +109,18 @@ class OpenRouterProvider:
                     output_tokens=output_tokens,
                     cost_micro_usd=cost,
                 )
-        raise ReasoningError("invalid_output", "The model answered in words instead of the required shape.")
+        raise ReasoningError("invalid_output", "The model gave an empty answer instead of the required shape.")
 
 
 def answered(message: ChatCompletionMessage) -> str | None:
     for tool_call in message.tool_calls or ():
         if tool_call.type == "function" and tool_call.function.name == RESPOND_TOOL:
             return tool_call.function.arguments
-    written = FENCED.fullmatch((message.content or "").strip())
-    return written["body"] if written is not None else None
+    content = (message.content or "").strip()
+    written = FENCED.search(content)
+    if written is not None:
+        return written["body"]
+    return content or None
 
 
 def portable(schema: Mapping[str, object]) -> dict[str, object]:

@@ -1,6 +1,6 @@
 export const databaseUrls = {
-  migrator: process.env["VENOM_MIGRATOR_URL"] ?? "postgres://venom:venom@127.0.0.1:55432/venom",
-  app: process.env["VENOM_DATABASE_URL"] ?? "postgres://venom_app:venom_app@127.0.0.1:55432/venom",
+  migrator: process.env["VENOM_MIGRATOR_URL"] ?? "postgres://venom:venom@127.0.0.1:15432/venom",
+  app: process.env["VENOM_DATABASE_URL"] ?? "postgres://venom_app:venom_app@127.0.0.1:15432/venom",
 } as const;
 
 export function withDatabase(url: string, database: string): string {

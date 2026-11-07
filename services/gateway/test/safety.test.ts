@@ -197,7 +197,7 @@ describe("device trust", () => {
     const { here } = await account();
     const response = await call(gateway.base, "POST", "/v1/commands/report", {
       token: here.device_token,
-      body: { command_id: uuidv7(), outcome: "done", detail: null },
+      body: { command_id: uuidv7(), outcome: "done", detail: null, output: null },
     });
     expect(response.status).toBe(404);
   });

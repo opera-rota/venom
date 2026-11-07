@@ -9,7 +9,7 @@ function fixture<T>(kind: "valid" | "invalid", name: string): T {
 
 const plan = fixture<PlanDraft>("valid", "PlanDraft.json");
 const task = fixture<{ plan: Step[] }>("valid", "Task.json");
-const openNotepad: DraftStep = { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad" }, effects: [], reversible: true };
+const openNotepad: DraftStep = { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad", open: null }, effects: [], reversible: true };
 
 describe("a drafted plan", () => {
   it("has steps or a reason it cannot be done, never both and never neither", () => {

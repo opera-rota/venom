@@ -1,5 +1,6 @@
-import { CommandFrame, DeviceKeyEnrolled, GatewayEvent, LiveChallenge, type CommandOutcome, type DeviceSession } from "@venom/contracts";
+import { CommandFrame, DeviceKeyEnrolled, GatewayEvent, LiveChallenge, type CommandOutcome, type DeviceAction, type DeviceSession, type RunStepCommand } from "@venom/contracts";
 import { CommandGuard, liveChallengeText, newKeyPair, signText, type KeyPair } from "@venom/safety";
+import { refusesUnconfirmed, unconfirmedScriptWords } from "@venom/safety/device";
 import { call } from "./harness.ts";
 
 export interface Report {
@@ -12,6 +13,7 @@ export interface ActingDevice {
   readonly events: GatewayEvent[];
   readonly reports: Report[];
   readonly stops: string[];
+  readonly commands: RunStepCommand[];
   readonly closed: Promise<number>;
   until(match: (event: GatewayEvent) => boolean): Promise<GatewayEvent>;
   reported(stepId: string): Promise<Report>;
@@ -43,6 +45,7 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
   const events: GatewayEvent[] = [];
   const reports: Report[] = [];
   const stops: string[] = [];
+  const commands: RunStepCommand[] = [];
   const waiters = new Set<() => void>();
   let running: { readonly abort: AbortController; readonly taskId: string; readonly timer: NodeJS.Timeout } | null = null;
   let shut = false;
@@ -51,13 +54,34 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     for (const check of [...waiters]) check();
   };
 
-  async function report(commandId: string, stepId: string, outcome: CommandOutcome, detail: string): Promise<void> {
+  async function report(commandId: string, stepId: string, outcome: CommandOutcome, detail: string, output: string | null = null): Promise<void> {
     if (shut) {
       return;
     }
     reports.push({ stepId, outcome, at: Date.now() });
     wake();
-    await call(base, "POST", "/v1/commands/report", { token: session.device_token, body: { command_id: commandId, outcome, detail } });
+    await call(base, "POST", "/v1/commands/report", { token: session.device_token, body: { command_id: commandId, outcome, detail, output } });
+  }
+
+  async function chunk(commandId: string, sequence: number, text: string): Promise<void> {
+    if (!shut) {
+      await call(base, "POST", "/v1/commands/output", { token: session.device_token, body: { command_id: commandId, sequence, text } });
+    }
+  }
+
+  function lasting(action: DeviceAction): number {
+    return action.name === "wait" ? action.seconds * 1000 : 200;
+  }
+
+  function finished(action: DeviceAction): string {
+    switch (action.name) {
+      case "wait":
+        return `Waited ${action.seconds} seconds.`;
+      case "run_script":
+        return "The script finished with exit code 0.";
+      default:
+        return `Did ${action.name.replace("_", " ")}.`;
+    }
   }
 
   function execute(frame: CommandFrame): void {
@@ -74,18 +98,29 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
       wake();
       return;
     }
+    commands.push(body);
+    wake();
+    if (refusesUnconfirmed(body)) {
+      void report(command_id, body.step_id, "refused", unconfirmedScriptWords);
+      return;
+    }
+    const { action } = body;
+    const output = action.name === "run_script" ? `Running: ${action.purpose}\nAll good.` : null;
+    if (action.name === "run_script") {
+      void chunk(command_id, 0, `Running: ${action.purpose}\n`).then(() => chunk(command_id, 1, "All good."));
+    }
     const abort = new AbortController();
     const started = Date.now();
     const timer = setTimeout(() => {
       running = null;
-      void report(command_id, body.step_id, "done", `Waited ${body.action.seconds} seconds.`);
-    }, (body.action.seconds * 1000) / speed);
+      void report(command_id, body.step_id, "done", finished(action), output);
+    }, lasting(action) / speed);
     running = { abort, taskId: body.task_id, timer };
     abort.signal.addEventListener("abort", () => {
       clearTimeout(timer);
       running = null;
       const elapsed = Math.floor((Date.now() - started) / 1000);
-      void report(command_id, body.step_id, "stopped", `Stopped after ${elapsed} of ${body.action.seconds} seconds.`);
+      void report(command_id, body.step_id, "stopped", action.name === "wait" ? `Stopped after ${elapsed} of ${action.seconds} seconds.` : "Stopped before it finished.");
     });
   }
 
@@ -124,6 +159,7 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     events,
     reports,
     stops,
+    commands,
     closed,
     until: (match) => waitFor(() => events.find(match)),
     reported: (stepId) => waitFor(() => reports.find((entry) => entry.stepId === stepId)),

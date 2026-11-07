@@ -1,7 +1,17 @@
 import { z } from "zod";
 import { ConfirmRequest, StopScope } from "./messages.ts";
 import { Id, Timestamp } from "./primitives.ts";
-import { actionLimits, ConfirmationStrictness, Task, WaitAction } from "./records.ts";
+import {
+  actionLimits,
+  ClickAction,
+  ConfirmationStrictness,
+  OpenAppAction,
+  RunScriptAction,
+  TakeScreenshotAction,
+  Task,
+  TypeTextAction,
+  WaitAction,
+} from "./records.ts";
 import { contracts } from "./registry.ts";
 
 export const safetyLimits = {
@@ -10,6 +20,10 @@ export const safetyLimits = {
   challengeLifetimeSeconds: 60,
   waitSeconds: actionLimits.waitSeconds,
   recentTasks: 20,
+  signedPayload: 16384,
+  outputChunk: 4000,
+  outputChunks: 1000,
+  stepOutput: actionLimits.stepOutput,
 } as const;
 
 export const PublicKey = z
@@ -44,7 +58,7 @@ export const LiveChallenge = z
   .register(contracts, { id: "LiveChallenge" });
 
 export const DeviceAction = z
-  .discriminatedUnion("name", [WaitAction])
+  .discriminatedUnion("name", [WaitAction, OpenAppAction, TypeTextAction, ClickAction, RunScriptAction, TakeScreenshotAction])
   .register(contracts, { id: "DeviceAction" });
 
 export const RunStepCommand = z
@@ -53,6 +67,7 @@ export const RunStepCommand = z
     task_id: Id,
     step_id: Id,
     action: DeviceAction,
+    confirmed: z.boolean(),
   })
   .register(contracts, { id: "RunStepCommand" });
 
@@ -81,7 +96,7 @@ export const CommandPayload = z
 
 export const SignedCommand = z
   .strictObject({
-    payload: z.string().min(2).max(4096),
+    payload: z.string().min(2).max(safetyLimits.signedPayload),
     signature: Signature,
   })
   .register(contracts, { id: "SignedCommand" });
@@ -102,8 +117,17 @@ export const CommandReport = z
     command_id: Id,
     outcome: CommandOutcome,
     detail: z.string().min(1).max(300).nullable(),
+    output: z.string().min(1).max(safetyLimits.stepOutput).nullable(),
   })
   .register(contracts, { id: "CommandReport" });
+
+export const StepOutputChunk = z
+  .strictObject({
+    command_id: Id,
+    sequence: z.int().min(0).max(safetyLimits.outputChunks - 1),
+    text: z.string().min(1).max(safetyLimits.outputChunk),
+  })
+  .register(contracts, { id: "StepOutputChunk" });
 
 export const StopRequest = z
   .strictObject({
@@ -188,6 +212,7 @@ export type SignedCommand = z.infer<typeof SignedCommand>;
 export type CommandFrame = z.infer<typeof CommandFrame>;
 export type CommandOutcome = z.infer<typeof CommandOutcome>;
 export type CommandReport = z.infer<typeof CommandReport>;
+export type StepOutputChunk = z.infer<typeof StepOutputChunk>;
 export type StopRequest = z.infer<typeof StopRequest>;
 export type StopReceipt = z.infer<typeof StopReceipt>;
 export type DrillKind = z.infer<typeof DrillKind>;

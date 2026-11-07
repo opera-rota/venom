@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { EngineId } from "@venom/contracts";
+import { EngineId, type Task } from "@venom/contracts";
 import type { Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import type { Memory } from "@venom/memory";
@@ -8,13 +8,14 @@ import type { CommandSigner, Trust } from "@venom/safety";
 import type { Tasks } from "@venom/tasks";
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
 import { v7 as uuidv7 } from "uuid";
+import { createActing } from "./acting.ts";
 import { identify } from "./auth.ts";
 import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
-import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, LiveHub, memoryEvent, powerEvent, taskEvent } from "./live-hub.ts";
+import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, LiveHub, memoryEvent, messageEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
 import { LiveRequests } from "./requests.ts";
-import { TaskRunner } from "./runner.ts";
+import { TaskRunner, type SaidKind } from "./runner.ts";
 import { deviceRoutes } from "./routes/devices.ts";
 import { identityRoutes } from "./routes/identity.ts";
 import { liveRoute } from "./routes/live.ts";
@@ -61,6 +62,22 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     inflight.add(work);
     void work.finally(() => inflight.delete(work));
   };
+  const say = async (task: Task, kind: SaidKind, text: string, stepId: string | null) => {
+    try {
+      const message = await store.recordMessage({
+        device: { id: task.origin_device_id, account_id: task.account_id },
+        requestId: uuidv7(),
+        speaker: "venom",
+        kind,
+        text,
+        taskId: task.id,
+        ...(stepId === null ? {} : { stepId }),
+      });
+      hub.publishToAccount(task.account_id, messageEvent(uuidv7(), message));
+    } catch (error) {
+      app.log.error({ err: error, task_id: task.id }, "could not tell the chat about this task");
+    }
+  };
   const runner = new TaskRunner({
     tasks,
     signer,
@@ -71,9 +88,11 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     track,
     publishTask: (accountId, requestId, task) => hub.publishToAccount(accountId, taskEvent(requestId, task)),
     publishConfirmation: (accountId, requestId, request, answered) => hub.publishToAccount(accountId, confirmationEvent(requestId, request, answered)),
+    publishOutput: (accountId, requestId, taskId, stepId, chunk, text) => hub.publishToAccount(accountId, stepOutputEvent(requestId, taskId, stepId, chunk, text)),
+    say,
   });
 
-  const context: GatewayContext = {
+  const shared: Omit<GatewayContext, "acting"> = {
     store,
     identity,
     hub,
@@ -111,6 +130,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     broadcastHalt(accountId, requestId, receipt) {
       hub.publishToAccount(accountId, haltEvent(requestId, receipt));
     },
+    say,
     async availableEngines() {
       if (known !== null && Date.now() - known.at < availabilityMs) {
         return known.engines;
@@ -124,6 +144,8 @@ export async function buildGateway({ store, identity, brain, power, memory, task
       }
     },
   };
+
+  const context: GatewayContext = { ...shared, acting: createActing(shared) };
 
   app.decorateRequest("device", null);
   installErrorHandling(app);

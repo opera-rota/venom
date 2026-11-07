@@ -20,7 +20,8 @@
     "typecheck": "pnpm -r typecheck && pyright",
     "test": "pnpm -r test && uv run pytest",
     "check": "pnpm generate && pnpm typecheck && pnpm test",
-    "model:check": "uv run scripts/model-check.py"
+    "model:check": "uv run scripts/model-check.py",
+    "hands:check": "pnpm --filter @venom/desktop run hands:check"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

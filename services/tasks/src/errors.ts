@@ -32,6 +32,10 @@ export const refuseTasks = {
   cannotIgnore: () => new TaskError(409, "conflict", "Only a step that has not started, a skipped step or a failed step can be ignored."),
   lastCounted: () => new TaskError(409, "conflict", "At least one step must still count. Stop the task instead."),
   cannotDiscard: () => new TaskError(409, "conflict", "Only a plan that has not started can be discarded."),
-  cannotRunYet: () => new TaskError(409, "conflict", "I cannot run planned steps yet. That arrives with VENOM's hands on the computer."),
+  notAPlan: () => new TaskError(409, "conflict", "Only a plan that has not started can be run. A stopped task can be resumed instead."),
+  planNotStarted: () => new TaskError(409, "conflict", "This plan has not started yet. Press Run it to start it."),
+  discarded: () => new TaskError(409, "conflict", "This plan was discarded, so it will not run. Ask me again for a new plan."),
+  needsService: (position: number) =>
+    new TaskError(409, "conflict", `Step ${position + 1} needs a connected service, and connecting services is not possible yet. Nothing was done.`),
   cannotRestore: () => new TaskError(409, "conflict", "Only a skipped or ignored step can be counted again."),
 } as const;

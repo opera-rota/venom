@@ -10,7 +10,8 @@
     "build": "electron-vite build",
     "preview": "install-electron && electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "hands:check": "node scripts/hands-check.ts"
   },
   "dependencies": {
     "@serenity-kit/opaque": "1.1.0",

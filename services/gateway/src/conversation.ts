@@ -8,6 +8,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { RequestTrace } from "./live-hub.ts";
+import { planWaiting } from "./words.ts";
 
 export const historyLimit = 20;
 
@@ -150,7 +151,7 @@ export function planReply(plan: RoutedPlan, task: Task): string {
     plan.elsewhere ? `This device cannot do it, so I planned it for ${plan.target.name}.` : "",
     `It has ${total} ${total === 1 ? "step" : "steps"}${asks(asking, total)}.`,
     plan.missing ?? "",
-    "I cannot run steps yet, so nothing has been done.",
+    plan.missing === null ? `Nothing has run yet. ${planWaiting}` : "Nothing has been done.",
   ]
     .filter((line) => line !== "")
     .join(" ");

@@ -1,4 +1,4 @@
-import type { Device, Message, Task } from "@venom/contracts";
+import type { ConfirmDecision, ConfirmRequest, Device, Message, Task } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
@@ -38,8 +38,14 @@ export interface Plans {
   readonly tasks: ReadonlyMap<string, Task>;
   readonly deviceId: string;
   readonly devices: readonly Device[];
+  readonly open: readonly ConfirmRequest[];
+  readonly sending: ReadonlySet<string>;
   discarding(taskId: string): boolean;
   discard(taskId: string): void;
+  starting(taskId: string): boolean;
+  run(taskId: string): void;
+  output(stepId: string): string | null;
+  answer(request: ConfirmRequest, decision: ConfirmDecision): void;
 }
 
 interface MessageItemProps {
@@ -47,23 +53,78 @@ interface MessageItemProps {
   readonly from: string | null;
   readonly plans: Plans;
   readonly task: Task | undefined;
-  readonly discarding: boolean;
   readonly onOpenLink: (url: string) => void;
 }
 
-const MessageItem = memo(function MessageItem({ message, from, plans, task, discarding, onOpenLink }: MessageItemProps) {
+const reportEdge: Partial<Record<Task["status"], string>> = {
+  completed: "border-l-4 border-l-status-ok",
+  failed: "border-l-4 border-l-status-fail",
+  stopped: "border-l-4 border-l-status-fail",
+  cancelled: "border-l-4 border-l-status-idle",
+};
+
+function answeredWords(task: Task | undefined, stepId: string | null): string {
+  const step = task?.plan.find((candidate) => candidate.id === stepId);
+  if (step === undefined || task === undefined) {
+    return "This question is closed.";
+  }
+  if (step.status === "running" || step.status === "done" || step.status === "failed") {
+    return "You said yes.";
+  }
+  if (task.status === "cancelled" && step.status === "stopped") {
+    return "You said no.";
+  }
+  if (task.status === "stopped") {
+    return "Closed, because the task was stopped.";
+  }
+  return "This question is closed.";
+}
+
+function Question({ message, plans, task }: { readonly message: Message; readonly plans: Plans; readonly task: Task | undefined }) {
+  const request = plans.open.find((candidate) => candidate.step_id === message.step_id);
+  if (request === undefined) {
+    return <p className={`mt-2 ${text.support}`}>{answeredWords(task, message.step_id)}</p>;
+  }
+  const busy = plans.sending.has(request.step_id);
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Your answer">
+      <button type="button" disabled={busy} onClick={() => plans.answer(request, "approve")} className={button.gateApprove}>
+        <Icon name="check" className="h-3.5 w-3.5 text-status-ok" />
+        <span>{busy ? "Sending…" : "Yes, do it"}</span>
+      </button>
+      <button type="button" disabled={busy} onClick={() => plans.answer(request, "decline")} className={button.gateCancel}>
+        <Icon name="cross" className="h-3.5 w-3.5" />
+        <span>No</span>
+      </button>
+      <span className={`${text.detail} text-ink-faint`}>or type yes or no</span>
+    </div>
+  );
+}
+
+const MessageItem = memo(function MessageItem({ message, from, plans, task, onOpenLink }: MessageItemProps) {
   const mine = message.speaker === "user";
+  const edge = message.kind === "question" ? "border-l-4 border-l-status-wait" : message.kind === "report" ? (reportEdge[task?.status ?? "completed"] ?? "") : "";
   return (
     <article className={`flex flex-col gap-1.5 ${mine ? "items-end" : "items-start"}`}>
       <Byline mine={mine} time={message.created_at} from={from} />
       {mine ? (
         <p className={`max-w-[85%] px-3.5 py-2.5 whitespace-pre-wrap break-words text-ink ${surface.bubble}`}>{message.text}</p>
       ) : (
-        <div className={`max-w-[92%] px-4 py-3 ${surface.card}`}>
+        <div className={`max-w-[92%] px-4 py-3 ${surface.card} ${edge}`}>
           <Markdown source={message.text} onOpenLink={onOpenLink} />
-          {message.task_id !== null && (
-            <PlanCard task={task} deviceId={plans.deviceId} devices={plans.devices} discarding={discarding} onDiscard={plans.discard} />
+          {message.kind === "plan" && (
+            <PlanCard
+              task={task}
+              deviceId={plans.deviceId}
+              devices={plans.devices}
+              discarding={message.task_id !== null && plans.discarding(message.task_id)}
+              starting={message.task_id !== null && plans.starting(message.task_id)}
+              output={plans.output}
+              onDiscard={plans.discard}
+              onRun={plans.run}
+            />
           )}
+          {message.kind === "question" && <Question message={message} plans={plans} task={task} />}
         </div>
       )}
     </article>
@@ -198,7 +259,6 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
                 from={sentFrom(message, devices, deviceId)}
                 plans={plans}
                 task={message.task_id === null ? undefined : plans.tasks.get(message.task_id)}
-                discarding={message.task_id !== null && plans.discarding(message.task_id)}
                 onOpenLink={onOpenLink}
               />
               {pending.map((answer) => (

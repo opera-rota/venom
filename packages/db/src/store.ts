@@ -1,5 +1,5 @@
 import postgres, { type Sql } from "postgres";
-import { ConversationEntry, Message, type IntentKind, type QuestionRef, type Speaker } from "@venom/contracts";
+import { ConversationEntry, Message, type IntentKind, type MessageKind, type QuestionRef, type Speaker } from "@venom/contracts";
 
 export interface DeviceRef {
   readonly id: string;
@@ -11,7 +11,9 @@ export interface RecordMessage {
   readonly requestId: string;
   readonly speaker: Speaker;
   readonly text: string;
+  readonly kind?: MessageKind;
   readonly taskId?: string;
+  readonly stepId?: string;
   readonly answer?: { readonly model: string | null; readonly intent: IntentKind };
 }
 
@@ -52,13 +54,15 @@ interface MessageRow {
   account_id: string;
   device_id: string;
   speaker: string;
+  kind: string;
   text: string;
   task_id: string | null;
+  step_id: string | null;
   created_at: Date;
 }
 
-function toMessage({ id, account_id, device_id, speaker, text, task_id, created_at }: MessageRow): Message {
-  return Message.parse({ id, account_id, device_id, speaker, text, task_id, created_at: created_at.toISOString() });
+function toMessage({ id, account_id, device_id, speaker, kind, text, task_id, step_id, created_at }: MessageRow): Message {
+  return Message.parse({ id, account_id, device_id, speaker, kind, text, task_id, step_id, created_at: created_at.toISOString() });
 }
 
 export function connect(url: string, options: { max?: number } = {}): Sql {
@@ -75,12 +79,13 @@ export function createStore(url: string): Store {
   const sql = connect(url);
 
   return {
-    async recordMessage({ device, requestId, speaker, text, taskId = null, answer }) {
+    async recordMessage({ device, requestId, speaker, text, kind: requested, taskId = null, stepId = null, answer }) {
+      const kind = requested ?? (taskId === null ? "text" : "plan");
       return sql.begin(async (tx) => {
         const [row] = await tx<MessageRow[]>`
-          insert into messages (account_id, device_id, request_id, speaker, text, task_id)
-          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${text}, ${taskId})
-          returning id, account_id, device_id, speaker, text, task_id, created_at
+          insert into messages (account_id, device_id, request_id, speaker, kind, text, task_id, step_id)
+          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${kind}, ${text}, ${taskId}, ${stepId})
+          returning id, account_id, device_id, speaker, kind, text, task_id, step_id, created_at
         `;
         if (row === undefined) {
           throw new Error("Message insert returned no row");
@@ -89,7 +94,7 @@ export function createStore(url: string): Store {
           insert into audit_log (account_id, device_id, request_id, actor, action, subject_id, detail)
           values (
             ${device.account_id}, ${device.id}, ${requestId}, ${speaker}, 'message.recorded', ${row.id},
-            ${tx.json({ speaker, characters: text.length, ...(taskId === null ? {} : { task_id: taskId }), ...answer })}
+            ${tx.json({ speaker, ...(kind === "text" ? {} : { kind }), characters: text.length, ...(taskId === null ? {} : { task_id: taskId }), ...(stepId === null ? {} : { step_id: stepId }), ...answer })}
           )
         `;
         return toMessage(row);
@@ -99,7 +104,7 @@ export function createStore(url: string): Store {
     async listConversation(accountId, limit) {
       const rows = await sql<ConversationRow[]>`
         select
-          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.text, latest.task_id, latest.created_at,
+          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.kind, latest.text, latest.task_id, latest.step_id, latest.created_at,
           latest.speaker = 'venom' or exists (
             select 1 from messages reply
             where reply.account_id = latest.account_id and reply.request_id = latest.request_id and reply.speaker = 'venom'
@@ -139,7 +144,7 @@ export function createStore(url: string): Store {
     async findRequest(accountId, requestId) {
       const [row] = await sql<RequestRow[]>`
         select
-          question.id, question.account_id, question.device_id, question.speaker, question.text, question.task_id, question.created_at,
+          question.id, question.account_id, question.device_id, question.speaker, question.kind, question.text, question.task_id, question.step_id, question.created_at,
           exists (
             select 1 from messages reply
             where reply.request_id = question.request_id and reply.speaker = 'venom'

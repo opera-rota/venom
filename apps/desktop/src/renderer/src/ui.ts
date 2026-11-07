@@ -47,6 +47,7 @@ export const mark = {
   badge: "inline-grid min-w-4 shrink-0 place-items-center rounded-full px-1 text-[10.5px] leading-4 font-semibold tabular-nums",
   track: "h-1.5 w-full overflow-hidden rounded-full bg-surface-2",
   caution: "inline-flex shrink-0 items-center whitespace-nowrap rounded-tag border border-status-wait/40 px-2 py-0.5 text-[11.5px] font-medium text-status-wait",
+  reason: "inline-block max-w-full rounded-tag border border-status-wait/40 px-2 py-0.5 text-[11.5px] font-medium text-status-wait",
 } as const;
 
 export const text = {

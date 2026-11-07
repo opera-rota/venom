@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -27,6 +28,8 @@ from venom_reasoning.provider import Completion, ModelCall, Provider, ProviderEv
 log = logging.getLogger("venom.reasoning")
 
 STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent, "PlanDraft": PlanDraft}
+
+INTENT_WORDS = re.compile(r"\b(question|task)s?\b", re.IGNORECASE)
 
 SERVICE_NAMES: Mapping[ConnectorService, str] = {"mail": "Mail", "calendar": "Calendar"}
 
@@ -123,16 +126,29 @@ def structured_shape(output: ReasoningOutput) -> type[BaseModel] | None:
             return None
 
 
+def read_intent(text: str) -> Intent | None:
+    named = {word.lower() for word in INTENT_WORDS.findall(text)}
+    if len(named) != 1:
+        return None
+    return Intent(kind="task" if named == {"task"} else "question")
+
+
+def validated(text: str, shape: type[BaseModel]) -> BaseModel:
+    try:
+        return shape.model_validate_json(text)
+    except ValidationError:
+        if shape is Intent and (intent := read_intent(text)) is not None:
+            return intent
+        raise ReasoningError("invalid_output", "The model did not answer in the required shape.") from None
+
+
 def done(completion: Completion, shape: type[BaseModel] | None) -> ReasoningDone:
     text = completion.text
     if shape is None:
         if not text.strip():
             raise ReasoningError("invalid_output", "The model returned an empty answer.")
     else:
-        try:
-            value = shape.model_validate_json(text)
-        except ValidationError:
-            raise ReasoningError("invalid_output", "The model did not answer in the required shape.") from None
+        value = validated(text, shape)
         if not coherent(value):
             raise ReasoningError("invalid_output", "The model's answer contradicted itself.")
         text = value.model_dump_json()

@@ -1,6 +1,6 @@
-import type { ConfirmationAnswered, ConfirmationEvent, ConfirmRequest, GatewayEvent, HaltEvent, Task, TaskEvent, TaskList } from "@venom/contracts";
+import { safetyLimits, type ConfirmationAnswered, type ConfirmationEvent, type ConfirmRequest, type GatewayEvent, type HaltEvent, type StepOutputEvent, type Task, type TaskEvent, type TaskList } from "@venom/contracts";
 
-export type SafetyEvent = TaskEvent | ConfirmationEvent | HaltEvent;
+export type SafetyEvent = TaskEvent | ConfirmationEvent | HaltEvent | StepOutputEvent;
 
 export interface Closed {
   readonly request: ConfirmRequest;
@@ -13,6 +13,7 @@ export interface TasksState {
   readonly closed: readonly Closed[];
   readonly halted: HaltEvent | null;
   readonly dismissed: ReadonlySet<string>;
+  readonly output: ReadonlyMap<string, ReadonlyMap<number, string>>;
 }
 
 export type TasksAction =
@@ -28,9 +29,12 @@ export const initialTasks: TasksState = {
   closed: [],
   halted: null,
   dismissed: new Set(),
+  output: new Map(),
 };
 
-const safetyEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["task", "confirmation", "halt"]);
+const safetyEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["task", "confirmation", "halt", "step_output"]);
+
+const keptOutputSteps = 20;
 
 const openStatuses: ReadonlySet<Task["status"]> = new Set(["running", "awaiting_confirmation"]);
 
@@ -64,8 +68,40 @@ function withoutStep(queue: readonly ConfirmRequest[], stepId: string): readonly
   return queue.filter((request) => request.step_id !== stepId);
 }
 
+function withOutput(output: TasksState["output"], { step_id, chunk, text }: StepOutputEvent): TasksState["output"] {
+  const chunks = output.get(step_id);
+  if (chunks?.has(chunk) === true) {
+    return output;
+  }
+  const next = new Map(output);
+  next.delete(step_id);
+  next.set(step_id, new Map(chunks).set(chunk, text));
+  while (next.size > keptOutputSteps) {
+    const [oldest] = next.keys();
+    if (oldest === undefined) {
+      break;
+    }
+    next.delete(oldest);
+  }
+  return next;
+}
+
+export function liveOutput(state: Pick<TasksState, "output">, stepId: string): string | null {
+  const chunks = state.output.get(stepId);
+  if (chunks === undefined) {
+    return null;
+  }
+  const text = [...chunks.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, piece]) => piece)
+    .join("");
+  return text.length <= safetyLimits.stepOutput ? text : text.slice(text.length - safetyLimits.stepOutput);
+}
+
 function apply(state: TasksState, event: SafetyEvent): TasksState {
   switch (event.type) {
+    case "step_output":
+      return { ...state, output: withOutput(state.output, event) };
     case "task": {
       const tasks = withTasks(state.tasks, [event.task]);
       const queue = isOpen(event.task) ? state.queue : state.queue.filter((request) => request.task_id !== event.task.id);

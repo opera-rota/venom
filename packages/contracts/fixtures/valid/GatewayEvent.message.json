@@ -8,8 +8,10 @@
     "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
     "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
     "speaker": "user",
+    "kind": "text",
     "text": "Hello VENOM",
     "task_id": null,
+    "step_id": null,
     "created_at": "2026-10-11T09:31:00.100Z"
   }
 }

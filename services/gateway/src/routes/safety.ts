@@ -4,7 +4,7 @@ import { requireSignedIn } from "../auth.ts";
 import type { GatewayContext } from "../context.ts";
 
 export function safetyRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { hub, signer, tasks, trust, runner, broadcastTask, broadcastConfirmation, broadcastHalt } = context;
+  const { tasks, trust, acting } = context;
 
   app.post("/v1/devices/current/key", async (request) => {
     const device = requireSignedIn(request);
@@ -20,26 +20,7 @@ export function safetyRoutes(app: FastifyInstance, context: GatewayContext): voi
   app.post("/v1/stop", async (request) => {
     const device = requireSignedIn(request);
     const stop = StopRequest.parse(request.body);
-    const { scope } = stop;
-    const reached = hub.devicesOf(device.account_id).filter((deviceId) => scope.kind !== "device" || deviceId === scope.device_id);
-    const taskId = scope.kind === "task" ? scope.task_id : null;
-    for (const deviceId of reached) {
-      hub.sendCommand(deviceId, signer.issue({ id: deviceId, account_id: device.account_id }, { kind: "stop", stop_id: stop.stop_id, task_id: taskId }).frame);
-    }
-    const { receipt, closed } = await tasks.stop(device, stop, request.id);
-    runner.wakeAll();
-    broadcastHalt(device.account_id, request.id, receipt);
-    for (const task of receipt.tasks) {
-      broadcastTask(device.account_id, request.id, task);
-    }
-    for (const confirmation of closed) {
-      broadcastConfirmation(device.account_id, request.id, confirmation, {
-        outcome: "stopped",
-        device_id: device.id,
-        device_name: null,
-        answered_at: receipt.stopped_at,
-      });
-    }
+    const receipt = await acting.halt(device, stop, request.id);
     request.log.info({ stop_id: stop.stop_id, tasks: receipt.tasks.length }, "stop delivered");
     return receipt;
   });

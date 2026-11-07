@@ -67,7 +67,7 @@ def task(cost_micro_usd: int = 40) -> list[Step]:
 NOTEPAD_PLAN = PlanDraft(
     title="Shopping list in Notepad",
     steps=[
-        DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad"), effects=[], reversible=True),
+        DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad", open=None), effects=[], reversible=True),
         DraftStep(
             summary="Type the shopping list",
             spec=TypeTextAction(name="type_text", text="Milk, bread, eggs", into="the Notepad window"),

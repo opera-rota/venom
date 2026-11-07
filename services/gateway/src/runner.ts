@@ -1,14 +1,18 @@
-import type { CommandOutcome, CommandReport, ConfirmationAnswered, ConfirmRequest, DeviceAction, Task } from "@venom/contracts";
+import type { CommandOutcome, CommandReport, ConfirmationAnswered, ConfirmRequest, DeviceAction, StepOutputChunk, Task } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { CommandSigner } from "@venom/safety";
 import type { NextStep, Tasks } from "@venom/tasks";
 import type { FastifyBaseLogger } from "fastify";
 import type { LiveHub } from "./live-hub.ts";
+import { doneWords, failedWords, questionWords } from "./words.ts";
 
 export interface Outcome {
   readonly outcome: CommandOutcome;
   readonly detail: string;
+  readonly output: string | null;
 }
+
+export type SaidKind = "question" | "report";
 
 export interface RunnerOptions {
   readonly tasks: Tasks;
@@ -20,6 +24,8 @@ export interface RunnerOptions {
   track(work: Promise<unknown>): void;
   publishTask(accountId: string, requestId: string, task: Task): void;
   publishConfirmation(accountId: string, requestId: string, request: ConfirmRequest, answered: ConfirmationAnswered | null): void;
+  publishOutput(accountId: string, requestId: string, taskId: string, stepId: string, chunk: number, text: string): void;
+  say(task: Task, kind: SaidKind, text: string, stepId: string | null): Promise<void>;
 }
 
 interface Rerun {
@@ -28,15 +34,30 @@ interface Rerun {
 }
 
 interface Awaiting {
+  readonly commandId: string;
+  readonly accountId: string;
+  readonly taskId: string;
+  readonly stepId: string;
   readonly deviceId: string;
   readonly targetName: string;
   settle(outcome: Outcome): void;
 }
 
-function durationMs(action: DeviceAction): number {
+export const scriptSeconds = 300;
+
+export function durationMs(action: DeviceAction): number {
   switch (action.name) {
     case "wait":
       return action.seconds * 1000;
+    case "open_app":
+      return 45_000;
+    case "type_text":
+      return 30_000 + action.text.length * 150;
+    case "click":
+    case "take_screenshot":
+      return 30_000;
+    case "run_script":
+      return (scriptSeconds + 30) * 1000;
   }
 }
 
@@ -80,7 +101,16 @@ export class TaskRunner {
     if (awaiting === undefined || awaiting.deviceId !== device.id) {
       return false;
     }
-    awaiting.settle({ outcome: report.outcome, detail: report.detail ?? this.#defaultDetail(report.outcome) });
+    awaiting.settle({ outcome: report.outcome, detail: report.detail ?? this.#defaultDetail(report.outcome), output: report.output });
+    return true;
+  }
+
+  output(device: DeviceRef, chunk: StepOutputChunk): boolean {
+    const awaiting = this.#reports.get(chunk.command_id);
+    if (awaiting === undefined || awaiting.deviceId !== device.id) {
+      return false;
+    }
+    this.#options.publishOutput(awaiting.accountId, awaiting.commandId, awaiting.taskId, awaiting.stepId, chunk.sequence, chunk.text);
     return true;
   }
 
@@ -97,7 +127,7 @@ export class TaskRunner {
   deviceLost(deviceId: string): void {
     for (const awaiting of [...this.#reports.values()]) {
       if (awaiting.deviceId === deviceId) {
-        awaiting.settle({ outcome: "failed", detail: `${awaiting.targetName} went offline before this step finished.` });
+        awaiting.settle({ outcome: "failed", detail: `${awaiting.targetName} went offline before this step finished.`, output: null });
       }
     }
   }
@@ -110,7 +140,11 @@ export class TaskRunner {
         return;
       }
       if (next.kind === "finished") {
-        this.#publish(accountId, requestId, await tasks.complete(accountId, taskId, requestId));
+        const completed = await tasks.complete(accountId, taskId, requestId);
+        this.#publish(accountId, requestId, completed);
+        if (completed !== null) {
+          await this.#say(completed, "report", doneWords(completed), null);
+        }
         return;
       }
       if (next.kind === "come_back") {
@@ -127,9 +161,13 @@ export class TaskRunner {
         continue;
       }
       this.#publish(accountId, requestId, started);
-      const { outcome, detail } = await this.#deliver(accountId, taskId, step);
-      this.#publish(accountId, requestId, await tasks.finish(accountId, step.id, outcome, detail, requestId));
+      const { outcome, detail, output } = await this.#deliver(accountId, taskId, step);
+      const finished = await tasks.finish(accountId, step.id, outcome, detail, requestId, output);
+      this.#publish(accountId, requestId, finished);
       if (outcome !== "done") {
+        if (finished?.status === "failed") {
+          await this.#say(finished, "report", failedWords(finished, step.id, detail), null);
+        }
         return;
       }
     }
@@ -144,6 +182,7 @@ export class TaskRunner {
         if (asked !== null) {
           this.#publish(accountId, requestId, asked.task);
           this.#options.publishConfirmation(accountId, requestId, asked.request, null);
+          await this.#say(asked.task, "question", questionWords(asked.request, step.action), step.id);
         }
       }
       const now = await tasks.next(accountId, taskId);
@@ -158,24 +197,32 @@ export class TaskRunner {
   async #deliver(accountId: string, taskId: string, step: NextStep): Promise<Outcome> {
     const { signer, hub } = this.#options;
     if (!hub.canAct(step.targetDeviceId)) {
-      return { outcome: "failed", detail: `${step.targetName} is not connected, so this step could not run.` };
+      return { outcome: "failed", detail: `${step.targetName} is not connected, so this step could not run.`, output: null };
     }
     const { commandId, frame } = signer.issue(
       { id: step.targetDeviceId, account_id: accountId },
-      { kind: "run_step", task_id: taskId, step_id: step.id, action: step.action },
+      { kind: "run_step", task_id: taskId, step_id: step.id, action: step.action, confirmed: step.requiresConfirmation && step.approved },
     );
     return new Promise<Outcome>((resolve) => {
-      const timer = setTimeout(() => settle({ outcome: "failed", detail: `${step.targetName} did not report back in time.` }), durationMs(step.action) + this.#graceMs);
+      const timer = setTimeout(() => settle({ outcome: "failed", detail: `${step.targetName} did not report back in time.`, output: null }), durationMs(step.action) + this.#graceMs);
       const settle = (outcome: Outcome) => {
         clearTimeout(timer);
         this.#reports.delete(commandId);
         resolve(outcome);
       };
-      this.#reports.set(commandId, { deviceId: step.targetDeviceId, targetName: step.targetName, settle });
+      this.#reports.set(commandId, { commandId, accountId, taskId, stepId: step.id, deviceId: step.targetDeviceId, targetName: step.targetName, settle });
       if (hub.sendCommand(step.targetDeviceId, frame) === 0) {
-        settle({ outcome: "failed", detail: `${step.targetName} is not connected, so this step could not run.` });
+        settle({ outcome: "failed", detail: `${step.targetName} is not connected, so this step could not run.`, output: null });
       }
     });
+  }
+
+  async #say(task: Task, kind: SaidKind, text: string, stepId: string | null): Promise<void> {
+    try {
+      await this.#options.say(task, kind, text, stepId);
+    } catch (error) {
+      this.#options.log.error({ err: error, task_id: task.id }, "could not tell the chat about this task");
+    }
   }
 
   #publish(accountId: string, requestId: string, task: Task | null): void {
@@ -200,7 +247,7 @@ export class TaskRunner {
   #shutdown(): void {
     this.wakeAll();
     for (const awaiting of [...this.#reports.values()]) {
-      awaiting.settle({ outcome: "failed", detail: "VENOM's gateway stopped before this step finished." });
+      awaiting.settle({ outcome: "failed", detail: "VENOM's gateway stopped before this step finished.", output: null });
     }
   }
 }

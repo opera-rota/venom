@@ -71,6 +71,9 @@ type CommandOutcome = Literal["done", "stopped", "failed", "refused"]
 type Detail = Annotated[str, Field(max_length=300, min_length=1)]
 
 
+type Output = Annotated[str, Field(max_length=16000, min_length=1)]
+
+
 class CommandReport(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -78,6 +81,7 @@ class CommandReport(BaseModel):
     command_id: UUID
     outcome: CommandOutcome
     detail: Detail | None
+    output: Output | None
 
 
 type DeviceName = Annotated[str, Field(max_length=80, min_length=1)]
@@ -195,6 +199,9 @@ type MemoryStatus = Literal["active", "archived", "forgotten"]
 type MemoryType = Literal["fact", "preference", "event"]
 
 
+type MessageKind = Literal["text", "plan", "question", "report"]
+
+
 type MessageText = Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
 
 
@@ -206,12 +213,16 @@ type OpaqueMessage = Annotated[
 ]
 
 
+type Open = Annotated[str, Field(max_length=400, min_length=1, pattern="\\S")]
+
+
 class OpenAppAction(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     name: Literal["open_app"]
     app: Annotated[str, Field(max_length=80, min_length=1, pattern="\\S")]
+    open: Open | None
 
 
 type Failure = Annotated[str, Field(min_length=1)]
@@ -310,6 +321,13 @@ type Risk = Literal["low", "medium", "high"]
 type RouteMethod = Literal["device_action", "connector", "script"]
 
 
+class RunPlan(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["run"]
+
+
 type ScriptLanguage = Literal["powershell", "python"]
 
 
@@ -355,7 +373,7 @@ class SignedCommand(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    payload: Annotated[str, Field(max_length=4096, min_length=2)]
+    payload: Annotated[str, Field(max_length=16384, min_length=2)]
     signature: Signature
 
 
@@ -394,6 +412,29 @@ type Speaker = Literal["user", "venom"]
 
 
 type StepAction = Literal["wait", "open_app", "type_text", "click", "run_script", "take_screenshot", "call_connector"]
+
+
+class StepOutputChunk(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    command_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=999)]
+    text: Annotated[str, Field(max_length=4000, min_length=1)]
+
+
+class StepOutputEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["step_output"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    task_id: UUID
+    step_id: UUID
+    chunk: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: Annotated[str, Field(max_length=4000, min_length=1)]
 
 
 type StepStatus = Literal["pending", "waiting", "running", "done", "failed", "skipped", "stopped", "ignored"]
@@ -662,9 +703,6 @@ class Device(BaseModel):
     last_seen_at: AwareDatetime | None
 
 
-type DeviceAction = Annotated[WaitAction, Field(discriminator="name")]
-
-
 class DeviceInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -818,8 +856,10 @@ class Message(BaseModel):
     account_id: UUID
     device_id: UUID
     speaker: Speaker
+    kind: MessageKind
     text: Annotated[str, Field(min_length=1)]
     task_id: UUID | None
+    step_id: UUID | None
     created_at: AwareDatetime
 
 
@@ -949,16 +989,6 @@ class RunScriptAction(BaseModel):
     code: Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
 
 
-class RunStepCommand(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    kind: Literal["run_step"]
-    task_id: UUID
-    step_id: UUID
-    action: DeviceAction
-
-
 class SafetySettings(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -997,7 +1027,7 @@ class StopSignal(BaseModel):
 
 
 type TaskControl = Annotated[
-    ResumeTask | RetryStep | SkipStep | IgnoreStep | RestoreStep | DiscardPlan,
+    RunPlan | ResumeTask | RetryStep | SkipStep | IgnoreStep | RestoreStep | DiscardPlan,
     Field(discriminator="kind"),
 ]
 
@@ -1043,21 +1073,6 @@ class AttachConfirm(BaseModel):
     device: DeviceInfo
 
 
-type CommandBody = Annotated[RunStepCommand | StopCommand, Field(discriminator="kind")]
-
-
-class CommandPayload(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    command_id: UUID
-    account_id: UUID
-    device_id: UUID
-    issued_at: AwareDatetime
-    expires_at: AwareDatetime
-    body: CommandBody
-
-
 class ConfirmationEvent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1068,6 +1083,12 @@ class ConfirmationEvent(BaseModel):
     emitted_at: AwareDatetime
     request: ConfirmRequest
     answered: ConfirmationAnswered | None
+
+
+type DeviceAction = Annotated[
+    WaitAction | OpenAppAction | TypeTextAction | ClickAction | RunScriptAction | TakeScreenshotAction,
+    Field(discriminator="name"),
+]
 
 
 class DeviceSession(BaseModel):
@@ -1155,6 +1176,17 @@ type ReasoningEvent = Annotated[
 ]
 
 
+class RunStepCommand(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["run_step"]
+    task_id: UUID
+    step_id: UUID
+    action: DeviceAction
+    confirmed: bool
+
+
 class Session(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1179,7 +1211,7 @@ class Step(BaseModel):
     reversible: bool
     on_failure: FailurePolicy
     status: StepStatus
-    output: str | None
+    output: Output | None
     set_aside_reason: SetAsideReason | None
     repeatable: bool
 
@@ -1258,6 +1290,21 @@ type TurnEvent = Annotated[
 ]
 
 
+type CommandBody = Annotated[RunStepCommand | StopCommand, Field(discriminator="kind")]
+
+
+class CommandPayload(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    command_id: UUID
+    account_id: UUID
+    device_id: UUID
+    issued_at: AwareDatetime
+    expires_at: AwareDatetime
+    body: CommandBody
+
+
 class HaltEvent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1296,12 +1343,12 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | OpenAppAction | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunScriptAction | RunStepCommand | SafetySettings | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | Step | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | OpenAppAction | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 
 
 type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | HaltEvent,
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | HaltEvent,
     Field(discriminator="type"),
 ]

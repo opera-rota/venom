@@ -22,6 +22,7 @@ import {
   TaskList,
   type Capabilities,
   type CommandReport,
+  type StepOutputChunk,
   type ConfirmDecision,
   type ConfirmationStrictness,
   type DrillKind,
@@ -362,6 +363,11 @@ export class GatewayClient {
 
   async report(report: CommandReport): Promise<StepResult> {
     const result = await this.#api.request("POST", "/v1/commands/report", { body: report, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async output(chunk: StepOutputChunk): Promise<StepResult> {
+    const result = await this.#api.request("POST", "/v1/commands/output", { body: chunk, token: this.#token });
     return result.ok ? { ok: true } : result;
   }
 

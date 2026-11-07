@@ -18,7 +18,7 @@ function device(n: number, overrides: Partial<Device> = {}): Device {
   };
 }
 
-const openNotepad: DraftStep = { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad" }, effects: [], reversible: true };
+const openNotepad: DraftStep = { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad", open: null }, effects: [], reversible: true };
 const saveScript: DraftStep = {
   summary: "Save the list on the desktop",
   spec: { name: "run_script", language: "powershell", purpose: "Save the list as a file", code: "Set-Content list.txt 'Milk'" },
@@ -61,14 +61,28 @@ describe("the router decides where a plan runs and what its steps really do", ()
     expect(routing).toMatchObject({ kind: "routed", plan: { target: { id: newer.id }, elsewhere: true, missing: null } });
   });
 
-  it("keeps the plan on this computer and says what it cannot do yet when no computer can control its screen", () => {
+  it("keeps the plan on this computer and says what it cannot do yet when no computer has working hands", () => {
     const blind = device(1, { capabilities: { ...here.capabilities, screen_control: false } });
     const routing = route(plan(openNotepad), { origin: blind, devices: [blind], connectors: [] });
     expect(routing).toMatchObject({
       kind: "routed",
-      plan: { target: { id: blind.id }, elsewhere: false, missing: "Computer 1 cannot control its screen yet, so this plan cannot run there yet." },
+      plan: { target: { id: blind.id }, elsewhere: false, missing: "Computer 1 has no working hands right now, so this plan cannot run there yet." },
     });
-    expect(route(plan(saveScript), { origin: blind, devices: [blind], connectors: [] })).toMatchObject({ plan: { missing: null } });
+    expect(route(plan(saveScript), { origin: blind, devices: [blind], connectors: [] })).toMatchObject({
+      plan: { missing: "Computer 1 has no working hands right now, so this plan cannot run there yet." },
+    });
+    expect(route(plan({ summary: "Wait", spec: { name: "wait", seconds: 5 }, effects: [], reversible: true }), { origin: blind, devices: [blind], connectors: [] })).toMatchObject({
+      plan: { missing: null },
+    });
+  });
+
+  it("counts opening a web address as reaching outside, and a folder on this computer as not", () => {
+    const step = (open: string): DraftStep => ({ summary: "Open it", spec: { name: "open_app", app: "Chrome", open }, effects: [], reversible: true });
+    const routing = route(plan(step("wikipedia.org"), step("https://example.com"), step("Downloads"), step("C:\\Users\\me\\list.txt")), fleet);
+    if (routing.kind !== "routed") {
+      throw new Error("expected a routed plan");
+    }
+    expect(routing.plan.steps.map((routed) => routed.effects)).toEqual([["reaches_outside"], ["reaches_outside"], [], []]);
   });
 
   it("plans on a computer when asked from a phone", () => {

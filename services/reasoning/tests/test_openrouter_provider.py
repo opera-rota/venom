@@ -158,11 +158,23 @@ async def test_accepts_the_shape_written_as_text_by_a_model_that_ignores_the_fun
     assert final.text == '{"kind": "task"}'
 
 
-@pytest.mark.parametrize("content", [None, "", "It is a task.", "Sure! {\"kind\": \"task\"}"])
-async def test_refuses_an_answer_in_words(content: str | None) -> None:
+@pytest.mark.parametrize("content", [None, "", "   "])
+async def test_refuses_an_empty_answer(content: str | None) -> None:
     with pytest.raises(ReasoningError) as raised:
         await collect(provider(written(content), []), call({"type": "object"}))
     assert raised.value.reason == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    ("content", "passed"),
+    [("Sure! {\"kind\": \"task\"}", '{"kind": "task"}'), ("It is a task.", "It is a task.")],
+)
+async def test_passes_a_written_answer_on_for_the_reasoner_to_judge(content: str, passed: str) -> None:
+    events = await collect(provider(written(content), []), call({"type": "object"}))
+
+    final = events[-1]
+    assert isinstance(final, Completion)
+    assert final.text == passed
 
 
 def test_sends_a_schema_every_provider_reads() -> None:

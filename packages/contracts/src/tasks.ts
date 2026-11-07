@@ -23,12 +23,16 @@ export const RestoreStep = z
   .strictObject({ kind: z.literal("restore"), step_id: Id })
   .register(contracts, { id: "RestoreStep" });
 
+export const RunPlan = z
+  .strictObject({ kind: z.literal("run") })
+  .register(contracts, { id: "RunPlan" });
+
 export const DiscardPlan = z
   .strictObject({ kind: z.literal("discard") })
   .register(contracts, { id: "DiscardPlan" });
 
 export const TaskControl = z
-  .discriminatedUnion("kind", [ResumeTask, RetryStep, SkipStep, IgnoreStep, RestoreStep, DiscardPlan])
+  .discriminatedUnion("kind", [RunPlan, ResumeTask, RetryStep, SkipStep, IgnoreStep, RestoreStep, DiscardPlan])
   .register(contracts, { id: "TaskControl" });
 
 export type ResumeTask = z.infer<typeof ResumeTask>;
@@ -36,5 +40,6 @@ export type RetryStep = z.infer<typeof RetryStep>;
 export type SkipStep = z.infer<typeof SkipStep>;
 export type IgnoreStep = z.infer<typeof IgnoreStep>;
 export type RestoreStep = z.infer<typeof RestoreStep>;
+export type RunPlan = z.infer<typeof RunPlan>;
 export type DiscardPlan = z.infer<typeof DiscardPlan>;
 export type TaskControl = z.infer<typeof TaskControl>;

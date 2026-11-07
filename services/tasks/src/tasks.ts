@@ -77,7 +77,7 @@ export interface Tasks {
   ask(accountId: string, stepId: string, requestId: string): Promise<Asked | null>;
   answer(device: DeviceRef, taskId: string, stepId: string, decision: ConfirmDecision, requestId: string): Promise<Answered>;
   start(accountId: string, stepId: string, requestId: string): Promise<Task | null>;
-  finish(accountId: string, stepId: string, outcome: CommandOutcome, detail: string, requestId: string): Promise<Task | null>;
+  finish(accountId: string, stepId: string, outcome: CommandOutcome, detail: string, requestId: string, output?: string | null): Promise<Task | null>;
   complete(accountId: string, taskId: string, requestId: string): Promise<Task | null>;
   control(device: DeviceRef, taskId: string, control: TaskControl, requestId: string): Promise<Controlled>;
   stop(device: DeviceRef, request: StopRequest, requestId: string): Promise<Stopped>;
@@ -289,8 +289,17 @@ function runnable(step: StepRow): boolean {
   return DeviceAction.safeParse({ ...step.params, name: step.action }).success;
 }
 
-function detailsOf({ name: _name, ...details }: ActionSpec): Record<string, string | number> {
+function detailsOf({ name: _name, ...details }: ActionSpec): Record<string, string | number | null> {
   return details;
+}
+
+function onlyPlanned(task: TaskRow, steps: readonly StepRow[]): boolean {
+  return task.status === "planned" || (task.status === "cancelled" && steps.every((step) => step.status === "pending" && step.answered_at === null));
+}
+
+function withOutput(detail: string, output: string | null): string {
+  const whole = output === null || output.trim().length === 0 ? detail : `${detail}\n\n${output.trimEnd()}`;
+  return whole.length <= safetyLimits.stepOutput ? whole : `${whole.slice(0, safetyLimits.stepOutput - 1)}…`;
 }
 
 async function holdActiveSlot(db: TransactionSql, accountId: string): Promise<void> {
@@ -507,7 +516,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         const [step] = await tx<{ task_id: string }[]>`
           update steps s set status = 'waiting', asked_at = clock_timestamp()
           from tasks t
-          where s.id = ${stepId} and s.account_id = ${accountId} and s.status = 'pending' and s.requires_confirmation and s.answered_at is null
+          where s.id = ${stepId} and s.account_id = ${accountId} and s.status = 'pending' and s.answered_at is null
             and t.id = s.task_id and t.status = 'running'
           returning s.task_id
         `;
@@ -582,6 +591,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           from tasks t
           where s.id = ${stepId} and s.account_id = ${accountId} and s.status = 'pending'
             and (not s.requires_confirmation or s.answered_at is not null)
+            and (s.action <> 'run_script' or s.answered_at is not null)
             and t.id = s.task_id and t.status = 'running'
           returning s.task_id
         `;
@@ -593,13 +603,13 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
       });
     },
 
-    async finish(accountId, stepId, outcome, detail, requestId) {
+    async finish(accountId, stepId, outcome, detail, requestId, output = null) {
       return sql.begin(async (tx) => {
         const status = finishedAs[outcome];
         const [step] = await tx<{ task_id: string }[]>`
           update steps s
           set status = case when ${status} = 'failed' and t.status = 'stopped' then 'stopped' else ${status} end,
-              output = ${detail},
+              output = ${withOutput(detail, output)},
               finished_at = clock_timestamp()
           from tasks t
           where s.id = ${stepId} and s.account_id = ${accountId} and s.status = 'running' and t.id = s.task_id
@@ -647,8 +657,30 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           await audit(tx, device, requestId, "user", "task.discarded", task.id);
           return { task: await settled(tx, device.account_id, task.id), run: false };
         }
-        if ((control.kind === "resume" || control.kind === "retry") && (task.status === "planned" || steps.some((step) => !runnable(step)))) {
-          throw refuseTasks.cannotRunYet();
+        if (control.kind === "run") {
+          if (task.status !== "planned") {
+            throw onlyPlanned(task, steps) ? refuseTasks.discarded() : refuseTasks.notAPlan();
+          }
+          const blocked = steps.find((step) => !runnable(step));
+          if (blocked !== undefined) {
+            throw refuseTasks.needsService(blocked.position);
+          }
+          await holdActiveSlot(tx, device.account_id);
+          await tx`update tasks set status = 'running', updated_at = clock_timestamp() where id = ${task.id}`;
+          await audit(tx, device, requestId, "user", "task.started", task.id, { steps: steps.length });
+          return { task: await settled(tx, device.account_id, task.id), run: true };
+        }
+        if (control.kind === "resume" || control.kind === "retry") {
+          if (task.status === "planned") {
+            throw refuseTasks.planNotStarted();
+          }
+          if (onlyPlanned(task, steps)) {
+            throw refuseTasks.discarded();
+          }
+          const blocked = steps.find((step) => !runnable(step));
+          if (blocked !== undefined) {
+            throw refuseTasks.needsService(blocked.position);
+          }
         }
         if (control.kind === "resume") {
           return resume(tx, device, task, steps, requestId);

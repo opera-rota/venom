@@ -1,6 +1,6 @@
 import { progressOf, type ConfirmRequest, type GatewayEvent, type Task } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
-import { initialTasks, reduceTasks, taskCount, taskGroups, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
+import { initialTasks, liveOutput, reduceTasks, taskCount, taskGroups, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
 
 const accountId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01";
 const deviceId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02";
@@ -94,6 +94,14 @@ describe("tasks state follows the cloud", () => {
     expect(state.queue).toEqual([]);
     expect(state.halted?.stop_id).toBe(stepId);
     expect(taskInView(state)?.status).toBe("stopped");
+  });
+
+  it("puts live script output together in order, once, whatever order it arrives in", () => {
+    const piece = (chunk: number, text: string): SafetyEvent => ({ type: "step_output", ...stamp, task_id: taskId, step_id: stepId, chunk, text });
+    const state = play([piece(1, "second\n"), piece(0, "first\n"), piece(1, "second\n"), piece(2, "third\n")]);
+    expect(liveOutput(state, stepId)).toBe("first\nsecond\nthird\n");
+    expect(liveOutput(state, otherDevice)).toBeNull();
+    expect(liveOutput(reduceTasks(state, { type: "list", list: { tasks: [], confirmations: [] } }), stepId)).toBe("first\nsecond\nthird\n");
   });
 
   it("does not bring back tasks that ended before the window opened, but shows open ones", () => {

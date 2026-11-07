@@ -1,0 +1,18 @@
+{
+  "command_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e43",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "issued_at": "2026-11-03T19:01:03.000Z",
+  "expires_at": "2026-11-03T19:01:33.000Z",
+  "body": {
+    "kind": "run_step",
+    "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+    "step_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
+    "action": {
+      "name": "open_app",
+      "app": "Chrome",
+      "open": "wikipedia.org"
+    },
+    "confirmed": true
+  }
+}

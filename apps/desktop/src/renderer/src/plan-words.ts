@@ -30,7 +30,7 @@ export function howItRuns(spec: ActionSpec): string {
     case "wait":
       return `Waits ${spec.seconds} ${spec.seconds === 1 ? "second" : "seconds"}`;
     case "open_app":
-      return `Opens ${spec.app}`;
+      return spec.open === null ? `Opens ${spec.app}` : `Opens ${spec.app} on ${spec.open}`;
     case "type_text":
       return `Types ${quoted(spec.text)} into ${spec.into}`;
     case "click":
@@ -44,8 +44,8 @@ export function howItRuns(spec: ActionSpec): string {
   }
 }
 
-export function whyItAsks(step: Pick<Step, "effects" | "reversible">): string {
-  const reasons = step.effects.map((effect) => effectReasons[effect]);
+export function whyItAsks(step: Pick<Step, "action" | "effects" | "reversible">): string {
+  const reasons = [...(step.action === "run_script" ? ["it runs a script"] : []), ...step.effects.map((effect) => effectReasons[effect])];
   if (reasons.length === 0) {
     return step.reversible ? "Asks you first" : "Asks you first because it cannot be undone";
   }

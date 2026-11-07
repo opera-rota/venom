@@ -133,6 +133,14 @@ export function confirmationEvent(requestId: string, request: ConfirmRequest, an
   return GatewayEvent.parse({ type: "confirmation", ...stamp(requestId, 0), request, answered });
 }
 
+export function messageEvent(requestId: string, message: Message): GatewayEvent {
+  return GatewayEvent.parse({ type: "message", ...stamp(requestId, 0), message });
+}
+
+export function stepOutputEvent(requestId: string, taskId: string, stepId: string, chunk: number, text: string): GatewayEvent {
+  return GatewayEvent.parse({ type: "step_output", ...stamp(requestId, chunk), task_id: taskId, step_id: stepId, chunk, text });
+}
+
 export function haltEvent(requestId: string, receipt: StopReceipt): GatewayEvent {
   return GatewayEvent.parse({ type: "halt", ...stamp(requestId, 0), ...receipt });
 }

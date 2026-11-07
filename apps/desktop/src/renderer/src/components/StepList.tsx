@@ -135,7 +135,7 @@ export function StepList({ task, deviceId, devices, controls, compact = false }:
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className={`text-[13px] ${step.status === "ignored" ? "text-ink-faint line-through" : "text-ink"}`}>{step.summary}</span>
                 {!compact && <span className={`${text.support} break-words`}>{howItRuns(step.spec)}</span>}
-                {step.output !== null && <span className={text.support}>{step.output}</span>}
+                {step.output !== null && <span className={`${text.support} max-h-40 overflow-auto whitespace-pre-wrap break-words`}>{step.output}</span>}
                 {step.set_aside_reason !== null && (
                   <span className={text.support}>
                     {step.status === "ignored" ? "Ignored" : "Skipped for later"}: {step.set_aside_reason}
@@ -144,7 +144,7 @@ export function StepList({ task, deviceId, devices, controls, compact = false }:
                 {(showRoute || step.requires_confirmation) && (
                   <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     {showRoute && <span className={`${text.detail} text-ink-faint`}>{routeTag(stepTarget, deviceId, devices)}</span>}
-                    {step.requires_confirmation && <span className={`${mark.caution} max-w-full whitespace-normal`}>{whyItAsks(step)}</span>}
+                    {step.requires_confirmation && <span className={mark.reason}>{whyItAsks(step)}</span>}
                   </span>
                 )}
               </span>

@@ -29,7 +29,7 @@ async function device(): Promise<DeviceRef> {
 }
 
 const steps: readonly RoutedStep[] = [
-  { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad" }, effects: [], reversible: true },
+  { summary: "Open Notepad", spec: { name: "open_app", app: "Notepad", open: null }, effects: [], reversible: true },
   { summary: "Type the shopping list", spec: { name: "type_text", text: "Milk, bread, eggs", into: "the Notepad window" }, effects: [], reversible: true },
   { summary: "Delete last week's list", spec: { name: "click", on: "the Delete button" }, effects: ["deletes"], reversible: false },
   { summary: "Pay for the groceries", spec: { name: "click", on: "the Pay now button" }, effects: ["pays"], reversible: false },
@@ -78,21 +78,64 @@ describe("a plan is saved as a task that has not started", () => {
     expect(await tasks.settings(here.account_id)).toEqual(saved);
   });
 
-  it("discards a plan once, and never runs one yet", async () => {
+  it("runs a plan once, and never runs a discarded plan", async () => {
     const here = await device();
-    const task = await tasks.plan(here, "Write my shopping list", routed(here), uuidv7());
-
-    await expect(tasks.control(here, task.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({
+    const first = await tasks.plan(here, "Write my shopping list", routed(here), uuidv7());
+    await expect(tasks.control(here, first.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({
       statusCode: 409,
-      message: "I cannot run planned steps yet. That arrives with VENOM's hands on the computer.",
+      message: "This plan has not started yet. Press Run it to start it.",
     });
-    const { task: discarded, run } = await tasks.control(here, task.id, { kind: "discard" }, uuidv7());
-    expect([discarded.status, discarded.result, run]).toEqual(["cancelled", "Discarded. Nothing ran.", false]);
-    await expect(tasks.control(here, task.id, { kind: "discard" }, uuidv7())).rejects.toMatchObject({ statusCode: 409 });
-    await expect(tasks.control(here, task.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({
-      message: "I cannot run planned steps yet. That arrives with VENOM's hands on the computer.",
+    const { task: started, run } = await tasks.control(here, first.id, { kind: "run" }, uuidv7());
+    expect([started.status, run]).toEqual(["running", true]);
+    await expect(tasks.control(here, first.id, { kind: "run" }, uuidv7())).rejects.toMatchObject({
+      message: "Only a plan that has not started can be run. A stopped task can be resumed instead.",
     });
-    expect((await tasks.get(here.account_id, task.id))?.status).toBe("cancelled");
+    expect(await tasks.next(here.account_id, first.id)).toMatchObject({
+      kind: "step",
+      step: { action: { name: "open_app", app: "Notepad", open: null }, requiresConfirmation: false },
+    });
+    await tasks.stop(here, { stop_id: uuidv7(), scope: { kind: "all" } }, uuidv7());
+
+    const second = await tasks.plan(here, "Write my shopping list", routed(here), uuidv7());
+    const { task: discarded, run: ran } = await tasks.control(here, second.id, { kind: "discard" }, uuidv7());
+    expect([discarded.status, discarded.result, ran]).toEqual(["cancelled", "Discarded. Nothing ran.", false]);
+    await expect(tasks.control(here, second.id, { kind: "discard" }, uuidv7())).rejects.toMatchObject({ statusCode: 409 });
+    for (const kind of ["resume", "run"] as const) {
+      await expect(tasks.control(here, second.id, { kind }, uuidv7())).rejects.toMatchObject({
+        message: "This plan was discarded, so it will not run. Ask me again for a new plan.",
+      });
+    }
+    expect((await tasks.get(here.account_id, second.id))?.status).toBe("cancelled");
+  });
+
+  it("refuses to run a plan that needs a service that is not connected", async () => {
+    const here = await device();
+    const email: RoutedStep = { summary: "Email the list", spec: { name: "call_connector", service: "mail", operation: "send an email", details: "To Alex" }, effects: ["reaches_outside"], reversible: false };
+    const task = await tasks.plan(here, "Email my list", { ...routed(here), steps: [email] }, uuidv7());
+    await expect(tasks.control(here, task.id, { kind: "run" }, uuidv7())).rejects.toMatchObject({
+      message: "Step 1 needs a connected service, and connecting services is not possible yet. Nothing was done.",
+    });
+    expect((await tasks.get(here.account_id, task.id))?.status).toBe("planned");
+  });
+
+  it("never starts a script before a yes, even when an older plan saved it as not asking", async () => {
+    const here = await device();
+    const script: RoutedStep = { summary: "List the files", spec: { name: "run_script", language: "powershell", purpose: "List the files", code: "Get-ChildItem" }, effects: [], reversible: false };
+    const task = await tasks.plan(here, "List my files", { ...routed(here), steps: [script] }, uuidv7());
+    const stepId = task.plan[0]?.id ?? "";
+    expect(task.plan[0]?.requires_confirmation).toBe(true);
+    await owner`update steps set requires_confirmation = false where id = ${stepId}`;
+    await tasks.control(here, task.id, { kind: "run" }, uuidv7());
+
+    expect(await tasks.next(here.account_id, task.id)).toMatchObject({ kind: "step", step: { id: stepId, requiresConfirmation: true, approved: false } });
+    expect(await tasks.start(here.account_id, stepId, uuidv7())).toBeNull();
+    expect((await tasks.ask(here.account_id, stepId, uuidv7()))?.request.step_id).toBe(stepId);
+    await tasks.answer(here, task.id, stepId, "approve", uuidv7());
+    expect((await tasks.start(here.account_id, stepId, uuidv7()))?.plan[0]?.status).toBe("running");
+
+    const finished = await tasks.finish(here.account_id, stepId, "done", "The script finished.", uuidv7(), "notes.txt\nlist.txt\n");
+    expect(finished?.plan[0]?.output).toBe("The script finished.\n\nnotes.txt\nlist.txt");
+    expect((await tasks.complete(here.account_id, task.id, uuidv7()))?.result).toBe("Finished. 1 step done.");
   });
 
   it("only lets a running task be discarded by stopping it, never by discard", async () => {

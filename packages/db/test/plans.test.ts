@@ -49,12 +49,12 @@ describe("a reply that carries a plan", () => {
     const theirs = await plannedTask(stranger);
     const ours = await plannedTask(account);
     await expect(app`
-      insert into messages (account_id, device_id, request_id, speaker, text, task_id)
-      values (${account.accountId}, ${account.deviceId}, ${requestId}, 'venom', 'Plan', ${theirs})
+      insert into messages (account_id, device_id, request_id, speaker, kind, text, task_id)
+      values (${account.accountId}, ${account.deviceId}, ${requestId}, 'venom', 'plan', 'Plan', ${theirs})
     `).rejects.toMatchObject({ code: "23503" });
     await expect(app`
-      insert into messages (account_id, device_id, request_id, speaker, text, task_id)
-      values (${account.accountId}, ${account.deviceId}, ${requestId}, 'user', 'Plan', ${ours})
+      insert into messages (account_id, device_id, request_id, speaker, kind, text, task_id)
+      values (${account.accountId}, ${account.deviceId}, ${requestId}, 'user', 'plan', 'Plan', ${ours})
     `).rejects.toMatchObject({ code: "23514" });
   });
 });

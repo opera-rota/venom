@@ -11,6 +11,7 @@
     "action": {
       "name": "shell",
       "command": "del everything"
-    }
+    },
+    "confirmed": false
   }
 }

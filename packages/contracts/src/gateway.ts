@@ -141,6 +141,17 @@ export const ConfirmationEvent = z
   })
   .register(contracts, { id: "ConfirmationEvent" });
 
+export const StepOutputEvent = z
+  .strictObject({
+    type: z.literal("step_output"),
+    ...eventFields,
+    task_id: Id,
+    step_id: Id,
+    chunk: z.int().nonnegative(),
+    text: z.string().min(1).max(4000),
+  })
+  .register(contracts, { id: "StepOutputEvent" });
+
 export const HaltEvent = z
   .strictObject({
     type: z.literal("halt"),
@@ -162,6 +173,7 @@ export const GatewayEvent = z
     ForgottenEvent,
     TaskEvent,
     ConfirmationEvent,
+    StepOutputEvent,
     HaltEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
@@ -183,5 +195,6 @@ export type MemoryEvent = z.infer<typeof MemoryEvent>;
 export type ForgottenEvent = z.infer<typeof ForgottenEvent>;
 export type TaskEvent = z.infer<typeof TaskEvent>;
 export type ConfirmationEvent = z.infer<typeof ConfirmationEvent>;
+export type StepOutputEvent = z.infer<typeof StepOutputEvent>;
 export type HaltEvent = z.infer<typeof HaltEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

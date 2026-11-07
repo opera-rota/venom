@@ -9,6 +9,7 @@ import { loadConfig } from "./config.ts";
 import { describeThisComputer } from "./device-info.ts";
 import { GatewayClient } from "./gateway-client.ts";
 import { HaltController } from "./halt.ts";
+import { HandHelper } from "./hand-helper.ts";
 import { Hands } from "./hands.ts";
 import { Onboarding } from "./onboarding.ts";
 import { expiredNotice, removedNotice, SessionManager } from "./session-manager.ts";
@@ -21,6 +22,7 @@ if (config.profile !== null) {
 }
 
 const appIcon = join(import.meta.dirname, "../../resources/icon.png");
+const handsScript = join(import.meta.dirname, "../../hands/venom-hands.ps1");
 
 if (process.platform === "win32") {
   app.setAppUserModelId(config.profile === null ? "com.venom.desktop" : `com.venom.desktop.${config.profile}`);
@@ -108,15 +110,35 @@ function wire(): void {
       return sessions.trust;
     },
   });
+  const helper = process.platform === "win32" ? new HandHelper({ script: handsScript, log: (line) => console.warn(`[venom hands] ${line}`) }) : null;
+  let screen = false;
   const hands = new Hands({
     trust: () => sessions.trust,
     report: (report) => gateway.report(report),
+    output: (chunk) => gateway.output(chunk),
     refused: (reason) => console.warn(`[venom] ${reason}`),
+    worker: helper,
   });
   const halt = new HaltController({ send: (stopId) => gateway.halt(stopId), haltLocally: () => hands.haltAll() });
-  const device = () => describeThisComputer(config.profile);
+  const device = () => describeThisComputer(config.profile, screen);
   const onboarding = new Onboarding({ api, device, complete: (session) => sessions.signIn(session) });
   let reported: string | null = null;
+
+  const reportCapabilities = () => {
+    const view = sessions.view;
+    if (gateway.state === "online" && view.kind === "signed_in") {
+      reported = view.device.id;
+      void gateway.reportCapabilities(view.device.id, device().capabilities);
+    }
+  };
+
+  void helper?.start().then(
+    (hello) => {
+      screen = hello.screen;
+      reportCapabilities();
+    },
+    (error: unknown) => console.warn(`[venom hands] ${error instanceof Error ? error.message : String(error)}`),
+  );
 
   const follow = (view: AuthView) => {
     broadcast(channels.authChanged, view);
@@ -137,8 +159,7 @@ function wire(): void {
     broadcast(channels.connectionChanged, state);
     const view = sessions.view;
     if (state === "online" && view.kind === "signed_in" && reported !== view.device.id) {
-      reported = view.device.id;
-      void gateway.reportCapabilities(view.device.id, device().capabilities);
+      reportCapabilities();
       void sessions.refresh();
     }
   });
@@ -208,6 +229,7 @@ function wire(): void {
   app.on("before-quit", () => {
     halt.close();
     gateway.stop();
+    helper?.stop();
   });
   app.on("will-quit", () => globalShortcut.unregisterAll());
   void sessions.start();

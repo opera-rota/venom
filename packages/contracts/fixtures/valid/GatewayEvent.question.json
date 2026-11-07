@@ -1,0 +1,17 @@
+{
+  "type": "message",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e46",
+  "sequence": 1,
+  "emitted_at": "2026-11-03T19:00:02.000Z",
+  "message": {
+    "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e47",
+    "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+    "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+    "speaker": "venom",
+    "kind": "question",
+    "text": "Next I would run a PowerShell script on RS-APP-CED: List the five biggest files in the work folder. A script cannot be undone. You sure, buddy? Say yes or no.",
+    "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+    "step_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
+    "created_at": "2026-11-03T19:00:02.000Z"
+  }
+}

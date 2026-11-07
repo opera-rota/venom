@@ -7,7 +7,7 @@ const platforms: Partial<Record<NodeJS.Platform, Platform>> = {
   linux: "linux",
 };
 
-export function describeThisComputer(profile: string | null): DeviceInfo {
+export function describeThisComputer(profile: string | null, screen = false): DeviceInfo {
   const host = hostname().trim() || "Computer";
   const name = profile === null ? host : `${host} (${profile})`;
 
@@ -16,7 +16,7 @@ export function describeThisComputer(profile: string | null): DeviceInfo {
     name: name.slice(0, 80),
     platform: platforms[process.platform] ?? "linux",
     capabilities: {
-      screen_control: false,
+      screen_control: screen,
       microphone: false,
       speaker: false,
       shortcuts: false,

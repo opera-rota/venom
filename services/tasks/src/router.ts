@@ -1,5 +1,5 @@
 import type { ActionSpec, ConnectorService, Device, Effect, PlanDraft, StepAction } from "@venom/contracts";
-import { effectsOf, undoable } from "@venom/safety";
+import { effectsOfSpec, undoable } from "@venom/safety";
 
 export interface RoutedStep {
   readonly summary: string;
@@ -31,14 +31,14 @@ const serviceNames: Record<ConnectorService, string> = {
   calendar: "Calendar",
 };
 
-const needsScreen: ReadonlySet<StepAction> = new Set(["open_app", "type_text", "click", "take_screenshot"]);
+const needsHands: ReadonlySet<StepAction> = new Set(["open_app", "type_text", "click", "run_script", "take_screenshot"]);
 
 function isComputer(device: Device): boolean {
   return device.type === "computer" && device.status !== "revoked";
 }
 
 function canCarry(device: Device, actions: ReadonlySet<StepAction>): boolean {
-  return isComputer(device) && (device.capabilities.screen_control || !Array.from(actions).some((action) => needsScreen.has(action)));
+  return isComputer(device) && (device.capabilities.screen_control || !Array.from(actions).some((action) => needsHands.has(action)));
 }
 
 function mostRecentlySeen(left: Device, right: Device): number {
@@ -85,11 +85,11 @@ export function route(draft: PlanDraft, fleet: Fleet): Routing {
       title: draft.title,
       target,
       elsewhere: target.id !== fleet.origin.id,
-      missing: canCarry(target, actions) ? null : `${target.name} cannot control its screen yet, so this plan cannot run there yet.`,
+      missing: canCarry(target, actions) ? null : `${target.name} has no working hands right now, so this plan cannot run there yet.`,
       steps: draft.steps.map((step) => ({
         summary: step.summary,
         spec: step.spec,
-        effects: effectsOf(step.spec.name, step.effects),
+        effects: effectsOfSpec(step.spec, step.effects),
         reversible: undoable(step.spec.name, step.reversible),
       })),
     },

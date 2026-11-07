@@ -5,10 +5,11 @@ import type { Memory } from "@venom/memory";
 import type { Availability, Power } from "@venom/power";
 import type { CommandSigner, Trust } from "@venom/safety";
 import type { Tasks } from "@venom/tasks";
+import type { Acting } from "./acting.ts";
 import type { Brain } from "./brain.ts";
 import type { LiveHub } from "./live-hub.ts";
 import type { LiveRequests } from "./requests.ts";
-import type { TaskRunner } from "./runner.ts";
+import type { SaidKind, TaskRunner } from "./runner.ts";
 
 export interface GatewayContext {
   readonly store: Store;
@@ -22,6 +23,7 @@ export interface GatewayContext {
   readonly trust: Trust;
   readonly signer: CommandSigner;
   readonly runner: TaskRunner;
+  readonly acting: Acting;
   readonly stopping: AbortSignal;
   readonly heartbeatMs: number;
   track(work: Promise<unknown>): void;
@@ -33,6 +35,7 @@ export interface GatewayContext {
   broadcastTask(accountId: string, requestId: string, task: Task): void;
   broadcastConfirmation(accountId: string, requestId: string, request: ConfirmRequest, answered: ConfirmationAnswered | null): void;
   broadcastHalt(accountId: string, requestId: string, receipt: StopReceipt): void;
+  say(task: Task, kind: SaidKind, text: string, stepId: string | null): Promise<void>;
   availableEngines(): Promise<Availability>;
 }
 

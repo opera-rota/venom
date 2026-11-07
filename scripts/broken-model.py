@@ -21,7 +21,7 @@ BROKEN_PLANS: Iterator[str] = cycle(
         json.dumps(
             {
                 "title": "Open Notepad",
-                "steps": [{"summary": "Open Notepad", "spec": {"name": "open_app", "app": "Notepad"}, "effects": [], "reversible": True}],
+                "steps": [{"summary": "Open Notepad", "spec": {"name": "open_app", "app": "Notepad", "open": None}, "effects": [], "reversible": True}],
                 "cannot": "I cannot open Notepad.",
             }
         ),

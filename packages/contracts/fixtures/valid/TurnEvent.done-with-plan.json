@@ -9,7 +9,8 @@
         "summary": "Open Notepad",
         "spec": {
           "name": "open_app",
-          "app": "Notepad"
+          "app": "Notepad",
+          "open": null
         },
         "effects": [],
         "reversible": true

@@ -54,6 +54,7 @@ describe("upgrading a database that already holds Phase 2 data", () => {
     const legacy = await createTestDatabase();
     const sql = connect(legacy.migratorUrl, { max: 1 });
     try {
+      await sql.unsafe("alter table messages drop column kind, drop column step_id");
       await sql.unsafe("alter table messages drop column task_id");
       await sql.unsafe("alter table accounts drop column skip_asking");
       await sql.unsafe("drop table stops, steps, tasks, live_challenges");
@@ -88,10 +89,10 @@ describe("upgrading a database that already holds Phase 2 data", () => {
       const applied = await migrate(sql);
       expect(applied.map((migration) => migration.name)).toEqual(loadMigrations().slice(1).map((m) => m.name));
 
-      const [kept] = await sql<{ text: string; credential_hash: Buffer | null }[]>`
-        select m.text, d.credential_hash from messages m join devices d on d.id = m.device_id
+      const [kept] = await sql<{ text: string; kind: string; credential_hash: Buffer | null }[]>`
+        select m.text, m.kind, d.credential_hash from messages m join devices d on d.id = m.device_id
       `;
-      expect(kept).toEqual({ text: "still here", credential_hash: null });
+      expect(kept).toEqual({ text: "still here", kind: "text", credential_hash: null });
     } finally {
       await sql.end();
       await legacy.drop();

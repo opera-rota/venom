@@ -37,7 +37,7 @@ PLAN_OUTPUT = StructuredOutput(kind="structured", contract="PlanDraft")
 
 
 def plan_json(cannot: str | None = None) -> str:
-    step = DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad"), effects=[], reversible=True)
+    step = DraftStep(summary="Open Notepad", spec=OpenAppAction(name="open_app", app="Notepad", open=None), effects=[], reversible=True)
     return PlanDraft(title="Open Notepad", steps=[step], cannot=cannot).model_dump_json()
 
 
@@ -161,6 +161,35 @@ async def test_returns_validated_structured_output() -> None:
 async def test_refuses_structured_output_of_the_wrong_shape() -> None:
     provider = ScriptedProvider({"quick": [structured('{"kind": "chat"}', "quick")]})
     final = (await run(provider, request("Hi", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
+
+    assert isinstance(final, ReasoningFailed)
+    assert final.reason == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    ("written", "kind"),
+    [("task", "task"), ("It is a task.", "task"), ('{"intent": "question"}', "question"), ("Classification: Question", "question")],
+)
+async def test_reads_a_plain_classification_from_a_model_that_ignores_the_shape(written: str, kind: str) -> None:
+    provider = ScriptedProvider({"quick": [structured(written, "quick")]})
+    final = (await run(provider, request("Open my notes", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
+
+    assert isinstance(final, ReasoningDone)
+    assert final.text == f'{{"kind":"{kind}"}}'
+
+
+@pytest.mark.parametrize("written", ["It could be a question or a task.", "Here is how to open Notepad."])
+async def test_refuses_a_classification_that_names_both_or_neither(written: str) -> None:
+    provider = ScriptedProvider({"quick": [structured(written, "quick")]})
+    final = (await run(provider, request("Hi", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
+
+    assert isinstance(final, ReasoningFailed)
+    assert final.reason == "invalid_output"
+
+
+async def test_never_reads_a_plan_from_words() -> None:
+    provider = ScriptedProvider({"primary": [structured("Open Notepad, then type the list. This is a task.", "primary")]})
+    final = (await run(provider, request("Open Notepad", role="plan", output=PLAN_OUTPUT, connectors=[]), ("primary",)))[-1]
 
     assert isinstance(final, ReasoningFailed)
     assert final.reason == "invalid_output"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandGuard, commandText, createCommandSigner, newKeyPair, signText, verifyText, assess, drills, effectsOf, plainLanguage, undoable } from "../src/index.ts";
+import { CommandGuard, commandText, createCommandSigner, newKeyPair, signText, verifyText, assess, drills, effectsOf, effectsOfSpec, opensOutside, plainLanguage, refusesUnconfirmed, undoable } from "../src/index.ts";
 
 const device = { id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02", account_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01" };
 
@@ -46,6 +46,24 @@ describe("fixed rules decide what needs confirmation", () => {
     expect(undoable("open_app", false)).toBe(false);
   });
 
+  it("always asks before a script, even when strictness is standard and the user skips everything it can", () => {
+    expect(assess({ action: "run_script", effects: [], reversible: false }, "standard", ["deletes", "posts", "reaches_outside"])).toEqual({
+      requiresConfirmation: true,
+      risk: "medium",
+      reasons: [],
+    });
+  });
+
+  it("treats opening a web address as reaching outside, and a place on this computer as not", () => {
+    const open = (target: string | null) => ({ name: "open_app", app: "Chrome", open: target }) as const;
+    expect(["wikipedia.org", "https://example.com/a", "file:///C:/x.html"].map((target) => opensOutside(open(target)))).toEqual([true, true, true]);
+    expect([null, "Downloads", "my Documents folder", "C:\\Users\\me\\list.txt", "\\\\server\\share", "%USERPROFILE%\\Desktop"].map((target) => opensOutside(open(target)))).toEqual([
+      false, false, false, false, false, false,
+    ]);
+    expect(effectsOfSpec(open("wikipedia.org"), ["posts"])).toEqual(["posts", "reaches_outside"]);
+    expect(effectsOfSpec({ name: "click", on: "Save" }, [])).toEqual([]);
+  });
+
   it("pauses on anything that cannot be undone only when strict", () => {
     const step = { action: "wait", effects: [], reversible: false } as const;
     expect(assess(step, "standard").requiresConfirmation).toBe(false);
@@ -61,6 +79,16 @@ describe("fixed rules decide what needs confirmation", () => {
 
   it("says the action, the target and whether it can be undone", () => {
     expect(plainLanguage("Pretend to delete a file", "Work laptop", false)).toBe("Pretend to delete a file on Work laptop. This cannot be undone.");
+  });
+});
+
+describe("this computer's own refusal", () => {
+  it("refuses a script nobody said yes to, whatever the cloud sent, and lets everything else through", () => {
+    const script = { name: "run_script", language: "powershell", purpose: "List files", code: "Get-ChildItem" } as const;
+    expect(refusesUnconfirmed({ action: script, confirmed: false })).toBe(true);
+    expect(refusesUnconfirmed({ action: script, confirmed: true })).toBe(false);
+    expect(refusesUnconfirmed({ action: { name: "open_app", app: "Chrome", open: "wikipedia.org" }, confirmed: false })).toBe(false);
+    expect(refusesUnconfirmed({ action: { name: "wait", seconds: 3 }, confirmed: false })).toBe(false);
   });
 });
 
@@ -94,7 +122,7 @@ describe("signed commands", () => {
   });
 
   it("refuses a command whose payload was changed after signing", () => {
-    const { frame } = signer.issue(device, { kind: "run_step", task_id: device.id, step_id: device.id, action: { name: "wait", seconds: 3 } });
+    const { frame } = signer.issue(device, { kind: "run_step", task_id: device.id, step_id: device.id, action: { name: "wait", seconds: 3 }, confirmed: false });
     const changed = { ...frame.command, payload: frame.command.payload.replace('"seconds":3', '"seconds":300') };
     expect(new CommandGuard(server.publicKey, device.id).check(changed)).toMatchObject({ refusal: "wrong_signature" });
   });

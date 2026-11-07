@@ -11,6 +11,7 @@
     "action": {
       "name": "wait",
       "seconds": 30
-    }
+    },
+    "confirmed": false
   }
 }

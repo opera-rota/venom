@@ -68,15 +68,32 @@ export const Speaker = z
   .enum(["user", "venom"])
   .register(contracts, { id: "Speaker" });
 
+export const MessageKind = z
+  .enum(["text", "plan", "question", "report"])
+  .register(contracts, { id: "MessageKind" });
+
 export const Message = z
   .strictObject({
     id: Id,
     account_id: Id,
     device_id: Id,
     speaker: Speaker,
+    kind: MessageKind,
     text: z.string().min(1),
     task_id: Id.nullable(),
+    step_id: Id.nullable(),
     created_at: Timestamp,
+  })
+  .superRefine((message, context) => {
+    const linked = message.kind === "text" ? message.task_id === null && message.step_id === null
+      : message.kind === "question" ? message.task_id !== null && message.step_id !== null
+      : message.task_id !== null && message.step_id === null;
+    if (!linked) {
+      context.addIssue({ code: "custom", path: ["kind"], message: "A message links to a task and a step exactly as its kind says." });
+    }
+    if (message.kind !== "text" && message.speaker !== "venom") {
+      context.addIssue({ code: "custom", path: ["speaker"], message: "Only VENOM writes plans, questions and reports." });
+    }
   })
   .register(contracts, { id: "Message" });
 
@@ -87,6 +104,7 @@ export const StepAction = z
 export const actionLimits = {
   waitSeconds: 600,
   appName: 80,
+  openTarget: 400,
   typedText: 2000,
   typedInto: 120,
   clickOn: 160,
@@ -94,6 +112,7 @@ export const actionLimits = {
   scriptCode: 4000,
   connectorOperation: 120,
   connectorDetails: 600,
+  stepOutput: 16000,
 } as const;
 
 const said = (limit: number) => z.string().min(1).max(limit).regex(/\S/);
@@ -117,6 +136,7 @@ export const OpenAppAction = z
   .strictObject({
     name: z.literal("open_app"),
     app: said(actionLimits.appName),
+    open: said(actionLimits.openTarget).nullable(),
   })
   .register(contracts, { id: "OpenAppAction" });
 
@@ -223,7 +243,7 @@ export const Step = z
     summary: z.string().min(1).max(300),
     ...stepFields,
     status: StepStatus,
-    output: z.string().nullable(),
+    output: z.string().min(1).max(actionLimits.stepOutput).nullable(),
     set_aside_reason: SetAsideReason.nullable(),
     repeatable: z.boolean(),
   })
@@ -340,6 +360,7 @@ export type DeviceStatus = z.infer<typeof DeviceStatus>;
 export type Capabilities = z.infer<typeof Capabilities>;
 export type Device = z.infer<typeof Device>;
 export type Speaker = z.infer<typeof Speaker>;
+export type MessageKind = z.infer<typeof MessageKind>;
 export type Message = z.infer<typeof Message>;
 export type StepAction = z.infer<typeof StepAction>;
 export type ScriptLanguage = z.infer<typeof ScriptLanguage>;

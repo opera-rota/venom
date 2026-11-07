@@ -13,7 +13,8 @@
       "action": "open_app",
       "spec": {
         "name": "open_app",
-        "app": "Notes"
+        "app": "Notes",
+        "open": null
       },
       "target": {
         "kind": "device",

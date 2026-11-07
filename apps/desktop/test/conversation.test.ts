@@ -25,7 +25,7 @@ const retryId = "01a12c54-8d81-756e-8439-b843a4fd7ef1";
 const otherId = "01a12c54-8d81-756e-8439-b843a4fd7ef2";
 
 function message(id: string, speaker: "user" | "venom", text: string, created_at = at): Message {
-  return { ...base, id, created_at, speaker, text, task_id: null };
+  return { ...base, id, created_at, speaker, kind: "text", text, task_id: null, step_id: null };
 }
 
 const question = message("01a12c54-0000-7000-8000-000000000001", "user", "Explain what a mutex is");

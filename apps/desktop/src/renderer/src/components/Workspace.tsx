@@ -7,7 +7,7 @@ import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
-import { taskCount, taskInView } from "../tasks-state.ts";
+import { liveOutput, taskCount, taskInView } from "../tasks-state.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
@@ -51,17 +51,27 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const inView = taskInView(tasks.state);
   const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
-  const { control, controlling, state } = tasks;
+  const { control, controlling, state, sending, answer } = tasks;
+  const messages = useStore(store, (current) => current.messages);
   const plans = useMemo<Plans>(
     () => ({
       tasks: state.tasks,
       deviceId: device.id,
       devices: devices.devices,
+      open: state.queue,
+      sending,
       discarding: (taskId) => controlling.has(controlKey(taskId, "discard")),
       discard: (taskId) => void control(taskId, { kind: "discard" }),
+      starting: (taskId) => controlling.has(controlKey(taskId, "run")),
+      run: (taskId) => void control(taskId, { kind: "run" }),
+      output: (stepId) => liveOutput(state, stepId),
+      answer: (request, decision) => void answer(request, decision),
     }),
-    [state.tasks, device.id, devices.devices, controlling, control],
+    [state, device.id, devices.devices, controlling, control, sending, answer],
   );
+  const inChat = useMemo(() => new Set(messages.filter((message) => message.kind === "plan" && message.task_id !== null).map((message) => message.task_id)), [messages]);
+  const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);
+  const gateClosed = useMemo(() => state.closed.filter((entry) => !inChat.has(entry.request.task_id)), [state.closed, inChat]);
 
   useEffect(() => conversation.connect(), [conversation]);
 
@@ -91,8 +101,8 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       {panel === "memory" && <MemoryPanel state={memory} onClose={() => setPanel(null)} />}
       {panel === "safety" && <SafetyPanel handle={tasks} onClose={() => setPanel(null)} />}
       <ConfirmationGate
-        queue={tasks.state.queue}
-        closed={tasks.state.closed}
+        queue={gateQueue}
+        closed={gateClosed}
         deviceId={device.id}
         sending={tasks.sending}
         onAnswer={(request, decision) => void tasks.answer(request, decision)}
