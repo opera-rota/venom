@@ -11,7 +11,9 @@
     "preview": "install-electron && electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
-    "hands:check": "node scripts/hands-check.ts"
+    "hands:check": "node scripts/hands-check.ts",
+    "hands:look": "node scripts/hands-look.ts",
+    "hands:move": "node scripts/hands-move.ts"
   },
   "dependencies": {
     "@serenity-kit/opaque": "1.1.0",

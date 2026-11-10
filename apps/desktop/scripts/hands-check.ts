@@ -3,6 +3,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { z } from "zod";
 import { HandHelper, type HandHello, type HandResult } from "../src/main/hand-helper.ts";
 
 type Verdict = "passed" | "failed" | "skipped";
@@ -17,6 +18,14 @@ const stopTask = "hands-check-stop";
 const helper = new HandHelper({
   script: fileURLToPath(new URL("../hands/venom-hands.ps1", import.meta.url)),
   log: (line) => console.log(`      helper said: ${line}`),
+});
+
+const Observed = z.object({
+  picture: z.string().min(1),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  marks: z.array(z.object({ id: z.number().int(), editable: z.boolean() })),
+  focused: z.number().int().nullable(),
 });
 
 let hello: HandHello | null = null;
@@ -112,7 +121,54 @@ const checks: readonly Check[] = [
       const result = await helper.send({ op: "type_text", window: notepad, title: null, text: "Milk\nBread\nEggs\nGet-ChildItem $HOME\\Desktop | Sort-Object Length -Descending\n100% @ #1 & (a+b)=c; \"quotes\" 'single' ~`^ {x} [y] <z> é\nTyped by the VENOM hands check\n" });
       say(result);
       console.log(`      read back: ${String(result.data["verified"])}`);
+      if (result.data["verified"] === "different") {
+        console.log(`      what arrived (the end of it): ${JSON.stringify(String(result.data["arrived"] ?? ""))}`);
+      }
       return result.ok && result.data["verified"] === "match" ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Look at Notepad like VENOM does (picture and numbered marks)",
+    run: async () => {
+      if (notepad === null) {
+        return "skipped";
+      }
+      const started = performance.now();
+      const result = await helper.send({ op: "observe", window: notepad });
+      say(result);
+      const seen = Observed.safeParse(result.data["observation"]);
+      if (!result.ok || !seen.success) {
+        return "failed";
+      }
+      const { width, height, marks, focused, picture } = seen.data;
+      const box = marks.find((mark) => mark.editable);
+      console.log(`      looked in ${((performance.now() - started) / 1000).toFixed(1)}s: picture ${width}x${height} (${Math.round((picture.length * 3) / 4 / 1024)} KB), ${marks.length} marks`);
+      console.log(`      the place to type: ${box === undefined ? "not found" : `mark ${box.id}`}, focused mark: ${focused ?? "none"}`);
+      return width <= 1280 && marks.length > 0 && marks.length <= 60 && box !== undefined ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Click the place to type by its number, then type and press keys",
+    run: async () => {
+      if (notepad === null) {
+        return "skipped";
+      }
+      const looked = await helper.send({ op: "observe", window: notepad });
+      const seen = Observed.safeParse(looked.data["observation"]);
+      const box = seen.success ? seen.data.marks.find((mark) => mark.editable) : undefined;
+      if (!looked.ok || box === undefined) {
+        say(looked);
+        return "failed";
+      }
+      const clicked = await helper.send({ op: "move", move: { kind: "click", mark: box.id, point: null, double: false } });
+      say(clicked);
+      const ended = await helper.send({ op: "move", move: { kind: "key", key: "end" } });
+      say(ended);
+      const typed = await helper.send({ op: "move", move: { kind: "type", text: " typed by mark", mark: null, enter: true } });
+      say(typed);
+      const refused = await helper.send({ op: "move", move: { kind: "key", key: "ctrl+alt+delete" } });
+      say(refused);
+      return clicked.ok && ended.ok && typed.ok && typed.data["verified"] === "match" && !refused.ok ? "passed" : "failed";
     },
   },
   {

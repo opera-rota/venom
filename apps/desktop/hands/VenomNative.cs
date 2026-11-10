@@ -2,13 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Drawing.Text;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
 namespace Venom
 {
+    public sealed class Picture
+    {
+        public string Data { get; internal set; }
+        public int Width { get; internal set; }
+        public int Height { get; internal set; }
+    }
+
     public sealed class Sandboxed : IDisposable
     {
         private IntPtr job;
@@ -194,6 +204,8 @@ namespace Venom
         public UIntPtr PeakJobMemoryUsed;
     }
 
+    internal delegate bool EnumWindowsProc(IntPtr window, IntPtr data);
+
     internal static class Native
     {
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
@@ -210,6 +222,8 @@ namespace Venom
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window, out Rect rect);
         [DllImport("user32.dll")] internal static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] internal static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+        [DllImport("user32.dll")] internal static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr data);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern int GetClassName(IntPtr window, StringBuilder name, int size);
         [DllImport("user32.dll", SetLastError = true)] internal static extern uint SendInput(uint count, Input[] inputs, int size);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern short VkKeyScanEx(char character, IntPtr layout);
         [DllImport("user32.dll")] internal static extern IntPtr GetKeyboardLayout(uint thread);
@@ -248,6 +262,8 @@ namespace Venom
         private const uint KeyUnicode = 0x4;
         private const uint MouseLeftDown = 0x2;
         private const uint MouseLeftUp = 0x4;
+        private const uint MouseWheel = 0x800;
+        private const uint ExtendedKey = 0x1;
         private const ushort ReturnKey = 0x0D;
         private const ushort TabKey = 0x09;
         private const ushort AltKey = 0x12;
@@ -428,6 +444,209 @@ namespace Venom
                 image.Save(path, ImageFormat.Png);
             }
             return width + "x" + height;
+        }
+
+        public static bool ClickTimes(long window, int x, int y, int times)
+        {
+            IntPtr target = new IntPtr(window);
+            if (!Inside(target, x, y))
+            {
+                return false;
+            }
+            Native.SetCursorPos(x, y);
+            Thread.Sleep(40);
+            for (int round = 0; round < times; round++)
+            {
+                Input[] inputs = new Input[2];
+                inputs[0].Type = MouseType;
+                inputs[0].Data.Mouse.Flags = MouseLeftDown;
+                inputs[1].Type = MouseType;
+                inputs[1].Data.Mouse.Flags = MouseLeftUp;
+                if (Native.SendInput(2, inputs, Marshal.SizeOf(typeof(Input))) != 2)
+                {
+                    return false;
+                }
+                Thread.Sleep(60);
+            }
+            return true;
+        }
+
+        public static bool Wheel(long window, int x, int y, int notches)
+        {
+            IntPtr target = new IntPtr(window);
+            if (!Inside(target, x, y))
+            {
+                return false;
+            }
+            Native.SetCursorPos(x, y);
+            Thread.Sleep(40);
+            int direction = notches < 0 ? -1 : 1;
+            for (int step = 0; step < Math.Abs(notches); step++)
+            {
+                Input[] inputs = new Input[1];
+                inputs[0].Type = MouseType;
+                inputs[0].Data.Mouse.Flags = MouseWheel;
+                inputs[0].Data.Mouse.MouseData = unchecked((uint)(direction * 120));
+                Native.SendInput(1, inputs, Marshal.SizeOf(typeof(Input)));
+                Thread.Sleep(90);
+            }
+            return true;
+        }
+
+        public static int[] Center(long window)
+        {
+            IntPtr target = new IntPtr(window);
+            Rect bounds;
+            if (Native.DwmGetWindowAttribute(target, 9, out bounds, Marshal.SizeOf(typeof(Rect))) != 0)
+            {
+                Native.GetWindowRect(target, out bounds);
+            }
+            return new int[] { (bounds.Left + bounds.Right) / 2, (bounds.Top + bounds.Bottom) / 2 };
+        }
+
+        public static bool Chord(long window, int[] keys)
+        {
+            IntPtr target = new IntPtr(window);
+            if (Root(Native.GetForegroundWindow()) != target)
+            {
+                return false;
+            }
+            uint process;
+            IntPtr layout = Native.GetKeyboardLayout(Native.GetWindowThreadProcessId(target, out process));
+            for (int index = 0; index < keys.Length; index++)
+            {
+                Send(new Input[] { ChordStroke((ushort)keys[index], false, layout) });
+                Settle(target);
+                Thread.Sleep(ModifierPause);
+            }
+            for (int index = keys.Length - 1; index >= 0; index--)
+            {
+                Send(new Input[] { ChordStroke((ushort)keys[index], true, layout) });
+                Thread.Sleep(ModifierPause);
+            }
+            Settle(target);
+            return true;
+        }
+
+        private static Input ChordStroke(ushort key, bool up, IntPtr layout)
+        {
+            Input input = KeyStroke(key, up, layout);
+            if ((key >= 0x21 && key <= 0x28) || key == 0x2D || key == 0x2E || key == 0x5B)
+            {
+                input.Data.Keyboard.Flags |= ExtendedKey;
+            }
+            return input;
+        }
+
+        private static bool Inside(IntPtr target, int x, int y)
+        {
+            ScreenPoint point = new ScreenPoint();
+            point.X = x;
+            point.Y = y;
+            return Root(Native.WindowFromPoint(point)) == target && Root(Native.GetForegroundWindow()) == target;
+        }
+
+        public static int WakePages(long window)
+        {
+            List<IntPtr> pages = new List<IntPtr>();
+            StringBuilder name = new StringBuilder(64);
+            Native.EnumChildWindows(new IntPtr(window), (child, data) =>
+            {
+                name.Length = 0;
+                if (Native.GetClassName(child, name, name.Capacity) > 0 && name.ToString() == "Chrome_RenderWidgetHostHWND")
+                {
+                    pages.Add(child);
+                }
+                return true;
+            }, IntPtr.Zero);
+            foreach (IntPtr page in pages)
+            {
+                IntPtr ignored;
+                Native.SendMessageTimeout(page, 0x003D, IntPtr.Zero, new IntPtr(1), 0x2, 1000, out ignored);
+            }
+            return pages.Count;
+        }
+
+        public static int[] Screen()
+        {
+            return new int[] { Native.GetSystemMetrics(0), Native.GetSystemMetrics(1) };
+        }
+
+        public static Picture Look(int width, int height, int[] boxes, int limit)
+        {
+            int screenWidth = Math.Max(1, Native.GetSystemMetrics(0));
+            int screenHeight = Math.Max(1, Native.GetSystemMetrics(1));
+            using (Bitmap screen = new Bitmap(screenWidth, screenHeight, PixelFormat.Format32bppArgb))
+            using (Bitmap picture = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+            {
+                using (Graphics canvas = Graphics.FromImage(screen))
+                {
+                    canvas.CopyFromScreen(0, 0, 0, 0, new Size(screenWidth, screenHeight), CopyPixelOperation.SourceCopy);
+                }
+                using (Graphics canvas = Graphics.FromImage(picture))
+                {
+                    canvas.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    canvas.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    canvas.DrawImage(screen, new Rectangle(0, 0, width, height));
+                    DrawMarks(canvas, boxes, width, height);
+                }
+                Picture result = new Picture();
+                result.Data = Encode(picture, limit);
+                result.Width = width;
+                result.Height = height;
+                return result;
+            }
+        }
+
+        private static void DrawMarks(Graphics canvas, int[] boxes, int width, int height)
+        {
+            if (boxes == null)
+            {
+                return;
+            }
+            Color tone = Color.FromArgb(255, 229, 32, 64);
+            canvas.SmoothingMode = SmoothingMode.None;
+            canvas.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            using (Pen pen = new Pen(tone, 2f))
+            using (SolidBrush fill = new SolidBrush(tone))
+            using (SolidBrush ink = new SolidBrush(Color.White))
+            using (Font font = new Font("Segoe UI", 13f, FontStyle.Bold, GraphicsUnit.Pixel))
+            {
+                for (int index = 0; index + 3 < boxes.Length; index += 4)
+                {
+                    Rectangle box = new Rectangle(boxes[index], boxes[index + 1], Math.Max(2, boxes[index + 2]), Math.Max(2, boxes[index + 3]));
+                    canvas.DrawRectangle(pen, box);
+                    string label = ((index / 4) + 1).ToString();
+                    SizeF size = canvas.MeasureString(label, font);
+                    int labelWidth = (int)Math.Ceiling(size.Width) + 4;
+                    int labelHeight = (int)Math.Ceiling(size.Height);
+                    int x = Math.Max(0, Math.Min(box.Left, width - labelWidth));
+                    int y = box.Top - labelHeight >= 0 ? box.Top - labelHeight : Math.Min(box.Top, height - labelHeight);
+                    canvas.FillRectangle(fill, x, y, labelWidth, labelHeight);
+                    canvas.DrawString(label, font, ink, x + 2, y);
+                }
+            }
+        }
+
+        private static string Encode(Bitmap picture, int limit)
+        {
+            ImageCodecInfo jpeg = Array.Find(ImageCodecInfo.GetImageEncoders(), codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+            string data = string.Empty;
+            foreach (long quality in new long[] { 72, 56, 40, 28 })
+            {
+                using (MemoryStream stream = new MemoryStream())
+                using (EncoderParameters settings = new EncoderParameters(1))
+                {
+                    settings.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+                    picture.Save(stream, jpeg, settings);
+                    data = Convert.ToBase64String(stream.ToArray());
+                }
+                if (data.Length <= limit)
+                {
+                    break;
+                }
+            }
+            return data;
         }
 
         public static bool SandboxReady()

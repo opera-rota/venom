@@ -38,6 +38,17 @@ export type HandHello = Omit<z.infer<typeof HelloLine>, "type">;
 
 export type ScriptLanguage = "powershell" | "python";
 
+export interface ScreenPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+export type HandMove =
+  | { readonly kind: "click"; readonly mark: number | null; readonly point: ScreenPoint | null; readonly double: boolean }
+  | { readonly kind: "type"; readonly text: string; readonly mark: number | null; readonly enter: boolean }
+  | { readonly kind: "key"; readonly key: string }
+  | { readonly kind: "scroll"; readonly direction: "up" | "down"; readonly steps: number; readonly mark: number | null };
+
 export type HandRequest =
   | { readonly op: "ping" }
   | { readonly op: "open_app"; readonly app: string; readonly open: string | null; readonly task: string }
@@ -45,7 +56,9 @@ export type HandRequest =
   | { readonly op: "click"; readonly window: number | null; readonly title: string | null; readonly on: string }
   | { readonly op: "screenshot"; readonly window: number | null; readonly task: string }
   | { readonly op: "run_script"; readonly language: ScriptLanguage; readonly code: string; readonly task: string; readonly timeout_seconds: number }
-  | { readonly op: "describe"; readonly window: number };
+  | { readonly op: "describe"; readonly window: number }
+  | { readonly op: "observe"; readonly window: number | null }
+  | { readonly op: "move"; readonly move: HandMove };
 
 export interface HandResult {
   readonly ok: boolean;

@@ -16,10 +16,13 @@ $TreeScope = [System.Windows.Automation.TreeScope]
 $ControlType = [System.Windows.Automation.ControlType]
 
 $WorkRoot = Join-Path $env:LOCALAPPDATA 'VENOM\work'
-$ChromeProfile = Join-Path $env:LOCALAPPDATA 'VENOM\chrome'
 $PowerShellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $OutputLimit = 16000
 $StreamLimit = 200000
+$PictureWidth = 1280
+$PictureLimit = 1900000
+$MarkLimit = 60
+$TypeLimit = 2000
 
 $Apps = [ordered]@{
     notepad  = @{ Title = 'Notepad'; Words = @('notepad'); Processes = @('notepad'); Classes = @() }
@@ -244,15 +247,7 @@ function Invoke-OpenApp($Request) {
                 $address = Resolve-WebAddress ([string]$open)
                 if ($null -eq $address) { return New-Result $false "'$open' is not a web address I can open." }
             }
-            New-Item -ItemType Directory -Force -Path $ChromeProfile | Out-Null
-            $arguments = @(
-                "--user-data-dir=$(Quote $ChromeProfile)",
-                '--force-renderer-accessibility',
-                '--no-first-run',
-                '--no-default-browser-check',
-                '--new-window',
-                (Quote $address)
-            ) -join ' '
+            $arguments = @('--force-renderer-accessibility', '--new-window', (Quote $address)) -join ' '
         }
         'start' {
             if ($null -ne $open) { return New-Result $false "I can open a file, folder or web address only with Notepad, File Explorer or Chrome so far, so I did not open $($app.Title)." }
@@ -584,6 +579,257 @@ function Invoke-RunScript([string]$Id, $Request) {
     return New-Result $true 'The script finished.' $data
 }
 
+$MarkKinds = @{
+    'Button' = 'button'; 'SplitButton' = 'button'; 'Hyperlink' = 'link'; 'Edit' = 'box'; 'Document' = 'box'
+    'ComboBox' = 'list'; 'List' = 'list'; 'CheckBox' = 'check'; 'RadioButton' = 'check'; 'ListItem' = 'item'
+    'TreeItem' = 'item'; 'DataItem' = 'item'; 'TabItem' = 'tab'; 'MenuItem' = 'menu'
+}
+$MarkRanks = @{ 'box' = 0; 'button' = 1; 'tab' = 1; 'menu' = 1; 'check' = 1; 'list' = 1; 'link' = 2; 'item' = 2 }
+$MarkConditions = [System.Windows.Automation.Condition[]]@(
+    $MarkKinds.Keys | ForEach-Object { New-Object System.Windows.Automation.PropertyCondition -ArgumentList $Automation::ControlTypeProperty, $ControlType::$_ }
+)
+$MarkCondition = New-Object System.Windows.Automation.AndCondition -ArgumentList (, [System.Windows.Automation.Condition[]]@(
+        (New-Object System.Windows.Automation.OrCondition -ArgumentList (, $MarkConditions)),
+        (New-Object System.Windows.Automation.PropertyCondition -ArgumentList $Automation::IsOffscreenProperty, $false)
+    ))
+$ReadOnlyProperty = [System.Windows.Automation.ValuePattern]::IsReadOnlyProperty
+$script:Woken = @{}
+
+function New-MarkCache {
+    $cache = New-Object System.Windows.Automation.CacheRequest
+    foreach ($property in @(
+            $Automation::NameProperty, $Automation::ControlTypeProperty, $Automation::BoundingRectangleProperty,
+            $Automation::IsEnabledProperty, $Automation::IsPasswordProperty, $Automation::HasKeyboardFocusProperty,
+            $Automation::IsValuePatternAvailableProperty, $Automation::IsTextPatternAvailableProperty, $ReadOnlyProperty
+        )) { $cache.Add($property) }
+    $cache.AutomationElementMode = [System.Windows.Automation.AutomationElementMode]::None
+    return $cache
+}
+
+function Get-Cached($Element, $Property) {
+    return $Element.GetCachedPropertyValue($Property, $true)
+}
+
+function Test-Editable([string]$Type, $Element) {
+    $readOnly = Get-Cached $Element $ReadOnlyProperty
+    $hasValue = (Get-Cached $Element $Automation::IsValuePatternAvailableProperty) -eq $true
+    $writable = $hasValue -and $readOnly -eq $false
+    switch ($Type) {
+        'Edit' { return ($readOnly -ne $true) }
+        'Document' { return ($writable -or (-not $hasValue -and (Get-Cached $Element $Automation::HasKeyboardFocusProperty) -eq $true -and (Get-Cached $Element $Automation::IsTextPatternAvailableProperty) -eq $true)) }
+        'ComboBox' { return $writable }
+    }
+    return $false
+}
+
+function Get-Marks($Window, [double]$Scale, [int]$Width, [int]$Height) {
+    $cache = New-MarkCache
+    $active = $cache.Activate()
+    try { $found = $Window.Element.FindAll($TreeScope::Descendants, $MarkCondition) }
+    finally { $active.Dispose() }
+    $seen = @{}
+    $marks = New-Object System.Collections.ArrayList
+    foreach ($element in $found) {
+        try {
+            $cached = $element.Cached
+            if (-not $cached.IsEnabled) { continue }
+            $type = $cached.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+            $kind = $MarkKinds[$type]
+            if ($null -eq $kind) { continue }
+            $rect = $cached.BoundingRectangle
+            if ($rect.IsEmpty -or $rect.Width -lt 4 -or $rect.Height -lt 4) { continue }
+            $left = [Math]::Max(0, [int][Math]::Floor($rect.Left * $Scale))
+            $top = [Math]::Max(0, [int][Math]::Floor($rect.Top * $Scale))
+            $right = [Math]::Min($Width, [int][Math]::Ceiling($rect.Right * $Scale))
+            $bottom = [Math]::Min($Height, [int][Math]::Ceiling($rect.Bottom * $Scale))
+            if ($right - $left -lt 3 -or $bottom - $top -lt 3) { continue }
+            $editable = Test-Editable $type $element
+            if ($type -eq 'Document' -and -not $editable) { continue }
+            $name = ([string]$cached.Name -replace '\s+', ' ').Trim()
+            if ($name.Length -gt 120) { $name = $name.Substring(0, 117) + '...' }
+            $focus = [bool]$cached.HasKeyboardFocus
+            if ($name.Length -eq 0 -and -not $editable -and -not $focus) { continue }
+            $key = "$left,$top,$right,$bottom,$name"
+            if ($seen.ContainsKey($key)) { continue }
+            $seen[$key] = $true
+            $rank = if ($editable -or $focus) { 0 } else { $MarkRanks[$kind] }
+            if ($editable) { $kind = 'box' }
+            [void]$marks.Add([pscustomobject]@{
+                    Rank = $rank; Kind = $kind; Name = $name; Editable = $editable
+                    Password = [bool]$cached.IsPassword; Focused = $focus
+                    X = $left; Y = $top; W = $right - $left; H = $bottom - $top; Row = [int][Math]::Floor($top / 12)
+                })
+        }
+        catch { }
+    }
+    $chosen = @($marks | Sort-Object -Property Rank, Row, X | Select-Object -First $MarkLimit | Sort-Object -Property Row, X)
+    return $chosen
+}
+
+function Invoke-Observe($Request) {
+    $handle = Get-Arg $Request 'window'
+    $front = [Venom.Hands]::Foreground()
+    $target = if ($null -ne $handle) { [long]$handle } else { $front }
+    $window = @(Get-TopWindows | Where-Object { $_.Handle -eq $target })
+    $screen = [Venom.Hands]::Screen()
+    $scale = [Math]::Min(1.0, $PictureWidth / [double]$screen[0])
+    $width = [Math]::Max(1, [int][Math]::Round($screen[0] * $scale))
+    $height = [Math]::Max(1, [int][Math]::Round($screen[1] * $scale))
+    $marks = @()
+    $title = ''
+    $app = ''
+    if ($window.Length -gt 0 -and $ShellClasses -notcontains $window[0].Class) {
+        $title = $window[0].Name
+        $app = [string]$window[0].Process
+        if ([Venom.Hands]::WakePages($window[0].Handle) -gt 0 -and -not $script:Woken.ContainsKey($target)) {
+            $script:Woken[$target] = $true
+            Start-Sleep -Milliseconds 1200
+        }
+        $marks = @(Get-Marks $window[0] $scale $width $height)
+    }
+    elseif ($null -ne $handle) { return New-Result $false 'The window VENOM was looking at is closed.' }
+    $boxes = New-Object 'System.Collections.Generic.List[int]'
+    foreach ($mark in $marks) { $boxes.AddRange([int[]]@($mark.X, $mark.Y, $mark.W, $mark.H)) }
+    $picture = [Venom.Hands]::Look($width, $height, $boxes.ToArray(), $PictureLimit)
+    $list = New-Object System.Collections.ArrayList
+    $focused = $null
+    for ($index = 0; $index -lt $marks.Length; $index++) {
+        $mark = $marks[$index]
+        if ($mark.Focused -and $null -eq $focused) { $focused = $index + 1 }
+        [void]$list.Add(@{
+                id = $index + 1; kind = $mark.Kind; name = $mark.Name; editable = $mark.Editable; password = $mark.Password
+                box = @{ x = $mark.X; y = $mark.Y; width = $mark.W; height = $mark.H }
+            })
+    }
+    $observation = @{
+        picture = $picture.Data; width = $picture.Width; height = $picture.Height
+        window = $title; app = $app; marks = $list.ToArray(); focused = $focused
+    }
+    $what = if ($title.Length -gt 0) { "'$title'" } else { 'the desktop' }
+    $script:LastLook = @{ Window = $target; Scale = $scale; Marks = $marks }
+    $data = @{ observation = $observation; window = $target; front = ($front -eq $target); scale = $scale }
+    return New-Result $true "Looked at the screen and $what, and found $($list.Count) things to use." $data
+}
+
+$KeyCodes = @{
+    'enter' = @(0x0D); 'tab' = @(0x09); 'escape' = @(0x1B); 'backspace' = @(0x08); 'delete' = @(0x2E)
+    'up' = @(0x26); 'down' = @(0x28); 'left' = @(0x25); 'right' = @(0x27)
+    'page_up' = @(0x21); 'page_down' = @(0x22); 'home' = @(0x24); 'end' = @(0x23)
+    'ctrl+a' = @(0x11, 0x41); 'ctrl+c' = @(0x11, 0x43); 'ctrl+v' = @(0x11, 0x56); 'ctrl+f' = @(0x11, 0x46)
+    'ctrl+l' = @(0x11, 0x4C); 'ctrl+t' = @(0x11, 0x54); 'ctrl+w' = @(0x11, 0x57)
+    'alt+left' = @(0x12, 0x25); 'alt+tab' = @(0x12, 0x09); 'win' = @(0x5B); 'f5' = @(0x74)
+}
+$script:LastLook = $null
+
+function Get-LookWindow {
+    if ($null -eq $script:LastLook) { throw 'VENOM has not looked at the screen yet, so it does not know where to act.' }
+    $window = @(Get-TopWindows | Where-Object { $_.Handle -eq $script:LastLook.Window })
+    if ($window.Length -eq 0) { throw 'The window VENOM looked at is closed.' }
+    if (-not [Venom.Hands]::Focus($window[0].Handle)) { throw "I could not bring '$($window[0].Name)' to the front, so I did nothing." }
+    return $window[0]
+}
+
+function Get-MarkPoint($Mark) {
+    $scale = [double]$script:LastLook.Scale
+    return @([int][Math]::Round(($Mark.X + $Mark.W / 2.0) / $scale), [int][Math]::Round(($Mark.Y + $Mark.H / 2.0) / $scale))
+}
+
+function Get-LookMark($Number) {
+    $marks = @($script:LastLook.Marks)
+    $index = [int]$Number - 1
+    if ($index -lt 0 -or $index -ge $marks.Length) { throw "There is no mark $Number on the last look, so I did nothing." }
+    return $marks[$index]
+}
+
+function Get-Target($Move) {
+    $mark = Get-Arg $Move 'mark'
+    if ($null -ne $mark) {
+        $chosen = Get-LookMark $mark
+        return @{ Point = (Get-MarkPoint $chosen); Mark = $chosen; Label = "mark $mark '$($chosen.Name)'" }
+    }
+    $point = Get-Arg $Move 'point'
+    if ($null -ne $point) {
+        $scale = [double]$script:LastLook.Scale
+        $x = [int][Math]::Round([double](Get-Arg $point 'x') / $scale)
+        $y = [int][Math]::Round([double](Get-Arg $point 'y') / $scale)
+        return @{ Point = @($x, $y); Mark = $null; Label = "the point $(Get-Arg $point 'x'),$(Get-Arg $point 'y')" }
+    }
+    return $null
+}
+
+function Invoke-MoveClick($Window, $Move) {
+    $target = Get-Target $Move
+    if ($null -eq $target) { return New-Result $false 'I was not told where to click.' }
+    $times = if ((Get-Arg $Move 'double') -eq $true) { 2 } else { 1 }
+    if (-not [Venom.Hands]::ClickTimes($Window.Handle, $target.Point[0], $target.Point[1], $times)) {
+        return New-Result $false "Something else is covering $($target.Label) in '$($Window.Name)', so I clicked nothing."
+    }
+    $how = if ($times -eq 2) { 'Double-clicked' } else { 'Clicked' }
+    return New-Result $true "$how $($target.Label) in '$($Window.Name)'." @{ window = $Window.Handle }
+}
+
+function Invoke-MoveType($Window, $Move) {
+    $text = [string](Get-Arg $Move 'text')
+    if ($text.Length -eq 0 -or $text.Length -gt $TypeLimit) { return New-Result $false "I can type 1 to $TypeLimit characters in one move." }
+    $target = Get-Target $Move
+    if ($null -ne $target) {
+        if ($null -ne $target.Mark -and $target.Mark.Password) { return New-Result $false 'That is a password box, and VENOM never types passwords. Please type it yourself.' }
+        if (-not [Venom.Hands]::ClickTimes($Window.Handle, $target.Point[0], $target.Point[1], 1)) {
+            return New-Result $false "Something else is covering $($target.Label), so I typed nothing."
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    $done = 0
+    while ($done -lt $text.Length) {
+        if (Test-PasswordFocus) { return New-Result $false "The place to type is a password box, and VENOM never types passwords. Typed $done of $($text.Length) characters." @{ typed = $done } }
+        $chunk = $text.Substring($done, [Math]::Min(32, $text.Length - $done))
+        $typed = [Venom.Hands]::Type($Window.Handle, $chunk, 10)
+        $done += $typed
+        if ($typed -lt $chunk.Length) { return New-Result $false "'$($Window.Name)' lost focus, so I stopped after $done of $($text.Length) characters." @{ typed = $done } }
+    }
+    Start-Sleep -Milliseconds 250
+    $after = Read-FocusedText
+    $verified = if ($null -eq $after) { 'unreadable' } elseif ((ConvertTo-Lines $after).Contains((ConvertTo-Lines $text).TrimEnd("`n"))) { 'match' } else { 'different' }
+    if ((Get-Arg $Move 'enter') -eq $true) { [void][Venom.Hands]::Chord($Window.Handle, [int[]]@(0x0D)) }
+    $where = if ($null -ne $target) { " into $($target.Label)" } else { '' }
+    $check = switch ($verified) { 'match' { ' and checked that it arrived' } 'different' { ', but what arrived looks different' } default { '' } }
+    $enter = if ((Get-Arg $Move 'enter') -eq $true) { ', then pressed Enter' } else { '' }
+    return New-Result ($verified -ne 'different') "Typed $($text.Length) characters$where$check$enter." @{ window = $Window.Handle; verified = $verified; typed = $done }
+}
+
+function Invoke-MoveKey($Window, $Move) {
+    $name = ([string](Get-Arg $Move 'key')).ToLowerInvariant()
+    if (-not $KeyCodes.ContainsKey($name)) { return New-Result $false "The key '$name' is not on VENOM's list." }
+    if (-not [Venom.Hands]::Chord($Window.Handle, [int[]]$KeyCodes[$name])) { return New-Result $false "'$($Window.Name)' was not in front, so I pressed nothing." }
+    return New-Result $true "Pressed $name in '$($Window.Name)'." @{ window = $Window.Handle }
+}
+
+function Invoke-MoveScroll($Window, $Move) {
+    $steps = [int](Get-Arg $Move 'steps')
+    if ($steps -lt 1 -or $steps -gt 10) { return New-Result $false 'I can scroll 1 to 10 steps in one move.' }
+    $direction = [string](Get-Arg $Move 'direction')
+    if (@('up', 'down') -notcontains $direction) { return New-Result $false 'I can only scroll up or down.' }
+    $target = Get-Target $Move
+    $point = if ($null -ne $target) { $target.Point } else { [Venom.Hands]::Center($Window.Handle) }
+    $notches = if ($direction -eq 'down') { -$steps } else { $steps }
+    if (-not [Venom.Hands]::Wheel($Window.Handle, $point[0], $point[1], $notches)) { return New-Result $false "Something else is covering '$($Window.Name)', so I did not scroll." }
+    return New-Result $true "Scrolled $direction $steps steps in '$($Window.Name)'." @{ window = $Window.Handle }
+}
+
+function Invoke-Move($Request) {
+    $move = Get-Arg $Request 'move'
+    if ($null -eq $move) { return New-Result $false 'I was not told which move to make.' }
+    $window = Get-LookWindow
+    Start-Sleep -Milliseconds 120
+    switch ([string](Get-Arg $move 'kind')) {
+        'click' { return Invoke-MoveClick $window $move }
+        'type' { return Invoke-MoveType $window $move }
+        'key' { return Invoke-MoveKey $window $move }
+        'scroll' { return Invoke-MoveScroll $window $move }
+        default { return New-Result $false 'That move is not on the menu.' }
+    }
+}
+
 function Invoke-Describe($Request) {
     $window = Resolve-Window $Request
     return New-Result $true $window.Name @{ title = $window.Name; window = $window.Handle; front = ([Venom.Hands]::Foreground() -eq $window.Handle) }
@@ -598,6 +844,8 @@ function Invoke-Request([string]$Id, $Request) {
         'screenshot' { return Invoke-Screenshot $Request }
         'run_script' { return Invoke-RunScript $Id $Request }
         'describe' { return Invoke-Describe $Request }
+        'observe' { return Invoke-Observe $Request }
+        'move' { return Invoke-Move $Request }
         default { return New-Result $false 'The hands were asked for something that is not on the menu.' }
     }
 }
@@ -610,7 +858,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 1; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 4; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }
