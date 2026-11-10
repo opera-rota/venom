@@ -21,6 +21,7 @@ from venom_contracts.models import (
 from venom_orchestrator.engines import EngineCatalogue
 from venom_orchestrator.turns import ANSWER_CHARACTERS, BROKEN_PLAN, Orchestrator, fit, recent
 from venom_reasoning.errors import ReasoningError
+from venom_reasoning.openrouter_provider import ListedModel
 from venom_reasoning.reasoner import Limits, Reasoner
 from venom_reasoning.testing import ScriptedProvider, Step, answer, structured
 
@@ -204,7 +205,7 @@ async def test_answers_with_the_models_of_the_chosen_engine() -> None:
 
 async def test_refuses_an_engine_with_no_model_offered() -> None:
     catalogue = EngineCatalogue(("quick",))
-    catalogue.update({"quick": True})
+    catalogue.update({"quick": ListedModel(tools=True, sees=False)})
     provider = ScriptedProvider({})
     final = (await run(provider, turn("Hello"), catalogue))[-1]
 

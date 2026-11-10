@@ -1,0 +1,49 @@
+{
+  "picture": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP8=",
+  "width": 5000,
+  "height": 720,
+  "window": "Untitled - Notepad",
+  "app": "Notepad",
+  "marks": [
+    {
+      "id": 1,
+      "kind": "box",
+      "name": "Text editor",
+      "editable": true,
+      "password": false,
+      "box": {
+        "x": 12,
+        "y": 96,
+        "width": 1256,
+        "height": 600
+      }
+    },
+    {
+      "id": 2,
+      "kind": "menu",
+      "name": "File",
+      "editable": false,
+      "password": false,
+      "box": {
+        "x": 12,
+        "y": 40,
+        "width": 40,
+        "height": 28
+      }
+    },
+    {
+      "id": 3,
+      "kind": "button",
+      "name": "Close",
+      "editable": false,
+      "password": false,
+      "box": {
+        "x": 1232,
+        "y": 0,
+        "width": 48,
+        "height": 32
+      }
+    }
+  ],
+  "focused": 1
+}

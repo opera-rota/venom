@@ -1,0 +1,7 @@
+{
+  "seen": "The Gmail sign-in page asks for a password.",
+  "next": {
+    "kind": "ask",
+    "question": "Gmail wants your password. Please type it yourself, then tell me to go on."
+  }
+}

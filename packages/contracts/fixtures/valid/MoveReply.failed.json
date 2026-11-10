@@ -1,0 +1,10 @@
+{
+  "type": "failed",
+  "reason": "not_configured",
+  "detail": "Dove cannot see the screen. Choose an engine that can see in Models.",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_micro_usd": 0
+  }
+}

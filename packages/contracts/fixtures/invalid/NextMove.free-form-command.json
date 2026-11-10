@@ -1,0 +1,14 @@
+{
+  "seen": "A PowerShell window.",
+  "next": {
+    "kind": "move",
+    "intent": "Delete everything",
+    "effects": [
+      "deletes"
+    ],
+    "move": {
+      "name": "run",
+      "command": "Remove-Item C: -Recurse"
+    }
+  }
+}

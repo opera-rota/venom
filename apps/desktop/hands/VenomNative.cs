@@ -604,28 +604,92 @@ namespace Venom
             {
                 return;
             }
+            int count = boxes.Length / 4;
+            Rectangle[] marks = new Rectangle[count];
+            for (int index = 0; index < count; index++)
+            {
+                marks[index] = new Rectangle(boxes[index * 4], boxes[index * 4 + 1], Math.Max(2, boxes[index * 4 + 2]), Math.Max(2, boxes[index * 4 + 3]));
+            }
             Color tone = Color.FromArgb(255, 229, 32, 64);
             canvas.SmoothingMode = SmoothingMode.None;
             canvas.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             using (Pen pen = new Pen(tone, 2f))
+            using (Pen edge = new Pen(Color.White, 1f))
             using (SolidBrush fill = new SolidBrush(tone))
             using (SolidBrush ink = new SolidBrush(Color.White))
-            using (Font font = new Font("Segoe UI", 13f, FontStyle.Bold, GraphicsUnit.Pixel))
+            using (Font font = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel))
             {
-                for (int index = 0; index + 3 < boxes.Length; index += 4)
+                foreach (Rectangle mark in marks)
                 {
-                    Rectangle box = new Rectangle(boxes[index], boxes[index + 1], Math.Max(2, boxes[index + 2]), Math.Max(2, boxes[index + 3]));
-                    canvas.DrawRectangle(pen, box);
-                    string label = ((index / 4) + 1).ToString();
+                    canvas.DrawRectangle(pen, mark);
+                }
+                List<Rectangle> placed = new List<Rectangle>();
+                for (int index = 0; index < count; index++)
+                {
+                    string label = (index + 1).ToString();
                     SizeF size = canvas.MeasureString(label, font);
-                    int labelWidth = (int)Math.Ceiling(size.Width) + 4;
-                    int labelHeight = (int)Math.Ceiling(size.Height);
-                    int x = Math.Max(0, Math.Min(box.Left, width - labelWidth));
-                    int y = box.Top - labelHeight >= 0 ? box.Top - labelHeight : Math.Min(box.Top, height - labelHeight);
-                    canvas.FillRectangle(fill, x, y, labelWidth, labelHeight);
-                    canvas.DrawString(label, font, ink, x + 2, y);
+                    Size tag = new Size((int)Math.Ceiling(size.Width) + 2, (int)Math.Ceiling(size.Height));
+                    Rectangle spot = LabelSpot(marks, index, tag, placed, width, height);
+                    placed.Add(spot);
+                    canvas.FillRectangle(fill, spot);
+                    canvas.DrawRectangle(edge, spot.X, spot.Y, spot.Width - 1, spot.Height - 1);
+                    canvas.DrawString(label, font, ink, spot.X + 1, spot.Y);
                 }
             }
+        }
+
+        private static Rectangle LabelSpot(Rectangle[] marks, int index, Size tag, List<Rectangle> placed, int width, int height)
+        {
+            Rectangle mark = marks[index];
+            Point[] tries = new Point[]
+            {
+                new Point(mark.Left, mark.Top - tag.Height),
+                new Point(mark.Left, mark.Top),
+                new Point(mark.Left - tag.Width, mark.Top),
+                new Point(mark.Right - tag.Width, mark.Top - tag.Height),
+                new Point(mark.Left, mark.Bottom),
+                new Point(mark.Right, mark.Top),
+                new Point(mark.Left - tag.Width, mark.Bottom - tag.Height),
+                new Point(mark.Right - tag.Width, mark.Bottom - tag.Height),
+                new Point(mark.Left + tag.Width, mark.Top - tag.Height),
+                new Point(mark.Left - tag.Width * 2, mark.Top),
+            };
+            Rectangle best = Rectangle.Empty;
+            long least = long.MaxValue;
+            foreach (Point at in tries)
+            {
+                int x = Math.Max(0, Math.Min(at.X, width - tag.Width));
+                int y = Math.Max(0, Math.Min(at.Y, height - tag.Height));
+                Rectangle spot = new Rectangle(x, y, tag.Width, tag.Height);
+                long covered = 0;
+                foreach (Rectangle other in placed)
+                {
+                    covered += Shared(spot, other) * 1000;
+                }
+                for (int other = 0; other < marks.Length; other++)
+                {
+                    if (other != index && !marks[other].Contains(mark))
+                    {
+                        covered += Shared(spot, marks[other]);
+                    }
+                }
+                if (covered == 0)
+                {
+                    return spot;
+                }
+                if (covered < least)
+                {
+                    least = covered;
+                    best = spot;
+                }
+            }
+            return best;
+        }
+
+        private static long Shared(Rectangle one, Rectangle two)
+        {
+            Rectangle shared = Rectangle.Intersect(one, two);
+            return (long)shared.Width * shared.Height;
         }
 
         private static string Encode(Bitmap picture, int limit)

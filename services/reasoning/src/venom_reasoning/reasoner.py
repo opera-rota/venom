@@ -10,7 +10,9 @@ from venom_contracts.models import (
     ConnectorService,
     ConversationEntry,
     Intent,
+    MakeMove,
     MemoryContext,
+    NextMove,
     PlanDraft,
     ReasoningDelta,
     ReasoningDone,
@@ -18,6 +20,7 @@ from venom_contracts.models import (
     ReasoningFailed,
     ReasoningOutput,
     ReasoningRequest,
+    ScreenClick,
     StructuredOutput,
     TokenUsage,
 )
@@ -27,7 +30,7 @@ from venom_reasoning.provider import Completion, ModelCall, Provider, ProviderEv
 
 log = logging.getLogger("venom.reasoning")
 
-STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent, "PlanDraft": PlanDraft}
+STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent, "PlanDraft": PlanDraft, "NextMove": NextMove}
 
 INTENT_WORDS = re.compile(r"\b(question|task)s?\b", re.IGNORECASE)
 
@@ -56,7 +59,7 @@ class Reasoner:
             return
 
         shape = structured_shape(request.output)
-        turns = to_turns(request.messages)
+        turns = with_picture(to_turns(request.messages), request.picture)
         last = ReasoningError("internal", "The model could not answer.")
 
         for model in models:
@@ -169,6 +172,8 @@ def coherent(value: BaseModel) -> bool:
     match value:
         case PlanDraft(steps=steps, cannot=cannot):
             return (cannot is None) != (not steps)
+        case NextMove(next=MakeMove(move=ScreenClick(mark=mark, point=point))):
+            return (mark is None) != (point is None)
         case _:
             return True
 
@@ -195,6 +200,13 @@ def instructions(
 
 def listed(memory: MemoryContext) -> str:
     return f"- ({memory.type}, saved {memory.saved_at.date().isoformat()}) {memory.content}"
+
+
+def with_picture(turns: list[Turn], picture: str | None) -> list[Turn]:
+    if picture is None or not turns or turns[-1].role != "user":
+        return turns
+    last = turns[-1]
+    return [*turns[:-1], Turn(last.role, last.text, (*last.pictures, picture))]
 
 
 def to_turns(entries: Sequence[ConversationEntry]) -> list[Turn]:

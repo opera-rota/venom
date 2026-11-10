@@ -1,0 +1,17 @@
+{
+  "seen": "A Wikipedia article with a cookie banner at the bottom.",
+  "next": {
+    "kind": "move",
+    "intent": "Close the cookie banner",
+    "effects": [],
+    "move": {
+      "name": "click",
+      "mark": null,
+      "point": {
+        "x": 1180,
+        "y": 690
+      },
+      "double": false
+    }
+  }
+}

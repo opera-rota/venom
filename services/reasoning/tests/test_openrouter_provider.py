@@ -7,7 +7,7 @@ import pytest
 
 from venom_contracts.models import PlanDraft
 from venom_reasoning.errors import ReasoningError
-from venom_reasoning.openrouter_provider import ATTRIBUTION, OpenRouterProvider, listed_models, portable
+from venom_reasoning.openrouter_provider import ATTRIBUTION, ListedModel, OpenRouterProvider, listed_models, portable
 from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk, Thinking, Turn
 
 pytestmark = pytest.mark.anyio
@@ -137,6 +137,19 @@ async def test_structured_output_uses_a_forced_function() -> None:
     assert body["tools"][0]["function"]["parameters"]["properties"]["kind"] == {"type": "string"}
 
 
+async def test_sends_the_picture_with_the_last_words_of_the_user() -> None:
+    seen: list[httpx2.Request] = []
+    subject = provider(streamed(chunk({"content": "ok"}, finish="stop", usage=USAGE)), seen)
+    looked = ModelCall(model=MODEL, system="You are VENOM.", turns=[Turn("user", "What do you see?", ("QUJD",))], max_output_tokens=64, schema=None)
+    await collect(subject, looked)
+
+    content = json.loads(seen[0].content)["messages"][1]["content"]
+    assert content == [
+        {"type": "text", "text": "What do you see?"},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,QUJD", "detail": "high"}},
+    ]
+
+
 def written(content: str | None) -> Handler:
     response = {
         "id": "gen-3",
@@ -230,10 +243,17 @@ async def test_translates_a_connection_failure() -> None:
     assert raised.value.reason == "unavailable"
 
 
-async def test_lists_models_and_which_can_use_tools() -> None:
+async def test_lists_models_and_which_can_use_tools_and_see() -> None:
     listing = {
         "data": [
-            {"id": "anthropic/claude-haiku-5.5", "object": "model", "created": 1, "owned_by": "anthropic", "supported_parameters": ["tools", "max_tokens"]},
+            {
+                "id": "anthropic/claude-haiku-5.5",
+                "object": "model",
+                "created": 1,
+                "owned_by": "anthropic",
+                "supported_parameters": ["tools", "max_tokens"],
+                "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
+            },
             {"id": "meta-llama/llama-4-scout", "object": "model", "created": 1, "owned_by": "meta", "supported_parameters": ["max_tokens"]},
         ]
     }
@@ -241,5 +261,8 @@ async def test_lists_models_and_which_can_use_tools() -> None:
     subject = provider(lambda _request: httpx2.Response(200, json=listing), seen)
     listed = await listed_models(subject._client)  # pyright: ignore[reportPrivateUsage]
 
-    assert listed == {"anthropic/claude-haiku-5.5": True, "meta-llama/llama-4-scout": False}
+    assert listed == {
+        "anthropic/claude-haiku-5.5": ListedModel(tools=True, sees=True),
+        "meta-llama/llama-4-scout": ListedModel(tools=False, sees=False),
+    }
     assert seen[0].url.path == "/api/v1/models"

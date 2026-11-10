@@ -23,8 +23,8 @@ from venom_contracts.models import (
 )
 from venom_contracts.prompts import get_prompt
 from venom_reasoning.errors import ReasoningError
-from venom_reasoning.provider import Thinking
-from venom_reasoning.reasoner import Limits, Reasoner, to_turns
+from venom_reasoning.provider import Thinking, Turn
+from venom_reasoning.reasoner import Limits, Reasoner, to_turns, with_picture
 from venom_reasoning.testing import Pause, ScriptedProvider, Step, answer, structured
 
 pytestmark = pytest.mark.anyio
@@ -50,6 +50,7 @@ def request(
     memories: list[MemoryContext] | None = None,
     remembered: MemoryContext | None = None,
     connectors: list[ConnectorService] | None = None,
+    picture: str | None = None,
 ) -> ReasoningRequest:
     return ReasoningRequest(
         request_id=REQUEST_ID,
@@ -59,6 +60,7 @@ def request(
         memories=memories or [],
         remembered=remembered,
         connectors=connectors,
+        picture=picture,
         output=output or TextOutput(kind="text"),
         max_output_tokens=512,
     )
@@ -277,3 +279,20 @@ async def test_sends_only_the_rules_when_nothing_is_remembered() -> None:
     provider = ScriptedProvider({"primary": [answer("Hello!", "primary")]})
     await run(provider, request("Hello"))
     assert provider.calls[0].system == get_prompt("reply").text
+
+
+def test_a_picture_goes_with_the_last_words_of_the_user() -> None:
+    turns = [Turn("user", "Goal"), Turn("assistant", "Okay"), Turn("user", "The screen now")]
+    assert with_picture(turns, "QUJD")[-1] == Turn("user", "The screen now", ("QUJD",))
+    assert with_picture(turns, None) == turns
+    assert with_picture([Turn("assistant", "Hi")], "QUJD") == [Turn("assistant", "Hi")]
+
+
+async def test_passes_the_picture_of_the_request_to_the_model() -> None:
+    chosen = '{"seen": "Notepad.", "next": {"kind": "cannot", "reason": "Nothing to do."}}'
+    provider = ScriptedProvider({"primary": [structured(chosen, "primary")]})
+    ask = request("Look", role="act", output=StructuredOutput(kind="structured", contract="NextMove"), picture="QUJD")
+    events = await run(provider, ask, ["primary"])
+
+    assert isinstance(events[-1], ReasoningDone)
+    assert provider.calls[0].turns[-1].pictures == ("QUJD",)

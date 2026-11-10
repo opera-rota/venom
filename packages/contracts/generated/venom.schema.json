@@ -19,6 +19,9 @@
       "$ref": "#/$defs/ApiIssue"
     },
     {
+      "$ref": "#/$defs/AskUser"
+    },
+    {
       "$ref": "#/$defs/AttachChallenge"
     },
     {
@@ -133,6 +136,12 @@
       "$ref": "#/$defs/ForgottenEvent"
     },
     {
+      "$ref": "#/$defs/GoalCannot"
+    },
+    {
+      "$ref": "#/$defs/GoalDone"
+    },
+    {
       "$ref": "#/$defs/HaltEvent"
     },
     {
@@ -146,6 +155,9 @@
     },
     {
       "$ref": "#/$defs/LiveEvent"
+    },
+    {
+      "$ref": "#/$defs/MakeMove"
     },
     {
       "$ref": "#/$defs/MemoryContext"
@@ -175,7 +187,25 @@
       "$ref": "#/$defs/MessageHistory"
     },
     {
+      "$ref": "#/$defs/MoveChosen"
+    },
+    {
+      "$ref": "#/$defs/MoveFailed"
+    },
+    {
+      "$ref": "#/$defs/MoveRequest"
+    },
+    {
+      "$ref": "#/$defs/NextMove"
+    },
+    {
+      "$ref": "#/$defs/Observation"
+    },
+    {
       "$ref": "#/$defs/OpenAppAction"
+    },
+    {
+      "$ref": "#/$defs/PastMove"
     },
     {
       "$ref": "#/$defs/PendingAnswer"
@@ -239,6 +269,33 @@
     },
     {
       "$ref": "#/$defs/SafetySettings"
+    },
+    {
+      "$ref": "#/$defs/ScreenBox"
+    },
+    {
+      "$ref": "#/$defs/ScreenClick"
+    },
+    {
+      "$ref": "#/$defs/ScreenKeyPress"
+    },
+    {
+      "$ref": "#/$defs/ScreenMark"
+    },
+    {
+      "$ref": "#/$defs/ScreenOpen"
+    },
+    {
+      "$ref": "#/$defs/ScreenPause"
+    },
+    {
+      "$ref": "#/$defs/ScreenPoint"
+    },
+    {
+      "$ref": "#/$defs/ScreenScroll"
+    },
+    {
+      "$ref": "#/$defs/ScreenType"
     },
     {
       "$ref": "#/$defs/SecretWordRegistration"
@@ -526,6 +583,26 @@
       "required": [
         "path",
         "message"
+      ],
+      "additionalProperties": false
+    },
+    "AskUser": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "ask"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "question"
       ],
       "additionalProperties": false
     },
@@ -1736,6 +1813,46 @@
         "propertyName": "type"
       }
     },
+    "GoalCannot": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "cannot"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "GoalDone": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "done"
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "answer"
+      ],
+      "additionalProperties": false
+    },
     "HaltEvent": {
       "type": "object",
       "properties": {
@@ -1912,6 +2029,38 @@
         "failed",
         "stopped"
       ]
+    },
+    "MakeMove": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "move"
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "effects": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
+        "move": {
+          "$ref": "#/$defs/ScreenMove"
+        }
+      },
+      "required": [
+        "kind",
+        "intent",
+        "effects",
+        "move"
+      ],
+      "additionalProperties": false
     },
     "MemoryContent": {
       "type": "string",
@@ -2241,6 +2390,230 @@
       "minLength": 1,
       "maxLength": 100
     },
+    "MoveChoice": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MakeMove"
+        },
+        {
+          "$ref": "#/$defs/AskUser"
+        },
+        {
+          "$ref": "#/$defs/GoalDone"
+        },
+        {
+          "$ref": "#/$defs/GoalCannot"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "MoveChosen": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "chosen"
+        },
+        "next": {
+          "$ref": "#/$defs/NextMove"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelName"
+        },
+        "usage": {
+          "$ref": "#/$defs/TokenUsage"
+        }
+      },
+      "required": [
+        "type",
+        "next",
+        "model",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "MoveFailed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "failed"
+        },
+        "reason": {
+          "$ref": "#/$defs/ReasoningFailure"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usage": {
+          "$ref": "#/$defs/TokenUsage"
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "detail",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "MoveOutcome": {
+      "type": "string",
+      "enum": [
+        "done",
+        "failed",
+        "refused",
+        "declined",
+        "stopped"
+      ]
+    },
+    "MoveReply": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MoveChosen"
+        },
+        {
+          "$ref": "#/$defs/MoveFailed"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      }
+    },
+    "MoveRequest": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "engine": {
+          "$ref": "#/$defs/EngineId"
+        },
+        "goal": {
+          "$ref": "#/$defs/MessageText"
+        },
+        "moves": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PastMove"
+          }
+        },
+        "guidance": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MessageText"
+          }
+        },
+        "memories": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryContext"
+          }
+        },
+        "observation": {
+          "$ref": "#/$defs/Observation"
+        }
+      },
+      "required": [
+        "request_id",
+        "account_id",
+        "engine",
+        "goal",
+        "moves",
+        "guidance",
+        "memories",
+        "observation"
+      ],
+      "additionalProperties": false
+    },
+    "NextMove": {
+      "type": "object",
+      "properties": {
+        "seen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "next": {
+          "$ref": "#/$defs/MoveChoice"
+        }
+      },
+      "required": [
+        "seen",
+        "next"
+      ],
+      "additionalProperties": false
+    },
+    "Observation": {
+      "type": "object",
+      "properties": {
+        "picture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000000,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "window": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "app": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "marks": {
+          "maxItems": 60,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScreenMark"
+          }
+        },
+        "focused": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "picture",
+        "width",
+        "height",
+        "window",
+        "app",
+        "marks",
+        "focused"
+      ],
+      "additionalProperties": false
+    },
     "OpaqueMessage": {
       "type": "string",
       "minLength": 16,
@@ -2278,6 +2651,36 @@
         "name",
         "app",
         "open"
+      ],
+      "additionalProperties": false
+    },
+    "PastMove": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "move": {
+          "$ref": "#/$defs/ScreenMove"
+        },
+        "outcome": {
+          "$ref": "#/$defs/MoveOutcome"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "intent",
+        "move",
+        "outcome",
+        "detail"
       ],
       "additionalProperties": false
     },
@@ -2520,6 +2923,7 @@
       "enum": [
         "understand",
         "plan",
+        "act",
         "reply"
       ]
     },
@@ -2712,6 +3116,18 @@
             }
           ]
         },
+        "picture": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "output": {
           "$ref": "#/$defs/ReasoningOutput"
         },
@@ -2729,6 +3145,7 @@
         "memories",
         "remembered",
         "connectors",
+        "picture",
         "output",
         "max_output_tokens"
       ],
@@ -2989,6 +3406,349 @@
       "required": [
         "confirmation_strictness",
         "skip_asking"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenBox": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenClick": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "click"
+        },
+        "mark": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "point": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScreenPoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "double": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "mark",
+        "point",
+        "double"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenKey": {
+      "type": "string",
+      "enum": [
+        "enter",
+        "tab",
+        "escape",
+        "backspace",
+        "delete",
+        "up",
+        "down",
+        "left",
+        "right",
+        "page_up",
+        "page_down",
+        "home",
+        "end",
+        "ctrl+a",
+        "ctrl+c",
+        "ctrl+v",
+        "ctrl+f",
+        "ctrl+l",
+        "ctrl+t",
+        "ctrl+w",
+        "alt+left",
+        "alt+tab",
+        "win",
+        "f5"
+      ]
+    },
+    "ScreenKeyPress": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "key"
+        },
+        "key": {
+          "$ref": "#/$defs/ScreenKey"
+        }
+      },
+      "required": [
+        "name",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenMark": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "kind": {
+          "$ref": "#/$defs/ScreenMarkKind"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "editable": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "boolean"
+        },
+        "box": {
+          "$ref": "#/$defs/ScreenBox"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "editable",
+        "password",
+        "box"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenMarkKind": {
+      "type": "string",
+      "enum": [
+        "button",
+        "link",
+        "box",
+        "check",
+        "list",
+        "item",
+        "tab",
+        "menu",
+        "text",
+        "other"
+      ]
+    },
+    "ScreenMove": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ScreenClick"
+        },
+        {
+          "$ref": "#/$defs/ScreenType"
+        },
+        {
+          "$ref": "#/$defs/ScreenKeyPress"
+        },
+        {
+          "$ref": "#/$defs/ScreenScroll"
+        },
+        {
+          "$ref": "#/$defs/ScreenOpen"
+        },
+        {
+          "$ref": "#/$defs/ScreenPause"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "name"
+      }
+    },
+    "ScreenOpen": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "open"
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "\\S"
+        },
+        "open": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "app",
+        "open"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenPause": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "pause"
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "name",
+        "seconds"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenPoint": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenScroll": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "scroll"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down"
+          ]
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "mark": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "direction",
+        "steps",
+        "mark"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "type"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "mark": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enter": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "text",
+        "mark",
+        "enter"
       ],
       "additionalProperties": false
     },
@@ -3706,7 +4466,8 @@
           "type": "string",
           "enum": [
             "Intent",
-            "PlanDraft"
+            "PlanDraft",
+            "NextMove"
           ]
         }
       },

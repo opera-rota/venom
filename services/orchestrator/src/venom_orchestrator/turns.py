@@ -181,6 +181,7 @@ class Orchestrator:
             memories=list(memories),
             remembered=remembered,
             connectors=None if connectors is None else list(connectors),
+            picture=None,
             output=output,
             max_output_tokens=max_output_tokens,
         )

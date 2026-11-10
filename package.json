@@ -23,7 +23,8 @@
     "model:check": "uv run scripts/model-check.py",
     "hands:check": "pnpm --filter @venom/desktop run hands:check",
     "hands:look": "pnpm --filter @venom/desktop run hands:look",
-    "hands:move": "pnpm --filter @venom/desktop run hands:move"
+    "hands:move": "pnpm --filter @venom/desktop run hands:move",
+    "hands:think": "pnpm --filter @venom/desktop run hands:think"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

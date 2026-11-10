@@ -1,0 +1,14 @@
+{
+  "seen": "A long page.",
+  "next": {
+    "kind": "move",
+    "intent": "Scroll to the end",
+    "effects": [],
+    "move": {
+      "name": "scroll",
+      "direction": "down",
+      "steps": 50,
+      "mark": null
+    }
+  }
+}

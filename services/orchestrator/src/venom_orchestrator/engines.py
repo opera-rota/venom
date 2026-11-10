@@ -5,10 +5,11 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from venom_contracts.engines import load_engines
 from venom_contracts.models import EngineId
 from venom_reasoning.errors import ReasoningError
+from venom_reasoning.openrouter_provider import ListedModel
 
 log = logging.getLogger("venom.engines")
 
-type Lister = Callable[[], Awaitable[Mapping[str, bool]]]
+type Lister = Callable[[], Awaitable[Mapping[str, ListedModel]]]
 
 REFRESH_SECONDS = 3600.0
 TEST_DRIVE_POOL = 4
@@ -18,19 +19,23 @@ class EngineCatalogue:
     def __init__(self, understand: Sequence[str], *, test_drive: bool = False) -> None:
         self._understand = tuple(understand)
         self._test_drive = test_drive
-        self._listed: Mapping[str, bool] | None = None
+        self._listed: Mapping[str, ListedModel] | None = None
 
     @property
     def test_drive(self) -> bool:
         return self._test_drive
 
-    def update(self, listed: Mapping[str, bool]) -> None:
+    def update(self, listed: Mapping[str, ListedModel]) -> None:
         self._listed = dict(listed)
 
-    def free_models(self) -> tuple[str, ...]:
+    def free_models(self, *, seeing: bool = False) -> tuple[str, ...]:
         if self._listed is None:
             return ()
-        free = sorted(model for model, tools in self._listed.items() if tools and model.endswith(":free"))
+        free = sorted(
+            model
+            for model, traits in self._listed.items()
+            if model.endswith(":free") and traits.tools and (traits.sees or not seeing)
+        )
         return tuple(free[:TEST_DRIVE_POOL])
 
     def models(self, engine: EngineId) -> tuple[str, ...]:
@@ -41,15 +46,26 @@ class EngineCatalogue:
             return tuple(wanted)
         return tuple(model for model in wanted if model in self._listed)
 
+    def seeing_models(self, engine: EngineId) -> tuple[str, ...]:
+        if self._test_drive:
+            return self.free_models(seeing=True)
+        wanted = load_engines()[engine].models
+        if self._listed is None:
+            return tuple(wanted)
+        return tuple(model for model in wanted if (traits := self._listed.get(model)) is not None and traits.tools and traits.sees)
+
     def understand_models(self) -> tuple[str, ...]:
         if self._test_drive:
             return self.free_models()
         if self._listed is None:
             return self._understand
-        return tuple(model for model in self._understand if self._listed.get(model, False))
+        return tuple(model for model in self._understand if (traits := self._listed.get(model)) is not None and traits.tools)
 
     def available(self) -> list[EngineId]:
         return [engine for engine in load_engines() if self.models(engine)]
+
+    def seeing(self) -> list[EngineId]:
+        return [engine for engine in load_engines() if self.seeing_models(engine)]
 
     def missing(self) -> list[str]:
         if self._listed is None:
@@ -66,9 +82,15 @@ async def refresh(catalogue: EngineCatalogue, lister: Lister) -> None:
     except ReasoningError as error:
         log.warning("could not check which models OpenRouter offers (%s); keeping the last known list", error.detail)
         return
-    log.info("engines ready: %d of %d available", len(catalogue.available()), len(load_engines()))
+    log.info(
+        "engines ready: %d of %d available, %d can see the screen",
+        len(catalogue.available()),
+        len(load_engines()),
+        len(catalogue.seeing()),
+    )
     if catalogue.test_drive:
         log.warning("TEST DRIVE: every engine answers with these free models: %s", ", ".join(catalogue.free_models()) or "none offered right now")
+        log.warning("TEST DRIVE: screen moves use these free models that can see: %s", ", ".join(catalogue.free_models(seeing=True)) or "none offered right now")
     if missing := catalogue.missing():
         log.warning("models not offered by OpenRouter right now: %s", ", ".join(missing))
     if not catalogue.understand_models():

@@ -9,6 +9,7 @@ type TurnRole = Literal["user", "assistant"]
 class Turn:
     role: TurnRole
     text: str
+    pictures: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

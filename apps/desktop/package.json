@@ -13,7 +13,8 @@
     "test": "vitest run",
     "hands:check": "node scripts/hands-check.ts",
     "hands:look": "node scripts/hands-look.ts",
-    "hands:move": "node scripts/hands-move.ts"
+    "hands:move": "node scripts/hands-move.ts",
+    "hands:think": "node scripts/hands-think.ts"
   },
   "dependencies": {
     "@serenity-kit/opaque": "1.1.0",

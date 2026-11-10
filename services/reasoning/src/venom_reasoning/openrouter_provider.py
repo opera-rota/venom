@@ -1,11 +1,13 @@
 import re
 from collections.abc import AsyncGenerator, Mapping
+from dataclasses import dataclass
 from typing import cast
 
 import openai
 from openai.types import CompletionUsage
 from openai.types.chat import (
     ChatCompletionChunk,
+    ChatCompletionContentPartParam,
     ChatCompletionMessage,
     ChatCompletionMessageParam,
     ChatCompletionNamedToolChoiceParam,
@@ -20,6 +22,12 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 RESPOND_TOOL = "respond"
 FENCED = re.compile(r"(?:```(?:json)?\s*)?(?P<body>\{.*\})(?:\s*```)?", re.DOTALL)
 ATTRIBUTION = {"HTTP-Referer": "https://github.com/opera-rota/venom", "X-Title": "VENOM"}
+
+
+@dataclass(frozen=True, slots=True)
+class ListedModel:
+    tools: bool
+    sees: bool
 
 
 def create_client(api_key: str, base_url: str = OPENROUTER_URL) -> openai.AsyncOpenAI:
@@ -137,12 +145,18 @@ def plain(value: object) -> object:
             return value
 
 
-async def listed_models(client: openai.AsyncOpenAI) -> dict[str, bool]:
+async def listed_models(client: openai.AsyncOpenAI) -> dict[str, ListedModel]:
     try:
-        listed: dict[str, bool] = {}
+        listed: dict[str, ListedModel] = {}
         async for model in await client.models.list():
-            supported = extra(model).get("supported_parameters")
-            listed[model.id] = isinstance(supported, list) and "tools" in supported
+            details = extra(model)
+            supported = details.get("supported_parameters")
+            architecture = details.get("architecture")
+            inputs = cast(Mapping[str, object], architecture).get("input_modalities") if isinstance(architecture, Mapping) else None
+            listed[model.id] = ListedModel(
+                tools=isinstance(supported, list) and "tools" in supported,
+                sees=isinstance(inputs, list) and "image" in inputs,
+            )
         return listed
     except openai.APIError as error:
         raise translate(error) from error
@@ -156,6 +170,10 @@ def to_messages(call: ModelCall) -> list[ChatCompletionMessageParam]:
 
 def to_message(turn: Turn) -> ChatCompletionMessageParam:
     match turn.role:
+        case "user" if turn.pictures:
+            parts: list[ChatCompletionContentPartParam] = [{"type": "text", "text": turn.text}]
+            parts.extend({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{picture}", "detail": "high"}} for picture in turn.pictures)
+            return {"role": "user", "content": parts}
         case "user":
             return {"role": "user", "content": turn.text}
         case "assistant":

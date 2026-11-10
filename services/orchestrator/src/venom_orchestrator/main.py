@@ -7,6 +7,7 @@ import uvicorn
 
 from venom_orchestrator.embedding import EmbeddingCatalogue, EmbeddingService, keep_embeddings_fresh
 from venom_orchestrator.engines import EngineCatalogue, keep_fresh
+from venom_orchestrator.moves import MoveChooser
 from venom_orchestrator.server import create_app
 from venom_orchestrator.settings import BrainSettings, SettingsError
 from venom_orchestrator.turns import Orchestrator
@@ -41,7 +42,9 @@ def main() -> None:
     configure_logging(settings.log_level)
     client = create_client(settings.api_key, settings.openrouter_url)
     catalogue = EngineCatalogue(settings.understand_models, test_drive=settings.test_drive)
-    orchestrator = Orchestrator(Reasoner(OpenRouterProvider(client)), catalogue)
+    reasoner = Reasoner(OpenRouterProvider(client))
+    orchestrator = Orchestrator(reasoner, catalogue)
+    chooser = MoveChooser(reasoner, catalogue)
     embedding_catalogue = EmbeddingCatalogue(settings.embed_model, test_drive=settings.test_drive)
     embeddings = EmbeddingService(OpenRouterEmbedder(client), embedding_catalogue)
 
@@ -62,7 +65,7 @@ def main() -> None:
             "TEST DRIVE is on: every engine answers with OpenRouter free models. Turn it off when OpenRouter has credit.",
         )
     uvicorn.run(
-        create_app(orchestrator, embeddings, background),
+        create_app(orchestrator, embeddings, chooser, background),
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level,

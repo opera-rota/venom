@@ -1,0 +1,12 @@
+{
+  "seen": "Chrome is open.",
+  "next": {
+    "kind": "move",
+    "intent": "Close Chrome",
+    "effects": [],
+    "move": {
+      "name": "key",
+      "key": "alt+f4"
+    }
+  }
+}

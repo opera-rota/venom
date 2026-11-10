@@ -679,8 +679,10 @@ function Invoke-Observe($Request) {
     $title = ''
     $app = ''
     if ($window.Length -gt 0 -and $ShellClasses -notcontains $window[0].Class) {
-        $title = $window[0].Name
+        $title = ([string]$window[0].Name -replace '\s+', ' ').Trim()
+        if ($title.Length -gt 300) { $title = $title.Substring(0, 297) + '...' }
         $app = [string]$window[0].Process
+        if ($app.Length -gt 120) { $app = $app.Substring(0, 120) }
         if ([Venom.Hands]::WakePages($window[0].Handle) -gt 0 -and -not $script:Woken.ContainsKey($target)) {
             $script:Woken[$target] = $true
             Start-Sleep -Milliseconds 1200
@@ -858,7 +860,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 4; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 5; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }

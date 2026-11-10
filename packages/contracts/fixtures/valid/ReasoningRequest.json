@@ -11,6 +11,7 @@
   "memories": [],
   "remembered": null,
   "connectors": null,
+  "picture": null,
   "output": {
     "kind": "structured",
     "contract": "Intent"

@@ -1,0 +1,14 @@
+{
+  "seen": "An empty Notepad window, with the keyboard in the text area.",
+  "next": {
+    "kind": "move",
+    "intent": "Type the shopping list",
+    "effects": [],
+    "move": {
+      "name": "type",
+      "text": "Milk\nBread\nEggs",
+      "mark": 1,
+      "enter": false
+    }
+  }
+}

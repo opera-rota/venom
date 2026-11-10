@@ -29,6 +29,14 @@ class ApiIssue(BaseModel):
     message: str
 
 
+class AskUser(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["ask"]
+    question: Annotated[str, Field(max_length=500, min_length=1, pattern="\\S")]
+
+
 class AttachProven(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -170,6 +178,22 @@ class ForgottenEvent(BaseModel):
     message_ids: list[UUID]
 
 
+class GoalCannot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["cannot"]
+    reason: Annotated[str, Field(max_length=300, min_length=1, pattern="\\S")]
+
+
+class GoalDone(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["done"]
+    answer: Annotated[str, Field(max_length=4000, min_length=1, pattern="\\S")]
+
+
 type IntentKind = Literal["question", "task"]
 
 
@@ -206,6 +230,12 @@ type MessageText = Annotated[str, Field(max_length=4000, min_length=1, pattern="
 
 
 type ModelName = Annotated[str, Field(max_length=100, min_length=1)]
+
+
+type MoveOutcome = Literal["done", "failed", "refused", "declined", "stopped"]
+
+
+type Focused = Annotated[int, Field(ge=1, le=60)]
 
 
 type OpaqueMessage = Annotated[
@@ -254,7 +284,7 @@ class PowerStatus(BaseModel):
 type ProficiencyLevel = Annotated[int, Field(ge=1, le=5)]
 
 
-type PromptRole = Literal["understand", "plan", "reply"]
+type PromptRole = Literal["understand", "plan", "act", "reply"]
 
 
 type PublicKey = Annotated[str, Field(pattern="^[A-Za-z0-9_-]{43}$")]
@@ -280,6 +310,9 @@ type ReasoningFailure = Literal["not_configured", "refused", "rate_limited", "un
 
 
 type Connectors = Annotated[list[ConnectorService], Field(max_length=2)]
+
+
+type Picture = Annotated[str, Field(max_length=2000000, min_length=1)]
 
 
 type RequestState = Literal["accepted", "completed", "failed"]
@@ -326,6 +359,78 @@ class RunPlan(BaseModel):
         extra="forbid",
     )
     kind: Literal["run"]
+
+
+class ScreenBox(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    x: Annotated[int, Field(ge=0, le=4096)]
+    y: Annotated[int, Field(ge=0, le=4096)]
+    width: Annotated[int, Field(ge=1, le=4096)]
+    height: Annotated[int, Field(ge=1, le=4096)]
+
+
+type Mark = Annotated[int, Field(ge=1, le=60)]
+
+
+type ScreenKey = Literal["enter", "tab", "escape", "backspace", "delete", "up", "down", "left", "right", "page_up", "page_down", "home", "end", "ctrl+a", "ctrl+c", "ctrl+v", "ctrl+f", "ctrl+l", "ctrl+t", "ctrl+w", "alt+left", "alt+tab", "win", "f5"]
+
+
+class ScreenKeyPress(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["key"]
+    key: ScreenKey
+
+
+type ScreenMarkKind = Literal["button", "link", "box", "check", "list", "item", "tab", "menu", "text", "other"]
+
+
+class ScreenOpen(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["open"]
+    app: Annotated[str, Field(max_length=80, min_length=1, pattern="\\S")]
+    open: Open | None
+
+
+class ScreenPause(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["pause"]
+    seconds: Annotated[int, Field(ge=1, le=10)]
+
+
+class ScreenPoint(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    x: Annotated[int, Field(ge=0, le=4096)]
+    y: Annotated[int, Field(ge=0, le=4096)]
+
+
+class ScreenScroll(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["scroll"]
+    direction: Literal["up", "down"]
+    steps: Annotated[int, Field(ge=1, le=10)]
+    mark: Mark | None
+
+
+class ScreenType(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["type"]
+    text: Annotated[str, Field(max_length=2000, min_length=1)]
+    mark: Mark | None
+    enter: bool
 
 
 type ScriptLanguage = Literal["powershell", "python"]
@@ -480,7 +585,7 @@ class StructuredOutput(BaseModel):
         extra="forbid",
     )
     kind: Literal["structured"]
-    contract: Literal["Intent", "PlanDraft"]
+    contract: Literal["Intent", "PlanDraft", "NextMove"]
 
 
 class TakeScreenshotAction(BaseModel):
@@ -874,6 +979,16 @@ class MessageEvent(BaseModel):
     message: Message
 
 
+class MoveFailed(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["failed"]
+    reason: ReasoningFailure
+    detail: Annotated[str, Field(min_length=1)]
+    usage: TokenUsage
+
+
 class PendingAnswer(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -952,6 +1067,7 @@ class ReasoningRequest(BaseModel):
     memories: Annotated[list[MemoryContext], Field(max_length=40)]
     remembered: MemoryContext | None
     connectors: Connectors | None
+    picture: Picture | None
     output: ReasoningOutput
     max_output_tokens: Annotated[int, Field(ge=1, le=8192)]
 
@@ -995,6 +1111,34 @@ class SafetySettings(BaseModel):
     )
     confirmation_strictness: ConfirmationStrictness
     skip_asking: Annotated[list[SkippableEffect], Field(max_length=3)]
+
+
+class ScreenClick(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Literal["click"]
+    mark: Mark | None
+    point: ScreenPoint | None
+    double: bool
+
+
+class ScreenMark(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[int, Field(ge=1, le=60)]
+    kind: ScreenMarkKind
+    name: Annotated[str, Field(max_length=120)]
+    editable: bool
+    password: bool
+    box: ScreenBox
+
+
+type ScreenMove = Annotated[
+    ScreenClick | ScreenType | ScreenKeyPress | ScreenScroll | ScreenOpen | ScreenPause,
+    Field(discriminator="name"),
+]
 
 
 class SignupFinish(BaseModel):
@@ -1143,6 +1287,16 @@ class EngineSpec(BaseModel):
     models: Annotated[list[ModelName], Field(max_length=3, min_length=1)]
 
 
+class MakeMove(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["move"]
+    intent: Annotated[str, Field(max_length=200, min_length=1, pattern="\\S")]
+    effects: Annotated[list[Effect], Field(max_length=5)]
+    move: ScreenMove
+
+
 class MemoryEvent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1160,6 +1314,44 @@ class MessageHistory(BaseModel):
     )
     messages: list[Message]
     pending: list[PendingAnswer]
+
+
+type MoveChoice = Annotated[
+    MakeMove | AskUser | GoalDone | GoalCannot, Field(discriminator="kind")
+]
+
+
+class NextMove(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    seen: Annotated[str, Field(max_length=300, min_length=1, pattern="\\S")]
+    next: MoveChoice
+
+
+class Observation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    picture: Annotated[
+        str, Field(max_length=2000000, min_length=1, pattern="^[A-Za-z0-9+/]+={0,2}$")
+    ]
+    width: Annotated[int, Field(ge=1, le=4096)]
+    height: Annotated[int, Field(ge=1, le=4096)]
+    window: Annotated[str, Field(max_length=300)]
+    app: Annotated[str, Field(max_length=120)]
+    marks: Annotated[list[ScreenMark], Field(max_length=60)]
+    focused: Focused | None
+
+
+class PastMove(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    intent: Annotated[str, Field(max_length=200, min_length=1, pattern="\\S")]
+    move: ScreenMove
+    outcome: MoveOutcome
+    detail: Annotated[str, Field(max_length=300, min_length=1, pattern="\\S")]
 
 
 class PlanDraft(BaseModel):
@@ -1318,6 +1510,33 @@ class HaltEvent(BaseModel):
     tasks: list[Task]
 
 
+class MoveChosen(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["chosen"]
+    next: NextMove
+    model: ModelName
+    usage: TokenUsage
+
+
+type MoveReply = Annotated[MoveChosen | MoveFailed, Field(discriminator="type")]
+
+
+class MoveRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    request_id: UUID
+    account_id: UUID
+    engine: EngineId
+    goal: MessageText
+    moves: Annotated[list[PastMove], Field(max_length=40)]
+    guidance: Annotated[list[MessageText], Field(max_length=10)]
+    memories: Annotated[list[MemoryContext], Field(max_length=40)]
+    observation: Observation
+
+
 class Skill(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1343,7 +1562,7 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | OpenAppAction | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveFailed | MoveRequest | NextMove | Observation | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | ScreenBox | ScreenClick | ScreenKeyPress | ScreenMark | ScreenOpen | ScreenPause | ScreenPoint | ScreenScroll | ScreenType | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 

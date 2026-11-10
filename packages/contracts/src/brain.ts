@@ -44,7 +44,7 @@ export const TextOutput = z
   .register(contracts, { id: "TextOutput" });
 
 export const StructuredOutput = z
-  .strictObject({ kind: z.literal("structured"), contract: z.enum(["Intent", "PlanDraft"]) })
+  .strictObject({ kind: z.literal("structured"), contract: z.enum(["Intent", "PlanDraft", "NextMove"]) })
   .register(contracts, { id: "StructuredOutput" });
 
 export const ReasoningOutput = z
@@ -60,6 +60,7 @@ export const ReasoningRequest = z
     memories: z.array(MemoryContext).max(40),
     remembered: MemoryContext.nullable(),
     connectors: z.array(ConnectorService).max(2).nullable(),
+    picture: z.string().min(1).max(2_000_000).nullable(),
     output: ReasoningOutput,
     max_output_tokens: z.int().min(1).max(8192),
   })

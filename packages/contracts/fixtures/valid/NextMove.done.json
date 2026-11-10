@@ -1,0 +1,7 @@
+{
+  "seen": "Notepad shows the shopping list: Milk, Bread, Eggs.",
+  "next": {
+    "kind": "done",
+    "answer": "I opened Notepad and wrote the shopping list: milk, bread and eggs."
+  }
+}

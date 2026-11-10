@@ -1,0 +1,23 @@
+{
+  "type": "chosen",
+  "next": {
+    "seen": "An empty Notepad window, with the keyboard in the text area.",
+    "next": {
+      "kind": "move",
+      "intent": "Type the shopping list",
+      "effects": [],
+      "move": {
+        "name": "type",
+        "text": "Milk\nBread\nEggs",
+        "mark": 1,
+        "enter": false
+      }
+    }
+  },
+  "model": "anthropic/claude-haiku-5.5",
+  "usage": {
+    "input_tokens": 2210,
+    "output_tokens": 96,
+    "cost_micro_usd": 2690
+  }
+}
