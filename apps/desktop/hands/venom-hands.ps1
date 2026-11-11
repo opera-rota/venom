@@ -683,11 +683,19 @@ function Invoke-Observe($Request) {
         if ($title.Length -gt 300) { $title = $title.Substring(0, 297) + '...' }
         $app = [string]$window[0].Process
         if ($app.Length -gt 120) { $app = $app.Substring(0, 120) }
-        if ([Venom.Hands]::WakePages($window[0].Handle) -gt 0 -and -not $script:Woken.ContainsKey($target)) {
+        $pages = [Venom.Hands]::WakePages($window[0].Handle)
+        if ($pages -gt 0 -and -not $script:Woken.ContainsKey($target)) {
             $script:Woken[$target] = $true
             Start-Sleep -Milliseconds 1200
         }
         $marks = @(Get-Marks $window[0] $scale $width $height)
+        for ($try = 0; $pages -gt 0 -and $marks.Length -lt $MarkLimit -and $try -lt 4; $try++) {
+            Start-Sleep -Milliseconds 700
+            [void][Venom.Hands]::WakePages($window[0].Handle)
+            $again = @(Get-Marks $window[0] $scale $width $height)
+            if ($again.Length -le $marks.Length) { break }
+            $marks = $again
+        }
     }
     elseif ($null -ne $handle) { return New-Result $false 'The window VENOM was looking at is closed.' }
     $boxes = New-Object 'System.Collections.Generic.List[int]'
@@ -741,6 +749,39 @@ function Get-LookMark($Number) {
     $index = [int]$Number - 1
     if ($index -lt 0 -or $index -ge $marks.Length) { throw "There is no mark $Number on the last look, so I did nothing." }
     return $marks[$index]
+}
+
+$SpotKinds = @{
+    'Button' = 'button'; 'SplitButton' = 'button'; 'Hyperlink' = 'link'; 'Edit' = 'box'; 'ComboBox' = 'list'; 'List' = 'list'
+    'CheckBox' = 'check'; 'RadioButton' = 'check'; 'ListItem' = 'item'; 'TreeItem' = 'item'; 'DataItem' = 'item'; 'TabItem' = 'tab'; 'MenuItem' = 'menu'
+}
+
+function Invoke-Spot($Request) {
+    if ($null -eq $script:LastLook) { return New-Result $false 'VENOM has not looked at the screen yet, so it cannot read a spot.' }
+    $scale = [double]$script:LastLook.Scale
+    $x = [double](Get-Arg $Request 'x') / $scale
+    $y = [double](Get-Arg $Request 'y') / $scale
+    try { $element = $Automation::FromPoint((New-Object System.Windows.Point -ArgumentList $x, $y)) }
+    catch { return New-Result $false 'VENOM could not read what is at that spot.' @{ kind = 'other'; name = ''; password = $false } }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $kind = 'other'
+    $name = ''
+    $password = $false
+    for ($depth = 0; $null -ne $element -and $depth -lt 6; $depth++) {
+        $current = $element.Current
+        $type = $current.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+        $label = ([string]$current.Name -replace '\s+', ' ').Trim()
+        if ($SpotKinds.ContainsKey($type)) {
+            $kind = $SpotKinds[$type]
+            $name = $label
+            $password = [bool]$current.IsPassword
+            break
+        }
+        if ($name.Length -eq 0) { $name = $label }
+        $element = $walker.GetParent($element)
+    }
+    if ($name.Length -gt 120) { $name = $name.Substring(0, 117) + '...' }
+    return New-Result $true "At that spot: $kind '$name'." @{ kind = $kind; name = $name; password = $password }
 }
 
 function Get-Target($Move) {
@@ -846,6 +887,8 @@ function Invoke-Request([string]$Id, $Request) {
         'screenshot' { return Invoke-Screenshot $Request }
         'run_script' { return Invoke-RunScript $Id $Request }
         'describe' { return Invoke-Describe $Request }
+        'spot' { return Invoke-Spot $Request }
+        'front' { return New-Result $true 'The window in front.' @{ window = [Venom.Hands]::Foreground() } }
         'observe' { return Invoke-Observe $Request }
         'move' { return Invoke-Move $Request }
         default { return New-Result $false 'The hands were asked for something that is not on the menu.' }
@@ -860,7 +903,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 5; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 7; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }

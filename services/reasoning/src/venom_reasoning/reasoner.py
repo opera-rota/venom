@@ -142,6 +142,7 @@ def validated(text: str, shape: type[BaseModel]) -> BaseModel:
     except ValidationError:
         if shape is Intent and (intent := read_intent(text)) is not None:
             return intent
+        log.warning("the answer that did not fit the %s shape began: %s", shape.__name__, " ".join(text.split())[:400])
         raise ReasoningError("invalid_output", "The model did not answer in the required shape.") from None
 
 

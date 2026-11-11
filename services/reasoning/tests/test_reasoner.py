@@ -296,3 +296,12 @@ async def test_passes_the_picture_of_the_request_to_the_model() -> None:
 
     assert isinstance(events[-1], ReasoningDone)
     assert provider.calls[0].turns[-1].pictures == ("QUJD",)
+
+
+async def test_logs_how_an_answer_in_the_wrong_shape_began(caplog: pytest.LogCaptureFixture) -> None:
+    provider = ScriptedProvider({"primary": [structured('{"seen": "Notepad.", "next": {"kind": "wave"}}', "primary")]})
+    ask = request("Look", role="act", output=StructuredOutput(kind="structured", contract="NextMove"), picture="QUJD")
+    events = await run(provider, ask, ["primary"])
+
+    assert isinstance(events[-1], ReasoningFailed)
+    assert 'the answer that did not fit the NextMove shape began: {"seen": "Notepad.", "next": {"kind": "wave"}}' in caplog.text

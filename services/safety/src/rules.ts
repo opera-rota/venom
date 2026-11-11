@@ -26,11 +26,11 @@ export interface Drill {
   readonly steps: readonly PlannedWait[];
 }
 
-const effectOrder: readonly Effect[] = ["deletes", "pays", "uses_credential", "posts", "reaches_outside"];
+export const effectOrder: readonly Effect[] = ["deletes", "pays", "uses_credential", "posts", "reaches_outside"];
 
-const highRisk: ReadonlySet<Effect> = new Set(["deletes", "pays", "uses_credential"]);
+export const highRisk: ReadonlySet<Effect> = new Set(["deletes", "pays", "uses_credential"]);
 
-const alwaysAsks: ReadonlySet<Effect> = new Set(["pays", "uses_credential"]);
+export const alwaysAsks: ReadonlySet<Effect> = new Set(["pays", "uses_credential"]);
 
 const inherentEffects: Partial<Record<StepAction, readonly Effect[]>> = {
   call_connector: ["reaches_outside"],

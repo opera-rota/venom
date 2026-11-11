@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
-import { EngineId, MessageText, MoveReply, MoveRequest, Observation, type NextMove, type ScreenMove } from "@venom/contracts";
+import { EngineId, MessageText, MoveReply, MoveRequest, Observation, ScreenMarkKind, type NextMove, type ScreenMove } from "@venom/contracts";
+import { judgeMove, type MoveJudgement, type Spot } from "@venom/safety";
 import { HandHelper } from "../src/main/hand-helper.ts";
 
 const brainUrl = process.env["VENOM_BRAIN_URL"] ?? "http://127.0.0.1:4200";
-const waitSeconds = 5;
+const clickSeconds = 30;
 
 function stamp(): string {
   return new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
@@ -39,13 +40,58 @@ function described(move: ScreenMove, seen: Observation): string {
   }
 }
 
-function report(chosen: NextMove, seen: Observation): string[] {
+function judged(judgement: MoveJudgement): string[] {
+  const reasons = judgement.because.map((line) => `               ${line}`);
+  switch (judgement.verdict) {
+    case "go":
+      return ["  safety:      goes ahead, nothing sensitive on the screen or in the move"];
+    case "ask":
+      return [`  safety:      would ask you first (${judgement.risk} risk)`, ...reasons];
+    case "refuse":
+      return ["  safety:      refused, this move never runs", ...reasons];
+  }
+}
+
+async function frontWindow(helper: HandHelper): Promise<number | null> {
+  const result = await helper.send({ op: "front" }, { timeoutMs: 10_000 });
+  const window = result.data["window"];
+  return result.ok && typeof window === "number" ? window : null;
+}
+
+async function waitForClick(helper: HandHelper): Promise<boolean> {
+  const start = await frontWindow(helper);
+  for (let waited = 0; waited < clickSeconds * 1000; waited += 300) {
+    await sleep(300);
+    const now = await frontWindow(helper);
+    if (now !== null && now !== 0 && now !== start) {
+      await sleep(1000);
+      return true;
+    }
+  }
+  return false;
+}
+
+async function readSpot(helper: HandHelper, chosen: NextMove): Promise<Spot | null> {
+  if (chosen.next.kind !== "move" || chosen.next.move.name !== "click" || chosen.next.move.point === null) {
+    return null;
+  }
+  const result = await helper.send({ op: "spot", x: chosen.next.move.point.x, y: chosen.next.move.point.y }, { timeoutMs: 15_000 });
+  const kind = ScreenMarkKind.safeParse(result.data["kind"]);
+  const name = result.data["name"];
+  return result.ok && kind.success && typeof name === "string" ? { kind: kind.data, name, password: result.data["password"] === true } : null;
+}
+
+function report(chosen: NextMove, seen: Observation, spot: Spot | null): string[] {
   const lines = [`  VENOM sees:  ${chosen.seen}`];
   switch (chosen.next.kind) {
     case "move":
       lines.push(`  next move:   ${described(chosen.next.move, seen)}`);
       lines.push(`  because:     ${chosen.next.intent}`);
       lines.push(`  effects:     ${chosen.next.effects.length > 0 ? chosen.next.effects.join(", ") : "none"}`);
+      if (chosen.next.move.name === "click" && chosen.next.move.point !== null) {
+        lines.push(`  at that spot: ${spot === null ? "VENOM could not read anything there" : `${spot.kind} "${spot.name}"`}`);
+      }
+      lines.push(...judged(judgeMove(chosen.next, seen, "standard", [], spot)));
       break;
     case "ask":
       lines.push(`  VENOM would ask you: ${chosen.next.question}`);
@@ -96,11 +142,10 @@ async function main(): Promise<void> {
   try {
     console.log("VENOM thinks about one move.");
     console.log(`Goal: ${goal.data}`);
-    console.log("Click the window VENOM should work in, then leave the mouse alone.\n");
     const hello = await helper.start();
-    for (let left = waitSeconds; left > 0; left--) {
-      console.log(`  looking in ${left}...`);
-      await sleep(1000);
+    console.log(`Now click the window VENOM should work in (Notepad, Chrome, anything) and leave the mouse alone. VENOM looks 1 second after your click.\n`);
+    if (!(await waitForClick(helper))) {
+      console.log(`  You did not click another window within ${clickSeconds} seconds, so VENOM looks at the window in front.`);
     }
     const looked = await helper.send({ op: "observe", window: null }, { timeoutMs: 60_000 });
     if (!looked.ok) {
@@ -145,7 +190,8 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    for (const line of report(reply.next, seen)) {
+    const spot = await readSpot(helper, reply.next);
+    for (const line of report(reply.next, seen, spot)) {
       console.log(line);
     }
     console.log(`\n  model: ${reply.model}, thought for ${seconds}s, ${reply.usage.input_tokens} tokens in, ${reply.usage.output_tokens} out, cost ${(reply.usage.cost_micro_usd / 1_000_000).toFixed(6)} dollars`);

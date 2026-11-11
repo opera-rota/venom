@@ -57,6 +57,8 @@ export type HandRequest =
   | { readonly op: "screenshot"; readonly window: number | null; readonly task: string }
   | { readonly op: "run_script"; readonly language: ScriptLanguage; readonly code: string; readonly task: string; readonly timeout_seconds: number }
   | { readonly op: "describe"; readonly window: number }
+  | { readonly op: "front" }
+  | { readonly op: "spot"; readonly x: number; readonly y: number }
   | { readonly op: "observe"; readonly window: number | null }
   | { readonly op: "move"; readonly move: HandMove };
 
