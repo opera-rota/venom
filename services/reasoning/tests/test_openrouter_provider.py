@@ -1,11 +1,12 @@
 import json
 from collections.abc import Callable, Mapping
+from typing import cast
 
 import httpx2
 import openai
 import pytest
 
-from venom_contracts.models import PlanDraft
+from venom_contracts.models import NextMove, PlanDraft
 from venom_reasoning.errors import ReasoningError
 from venom_reasoning.openrouter_provider import ATTRIBUTION, ListedModel, OpenRouterProvider, listed_models, portable
 from venom_reasoning.provider import Completion, ModelCall, ProviderEvent, TextChunk, Thinking, Turn
@@ -188,6 +189,17 @@ async def test_passes_a_written_answer_on_for_the_reasoner_to_judge(content: str
     final = events[-1]
     assert isinstance(final, Completion)
     assert final.text == passed
+
+
+def test_sends_a_schema_without_references_for_models_to_follow() -> None:
+    schema = NextMove.model_json_schema()
+    sent = portable(schema)
+    text = json.dumps(sent)
+    assert "$defs" in json.dumps(schema) and "$ref" in json.dumps(schema)
+    assert "$defs" not in text and "$ref" not in text
+    assert set(cast(dict[str, object], sent["properties"])) == {"seen", "next"}
+    assert sent["required"] == ["seen", "next"]
+    assert '"enter"' in text and '"ctrl+l"' in text
 
 
 def test_sends_a_schema_every_provider_reads() -> None:

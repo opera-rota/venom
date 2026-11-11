@@ -32,6 +32,8 @@ export interface RunningGateway {
   stop(): Promise<void>;
 }
 
+export const drillMs = 15_000;
+
 export async function createEnvironment(): Promise<Environment> {
   const database = await createTestDatabase();
   return {

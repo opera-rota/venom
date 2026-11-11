@@ -40,6 +40,11 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
+function nativeHandle(window: BrowserWindow): number {
+  const handle = window.getNativeWindowHandle();
+  return handle.length >= 8 ? Number(handle.readBigUInt64LE(0)) : handle.readUInt32LE(0);
+}
+
 function fromRenderer(event: IpcMainInvokeEvent): boolean {
   return (event.senderFrame?.url ?? "").startsWith(trustedOrigin);
 }
@@ -116,6 +121,9 @@ function wire(): void {
     trust: () => sessions.trust,
     report: (report) => gateway.report(report),
     output: (chunk) => gateway.output(chunk),
+    observed: (report) => gateway.observed(report),
+    spotted: (report) => gateway.spotted(report),
+    ownWindows: () => BrowserWindow.getAllWindows().map(nativeHandle),
     refused: (reason) => console.warn(`[venom] ${reason}`),
     worker: helper,
   });

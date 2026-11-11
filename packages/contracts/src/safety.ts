@@ -13,6 +13,7 @@ import {
   WaitAction,
 } from "./records.ts";
 import { contracts } from "./registry.ts";
+import { Observation, ScreenMove, ScreenPoint, ScreenSpot } from "./screen.ts";
 
 export const safetyLimits = {
   commandLifetimeSeconds: 30,
@@ -71,6 +72,31 @@ export const RunStepCommand = z
   })
   .register(contracts, { id: "RunStepCommand" });
 
+export const ObserveCommand = z
+  .strictObject({
+    kind: z.literal("observe"),
+    task_id: Id,
+  })
+  .register(contracts, { id: "ObserveCommand" });
+
+export const SpotCommand = z
+  .strictObject({
+    kind: z.literal("spot"),
+    task_id: Id,
+    point: ScreenPoint,
+  })
+  .register(contracts, { id: "SpotCommand" });
+
+export const MoveCommand = z
+  .strictObject({
+    kind: z.literal("move"),
+    task_id: Id,
+    move_id: Id,
+    move: ScreenMove,
+    confirmed: z.boolean(),
+  })
+  .register(contracts, { id: "MoveCommand" });
+
 export const StopCommand = z
   .strictObject({
     kind: z.literal("stop"),
@@ -80,7 +106,7 @@ export const StopCommand = z
   .register(contracts, { id: "StopCommand" });
 
 export const CommandBody = z
-  .discriminatedUnion("kind", [RunStepCommand, StopCommand])
+  .discriminatedUnion("kind", [RunStepCommand, ObserveCommand, SpotCommand, MoveCommand, StopCommand])
   .register(contracts, { id: "CommandBody" });
 
 export const CommandPayload = z
@@ -120,6 +146,20 @@ export const CommandReport = z
     output: z.string().min(1).max(safetyLimits.stepOutput).nullable(),
   })
   .register(contracts, { id: "CommandReport" });
+
+export const ObservationReport = z
+  .strictObject({
+    command_id: Id,
+    observation: Observation,
+  })
+  .register(contracts, { id: "ObservationReport" });
+
+export const SpotReport = z
+  .strictObject({
+    command_id: Id,
+    spot: ScreenSpot.nullable(),
+  })
+  .register(contracts, { id: "SpotReport" });
 
 export const StepOutputChunk = z
   .strictObject({
@@ -205,6 +245,9 @@ export type DeviceKeyEnrolled = z.infer<typeof DeviceKeyEnrolled>;
 export type LiveChallenge = z.infer<typeof LiveChallenge>;
 export type DeviceAction = z.infer<typeof DeviceAction>;
 export type RunStepCommand = z.infer<typeof RunStepCommand>;
+export type ObserveCommand = z.infer<typeof ObserveCommand>;
+export type SpotCommand = z.infer<typeof SpotCommand>;
+export type MoveCommand = z.infer<typeof MoveCommand>;
 export type StopCommand = z.infer<typeof StopCommand>;
 export type CommandBody = z.infer<typeof CommandBody>;
 export type CommandPayload = z.infer<typeof CommandPayload>;
@@ -212,6 +255,8 @@ export type SignedCommand = z.infer<typeof SignedCommand>;
 export type CommandFrame = z.infer<typeof CommandFrame>;
 export type CommandOutcome = z.infer<typeof CommandOutcome>;
 export type CommandReport = z.infer<typeof CommandReport>;
+export type ObservationReport = z.infer<typeof ObservationReport>;
+export type SpotReport = z.infer<typeof SpotReport>;
 export type StepOutputChunk = z.infer<typeof StepOutputChunk>;
 export type StopRequest = z.infer<typeof StopRequest>;
 export type StopReceipt = z.infer<typeof StopReceipt>;

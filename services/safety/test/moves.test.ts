@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Effect, MakeMove, Observation, ScreenMark, ScreenMove } from "@venom/contracts";
+import { refusesMove as refusesOnDevice, unconfirmedMoveWords as refusedOnDevice } from "../src/device.ts";
 import { cardWords, judgeMove, passwordWords, unreadWords } from "../src/index.ts";
 
 function mark(id: number, kind: ScreenMark["kind"], name: string, x: number, more: Partial<ScreenMark> = {}): ScreenMark {
@@ -111,5 +112,30 @@ describe("fixed rules judge every move by what is really on the screen", () => {
     expect(judgeMove(click(1), seen, "standard", skip).verdict).toBe("go");
     expect(judgeMove(click(6), seen, "standard", skip).verdict).toBe("ask");
     expect(judgeMove(click(7), seen, "standard", skip).verdict).toBe("ask");
+  });
+});
+
+describe("the computer checks every move again by itself", () => {
+  const marks = { marks: seen.marks, focused: seen.focused };
+
+  it("lets a move it would not ask about run without a yes", () => {
+    expect(refusesOnDevice({ name: "click", mark: 3, point: null, double: false }, marks, null, false)).toBeNull();
+    expect(refusesOnDevice({ name: "click", mark: 1, point: null, double: false }, marks, null, false)).toBeNull();
+    expect(refusesOnDevice({ name: "open", app: "Chrome", open: "wikipedia.org" }, marks, null, false)).toBeNull();
+  });
+
+  it("refuses money, passwords and an unreadable spot unless the user said yes", () => {
+    const pay = { name: "click", mark: 6, point: null, double: false } as const;
+    const blank = { name: "click", mark: null, point: { x: 1211, y: 600 }, double: false } as const;
+    expect(refusesOnDevice(pay, marks, null, false)).toBe(refusedOnDevice);
+    expect(refusesOnDevice(pay, marks, null, true)).toBeNull();
+    expect(refusesOnDevice(blank, marks, null, false)).toBe(refusedOnDevice);
+    expect(refusesOnDevice(blank, marks, { kind: "link", name: "Log in", password: false }, false)).toBe(refusedOnDevice);
+    expect(refusesOnDevice(blank, marks, { kind: "link", name: "Random article", password: false }, false)).toBeNull();
+  });
+
+  it("never types into a password box or a card number, even after a yes", () => {
+    expect(refusesOnDevice({ name: "type", text: "hunter2", mark: 2, enter: false }, marks, null, true)).toBe(passwordWords);
+    expect(refusesOnDevice({ name: "type", text: "4111 1111 1111 1111", mark: 5, enter: false }, marks, null, true)).toBe(cardWords);
   });
 });

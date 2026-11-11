@@ -161,11 +161,21 @@ async def test_returns_validated_structured_output() -> None:
 
 
 async def test_refuses_structured_output_of_the_wrong_shape() -> None:
-    provider = ScriptedProvider({"quick": [structured('{"kind": "chat"}', "quick")]})
+    provider = ScriptedProvider({"quick": [structured('{"kind": "chat"}', "quick"), structured('{"kind": "chat"}', "quick")]})
     final = (await run(provider, request("Hi", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
 
     assert isinstance(final, ReasoningFailed)
     assert final.reason == "invalid_output"
+    assert [call.model for call in provider.calls] == ["quick", "quick"]
+
+
+async def test_asks_a_model_once_more_when_its_answer_had_the_wrong_shape() -> None:
+    provider = ScriptedProvider({"quick": [structured('{"respond": "placeholder"}', "quick"), structured('{"kind": "task"}', "quick")]})
+    final = (await run(provider, request("Open my notes", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
+
+    assert isinstance(final, ReasoningDone)
+    assert (final.text, final.model) == ('{"kind":"task"}', "quick")
+    assert [call.model for call in provider.calls] == ["quick", "quick"]
 
 
 @pytest.mark.parametrize(
@@ -182,7 +192,7 @@ async def test_reads_a_plain_classification_from_a_model_that_ignores_the_shape(
 
 @pytest.mark.parametrize("written", ["It could be a question or a task.", "Here is how to open Notepad."])
 async def test_refuses_a_classification_that_names_both_or_neither(written: str) -> None:
-    provider = ScriptedProvider({"quick": [structured(written, "quick")]})
+    provider = ScriptedProvider({"quick": [structured(written, "quick"), structured(written, "quick")]})
     final = (await run(provider, request("Hi", role="understand", output=StructuredOutput(kind="structured", contract="Intent"))))[-1]
 
     assert isinstance(final, ReasoningFailed)
@@ -190,7 +200,7 @@ async def test_refuses_a_classification_that_names_both_or_neither(written: str)
 
 
 async def test_never_reads_a_plan_from_words() -> None:
-    provider = ScriptedProvider({"primary": [structured("Open Notepad, then type the list. This is a task.", "primary")]})
+    provider = ScriptedProvider({"primary": [structured("Open Notepad, then type the list. This is a task.", "primary")] * 2})
     final = (await run(provider, request("Open Notepad", role="plan", output=PLAN_OUTPUT, connectors=[]), ("primary",)))[-1]
 
     assert isinstance(final, ReasoningFailed)
@@ -198,12 +208,12 @@ async def test_never_reads_a_plan_from_words() -> None:
 
 
 async def test_refuses_a_plan_that_contradicts_itself_and_asks_the_next_model() -> None:
-    provider = ScriptedProvider({"primary": [structured(plan_json(cannot="I cannot do this."), "primary")], "fallback": [structured(plan_json(), "fallback")]})
+    provider = ScriptedProvider({"primary": [structured(plan_json(cannot="I cannot do this."), "primary")] * 2, "fallback": [structured(plan_json(), "fallback")]})
     final = (await run(provider, request("Open Notepad", role="plan", output=PLAN_OUTPUT, connectors=[]), PLANNERS))[-1]
 
     assert isinstance(final, ReasoningDone)
     assert final.model == "fallback"
-    assert [call.model for call in provider.calls] == ["primary", "fallback"]
+    assert [call.model for call in provider.calls] == ["primary", "primary", "fallback"]
 
 
 async def test_tells_the_planner_which_services_are_connected() -> None:

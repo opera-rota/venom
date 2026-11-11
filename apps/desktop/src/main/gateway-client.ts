@@ -22,6 +22,8 @@ import {
   TaskList,
   type Capabilities,
   type CommandReport,
+  type ObservationReport,
+  type SpotReport,
   type StepOutputChunk,
   type ConfirmDecision,
   type ConfirmationStrictness,
@@ -368,6 +370,16 @@ export class GatewayClient {
 
   async output(chunk: StepOutputChunk): Promise<StepResult> {
     const result = await this.#api.request("POST", "/v1/commands/output", { body: chunk, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async observed(report: ObservationReport): Promise<StepResult> {
+    const result = await this.#api.request("POST", "/v1/commands/observation", { body: report, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async spotted(report: SpotReport): Promise<StepResult> {
+    const result = await this.#api.request("POST", "/v1/commands/spot", { body: report, token: this.#token });
     return result.ok ? { ok: true } : result;
   }
 

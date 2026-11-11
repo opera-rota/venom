@@ -7,6 +7,7 @@ import { PromptRole } from "./prompts.ts";
 import { PlanDraft } from "./plan.ts";
 import { ConnectorService, Speaker } from "./records.ts";
 import { contracts } from "./registry.ts";
+import { NextMove, Observation, PastMove, screenLimits } from "./screen.ts";
 
 export const ConversationEntry = z
   .strictObject({
@@ -152,6 +153,41 @@ export const TurnEvent = z
   .discriminatedUnion("type", [TurnDelta, TurnDone, TurnFailed])
   .register(contracts, { id: "TurnEvent" });
 
+export const MoveRequest = z
+  .strictObject({
+    request_id: Id,
+    account_id: Id,
+    engine: EngineId,
+    goal: MessageText,
+    moves: z.array(PastMove).max(screenLimits.moves),
+    guidance: z.array(MessageText).max(screenLimits.guidance),
+    memories: z.array(MemoryContext).max(40),
+    observation: Observation,
+  })
+  .register(contracts, { id: "MoveRequest" });
+
+export const MoveChosen = z
+  .strictObject({
+    type: z.literal("chosen"),
+    next: NextMove,
+    model: ModelName,
+    usage: TokenUsage,
+  })
+  .register(contracts, { id: "MoveChosen" });
+
+export const MoveFailed = z
+  .strictObject({
+    type: z.literal("failed"),
+    reason: ReasoningFailure,
+    detail: z.string().min(1),
+    usage: TokenUsage,
+  })
+  .register(contracts, { id: "MoveFailed" });
+
+export const MoveReply = z
+  .discriminatedUnion("type", [MoveChosen, MoveFailed])
+  .register(contracts, { id: "MoveReply" });
+
 export type ConversationEntry = z.infer<typeof ConversationEntry>;
 export type TurnRequest = z.infer<typeof TurnRequest>;
 export type IntentKind = z.infer<typeof IntentKind>;
@@ -174,3 +210,7 @@ export type TurnDelta = z.infer<typeof TurnDelta>;
 export type TurnDone = z.infer<typeof TurnDone>;
 export type TurnFailed = z.infer<typeof TurnFailed>;
 export type TurnEvent = z.infer<typeof TurnEvent>;
+export type MoveRequest = z.infer<typeof MoveRequest>;
+export type MoveChosen = z.infer<typeof MoveChosen>;
+export type MoveFailed = z.infer<typeof MoveFailed>;
+export type MoveReply = z.infer<typeof MoveReply>;

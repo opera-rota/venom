@@ -1,0 +1,16 @@
+{
+  "command_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e61",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "issued_at": "2026-11-12T08:01:03.000Z",
+  "expires_at": "2026-11-12T08:01:33.000Z",
+  "body": {
+    "kind": "move",
+    "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+    "move_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e71",
+    "move": {
+      "name": "pause",
+      "seconds": 2
+    }
+  }
+}

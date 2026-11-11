@@ -668,9 +668,10 @@ function Get-Marks($Window, [double]$Scale, [int]$Width, [int]$Height) {
 
 function Invoke-Observe($Request) {
     $handle = Get-Arg $Request 'window'
+    $desktop = (Get-Arg $Request 'desktop') -eq $true
     $front = [Venom.Hands]::Foreground()
-    $target = if ($null -ne $handle) { [long]$handle } else { $front }
-    $window = @(Get-TopWindows | Where-Object { $_.Handle -eq $target })
+    $target = if ($desktop) { [long]0 } elseif ($null -ne $handle) { [long]$handle } else { $front }
+    $window = @(if (-not $desktop) { Get-TopWindows | Where-Object { $_.Handle -eq $target } })
     $screen = [Venom.Hands]::Screen()
     $scale = [Math]::Min(1.0, $PictureWidth / [double]$screen[0])
     $width = [Math]::Max(1, [int][Math]::Round($screen[0] * $scale))
@@ -733,6 +734,7 @@ $script:LastLook = $null
 
 function Get-LookWindow {
     if ($null -eq $script:LastLook) { throw 'VENOM has not looked at the screen yet, so it does not know where to act.' }
+    if ($script:LastLook.Window -eq 0) { throw 'VENOM only looked at the desktop, so it opens an app before it clicks or types.' }
     $window = @(Get-TopWindows | Where-Object { $_.Handle -eq $script:LastLook.Window })
     if ($window.Length -eq 0) { throw 'The window VENOM looked at is closed.' }
     if (-not [Venom.Hands]::Focus($window[0].Handle)) { throw "I could not bring '$($window[0].Name)' to the front, so I did nothing." }
@@ -903,7 +905,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 7; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 8; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }

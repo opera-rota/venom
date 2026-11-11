@@ -1,10 +1,5 @@
 import { z } from "zod";
-import { MessageText } from "./gateway.ts";
-import { MemoryContext } from "./memory.ts";
-import { EngineId, ModelName } from "./power.ts";
-import { Id } from "./primitives.ts";
 import { Effect } from "./records.ts";
-import { ReasoningFailure, TokenUsage } from "./brain.ts";
 import { contracts } from "./registry.ts";
 
 export const screenLimits = {
@@ -47,6 +42,14 @@ export const ScreenBox = z
 export const ScreenMarkKind = z
   .enum(["button", "link", "box", "check", "list", "item", "tab", "menu", "text", "other"])
   .register(contracts, { id: "ScreenMarkKind" });
+
+export const ScreenSpot = z
+  .strictObject({
+    kind: ScreenMarkKind,
+    name: z.string().max(screenLimits.markName),
+    password: z.boolean(),
+  })
+  .register(contracts, { id: "ScreenSpot" });
 
 export const ScreenMark = z
   .strictObject({
@@ -191,44 +194,10 @@ export const NextMove = z
   })
   .register(contracts, { id: "NextMove" });
 
-export const MoveRequest = z
-  .strictObject({
-    request_id: Id,
-    account_id: Id,
-    engine: EngineId,
-    goal: MessageText,
-    moves: z.array(PastMove).max(screenLimits.moves),
-    guidance: z.array(MessageText).max(screenLimits.guidance),
-    memories: z.array(MemoryContext).max(40),
-    observation: Observation,
-  })
-  .register(contracts, { id: "MoveRequest" });
-
-export const MoveChosen = z
-  .strictObject({
-    type: z.literal("chosen"),
-    next: NextMove,
-    model: ModelName,
-    usage: TokenUsage,
-  })
-  .register(contracts, { id: "MoveChosen" });
-
-export const MoveFailed = z
-  .strictObject({
-    type: z.literal("failed"),
-    reason: ReasoningFailure,
-    detail: z.string().min(1),
-    usage: TokenUsage,
-  })
-  .register(contracts, { id: "MoveFailed" });
-
-export const MoveReply = z
-  .discriminatedUnion("type", [MoveChosen, MoveFailed])
-  .register(contracts, { id: "MoveReply" });
-
 export type ScreenPoint = z.infer<typeof ScreenPoint>;
 export type ScreenBox = z.infer<typeof ScreenBox>;
 export type ScreenMarkKind = z.infer<typeof ScreenMarkKind>;
+export type ScreenSpot = z.infer<typeof ScreenSpot>;
 export type ScreenMark = z.infer<typeof ScreenMark>;
 export type Observation = z.infer<typeof Observation>;
 export type ScreenKey = z.infer<typeof ScreenKey>;
@@ -247,7 +216,3 @@ export type GoalDone = z.infer<typeof GoalDone>;
 export type GoalCannot = z.infer<typeof GoalCannot>;
 export type MoveChoice = z.infer<typeof MoveChoice>;
 export type NextMove = z.infer<typeof NextMove>;
-export type MoveRequest = z.infer<typeof MoveRequest>;
-export type MoveChosen = z.infer<typeof MoveChosen>;
-export type MoveFailed = z.infer<typeof MoveFailed>;
-export type MoveReply = z.infer<typeof MoveReply>;

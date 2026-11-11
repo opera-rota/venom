@@ -32,6 +32,8 @@ log = logging.getLogger("venom.reasoning")
 
 STRUCTURED: Mapping[str, type[BaseModel]] = {"Intent": Intent, "PlanDraft": PlanDraft, "NextMove": NextMove}
 
+SHAPE_TRIES = 2
+
 INTENT_WORDS = re.compile(r"\b(question|task)s?\b", re.IGNORECASE)
 
 SERVICE_NAMES: Mapping[ConnectorService, str] = {"mail": "Mail", "calendar": "Calendar"}
@@ -62,6 +64,7 @@ class Reasoner:
         turns = with_picture(to_turns(request.messages), request.picture)
         last = ReasoningError("internal", "The model could not answer.")
 
+        tries = SHAPE_TRIES if shape is not None else 1
         for model in models:
             call = ModelCall(
                 model=model,
@@ -70,32 +73,38 @@ class Reasoner:
                 max_output_tokens=request.max_output_tokens,
                 schema=None if shape is None else shape.model_json_schema(),
             )
-            emitted = False
-            try:
-                async for event in self._attempt(call):
-                    match event:
-                        case TextChunk(text=text):
-                            emitted = True
-                            yield ReasoningDelta(type="delta", text=text)
-                        case Thinking():
-                            continue
-                        case Completion():
-                            yield done(event, shape)
-                return
-            except ReasoningError as error:
-                last = error
-            except Exception:
-                log.exception("reasoning failed unexpectedly", extra={"request_id": str(request.request_id), "model": model})
-                last = ReasoningError("internal", "Something unexpected went wrong while thinking.")
-            log.warning(
-                "%s failed: %s (%s)",
-                model,
-                last.reason,
-                last.detail,
-                extra={"request_id": str(request.request_id), "model": model, "emitted": emitted},
-            )
-            if emitted or not last.retryable:
-                break
+            for attempt in range(1, tries + 1):
+                emitted = False
+                try:
+                    async for event in self._attempt(call):
+                        match event:
+                            case TextChunk(text=text):
+                                emitted = True
+                                yield ReasoningDelta(type="delta", text=text)
+                            case Thinking():
+                                continue
+                            case Completion():
+                                yield done(event, shape)
+                    return
+                except ReasoningError as error:
+                    last = error
+                except Exception:
+                    log.exception("reasoning failed unexpectedly", extra={"request_id": str(request.request_id), "model": model})
+                    last = ReasoningError("internal", "Something unexpected went wrong while thinking.")
+                again = last.reason == "invalid_output" and attempt < tries and not emitted
+                log.warning(
+                    "%s failed: %s (%s)%s",
+                    model,
+                    last.reason,
+                    last.detail,
+                    ", asking it once more" if again else "",
+                    extra={"request_id": str(request.request_id), "model": model, "emitted": emitted},
+                )
+                if emitted or not last.retryable:
+                    yield failed(last)
+                    return
+                if not again:
+                    break
 
         yield failed(last)
 

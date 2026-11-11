@@ -190,6 +190,9 @@
       "$ref": "#/$defs/MoveChosen"
     },
     {
+      "$ref": "#/$defs/MoveCommand"
+    },
+    {
       "$ref": "#/$defs/MoveFailed"
     },
     {
@@ -200,6 +203,12 @@
     },
     {
       "$ref": "#/$defs/Observation"
+    },
+    {
+      "$ref": "#/$defs/ObservationReport"
+    },
+    {
+      "$ref": "#/$defs/ObserveCommand"
     },
     {
       "$ref": "#/$defs/OpenAppAction"
@@ -295,6 +304,9 @@
       "$ref": "#/$defs/ScreenScroll"
     },
     {
+      "$ref": "#/$defs/ScreenSpot"
+    },
+    {
       "$ref": "#/$defs/ScreenType"
     },
     {
@@ -332,6 +344,12 @@
     },
     {
       "$ref": "#/$defs/SkipStep"
+    },
+    {
+      "$ref": "#/$defs/SpotCommand"
+    },
+    {
+      "$ref": "#/$defs/SpotReport"
     },
     {
       "$ref": "#/$defs/Step"
@@ -832,6 +850,15 @@
       "oneOf": [
         {
           "$ref": "#/$defs/RunStepCommand"
+        },
+        {
+          "$ref": "#/$defs/ObserveCommand"
+        },
+        {
+          "$ref": "#/$defs/SpotCommand"
+        },
+        {
+          "$ref": "#/$defs/MoveCommand"
         },
         {
           "$ref": "#/$defs/StopCommand"
@@ -2434,6 +2461,37 @@
       ],
       "additionalProperties": false
     },
+    "MoveCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "move"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "move_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "move": {
+          "$ref": "#/$defs/ScreenMove"
+        },
+        "confirmed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id",
+        "move_id",
+        "move",
+        "confirmed"
+      ],
+      "additionalProperties": false
+    },
     "MoveFailed": {
       "type": "object",
       "properties": {
@@ -2611,6 +2669,41 @@
         "app",
         "marks",
         "focused"
+      ],
+      "additionalProperties": false
+    },
+    "ObservationReport": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observation": {
+          "$ref": "#/$defs/Observation"
+        }
+      },
+      "required": [
+        "command_id",
+        "observation"
+      ],
+      "additionalProperties": false
+    },
+    "ObserveCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "observe"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id"
       ],
       "additionalProperties": false
     },
@@ -3716,6 +3809,27 @@
       ],
       "additionalProperties": false
     },
+    "ScreenSpot": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ScreenMarkKind"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "password": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "password"
+      ],
+      "additionalProperties": false
+    },
     "ScreenType": {
       "type": "object",
       "properties": {
@@ -4047,6 +4161,52 @@
         "user",
         "venom"
       ]
+    },
+    "SpotCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "spot"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "point": {
+          "$ref": "#/$defs/ScreenPoint"
+        }
+      },
+      "required": [
+        "kind",
+        "task_id",
+        "point"
+      ],
+      "additionalProperties": false
+    },
+    "SpotReport": {
+      "type": "object",
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "spot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScreenSpot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "command_id",
+        "spot"
+      ],
+      "additionalProperties": false
     },
     "Step": {
       "type": "object",

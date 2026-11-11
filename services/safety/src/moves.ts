@@ -1,4 +1,4 @@
-import type { ConfirmationStrictness, Effect, MakeMove, Observation, Risk, ScreenMark, ScreenMarkKind, ScreenPoint } from "@venom/contracts";
+import { SkippableEffect, type ConfirmationStrictness, type Effect, type MakeMove, type Observation, type Risk, type ScreenMark, type ScreenMove, type ScreenPoint, type ScreenSpot } from "@venom/contracts";
 import { alwaysAsks, effectOrder, effectWords, highRisk, opensOutside } from "./rules.ts";
 
 export type MoveVerdict = "go" | "ask" | "refuse";
@@ -10,11 +10,9 @@ export interface MoveJudgement {
   readonly because: readonly string[];
 }
 
-export interface Spot {
-  readonly kind: ScreenMarkKind;
-  readonly name: string;
-  readonly password: boolean;
-}
+export type Spot = ScreenSpot;
+
+export type Seen = Pick<Observation, "marks" | "focused">;
 
 type Named = Pick<ScreenMark, "kind" | "name">;
 
@@ -54,14 +52,14 @@ function area(mark: ScreenMark): number {
   return mark.box.width * mark.box.height;
 }
 
-function under(point: ScreenPoint, seen: Observation): ScreenMark | null {
+function under(point: ScreenPoint, seen: Seen): ScreenMark | null {
   const hits = seen.marks.filter(
     ({ box }) => point.x >= box.x && point.x < box.x + box.width && point.y >= box.y && point.y < box.y + box.height,
   );
   return hits.reduce<ScreenMark | null>((smallest, mark) => (smallest === null || area(mark) < area(smallest) ? mark : smallest), null);
 }
 
-function marked(seen: Observation, id: number | null): ScreenMark | null {
+function marked(seen: Seen, id: number | null): ScreenMark | null {
   return id === null ? null : (seen.marks[id - 1] ?? null);
 }
 
@@ -95,8 +93,9 @@ function refused(because: string): MoveJudgement {
 export const passwordWords = "VENOM never types into a password box. Please type it yourself, then tell VENOM to go on.";
 export const cardWords = "VENOM never types a card number. Please type it yourself, then tell VENOM to go on.";
 export const unreadWords = "VENOM cannot read what is at the spot it would click, so it asks first.";
+export const unconfirmedMoveWords = "This computer refused a move you had not said yes to.";
 
-function clicked(point: ScreenPoint, seen: Observation, spot: Spot | null): Named[] {
+function clicked(point: ScreenPoint, seen: Seen, spot: Spot | null): Named[] {
   const read = spot !== null && spot.kind !== "other" && spot.name.length > 0 ? [spot] : [];
   const mark = under(point, seen);
   return [...read, ...(mark !== null ? [mark] : [])];
@@ -104,7 +103,7 @@ function clicked(point: ScreenPoint, seen: Observation, spot: Spot | null): Name
 
 export function judgeMove(
   choice: MakeMove,
-  seen: Observation,
+  seen: Seen,
   strictness: ConfirmationStrictness,
   skipAsking: readonly Effect[] = [],
   spot: Spot | null = null,
@@ -164,4 +163,12 @@ export function judgeMove(
     risk,
     because: [...new Set([...found.because, ...claimed, ...(unread ? [unreadWords] : [])])],
   };
+}
+
+export function refusesMove(move: ScreenMove, seen: Seen, spot: Spot | null, confirmed: boolean): string | null {
+  const judgement = judgeMove({ kind: "move", intent: "Checked again on this computer", effects: [], move }, seen, "standard", SkippableEffect.options, spot);
+  if (judgement.verdict === "refuse") {
+    return judgement.because[0] ?? unconfirmedMoveWords;
+  }
+  return judgement.verdict === "ask" && !confirmed ? unconfirmedMoveWords : null;
 }

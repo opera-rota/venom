@@ -2,7 +2,7 @@ import { ApiError, Task, type DeviceSession, type GatewayEvent, type TaskControl
 import { v7 as uuidv7 } from "uuid";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { actingDevice, type ActingDevice } from "./acting-device.ts";
-import { call, createEnvironment, destroyEnvironment, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
+import { call, createEnvironment, destroyEnvironment, drillMs, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
 
 let environment: Environment;
 let gateway: RunningGateway;
@@ -67,7 +67,7 @@ describe("Definition of done: the progress drill moves exactly as the formula pr
     expect(finished.type === "task" && finished.task.result).toBe("Finished. 4 steps done, 1 ignored.");
     expect(percentsSeen(device, task.id)).toEqual([0, 25, 50, 75, 100]);
     expect(device.reports.map((report) => report.stepId)).toEqual(task.plan.slice(0, 4).map((step) => step.id));
-  });
+  }, drillMs);
 
   it("keeps a skipped step counted and runs it after the others", async () => {
     const { here, device } = await account(20);

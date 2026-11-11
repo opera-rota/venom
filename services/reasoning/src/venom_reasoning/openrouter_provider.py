@@ -22,6 +22,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 RESPOND_TOOL = "respond"
 FENCED = re.compile(r"(?:```(?:json)?\s*)?(?P<body>\{.*\})(?:\s*```)?", re.DOTALL)
 ATTRIBUTION = {"HTTP-Referer": "https://github.com/opera-rota/venom", "X-Title": "VENOM"}
+DEFINITIONS = "#/$defs/"
+DROPPED = frozenset({"discriminator", "$defs"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,15 +134,27 @@ def answered(message: ChatCompletionMessage) -> str | None:
 
 
 def portable(schema: Mapping[str, object]) -> dict[str, object]:
-    return {("anyOf" if key == "oneOf" else key): plain(value) for key, value in schema.items() if key != "discriminator"}
+    definitions = schema.get("$defs")
+    named: Mapping[str, object] = cast(Mapping[str, object], definitions) if isinstance(definitions, Mapping) else {}
+    return inlined(schema, named)
 
 
-def plain(value: object) -> object:
+def inlined(schema: Mapping[str, object], named: Mapping[str, object]) -> dict[str, object]:
+    reference = schema.get("$ref")
+    if isinstance(reference, str) and reference.startswith(DEFINITIONS):
+        target = named.get(reference.removeprefix(DEFINITIONS))
+        if isinstance(target, Mapping):
+            rest = {key: value for key, value in schema.items() if key != "$ref"}
+            return inlined({**cast(Mapping[str, object], target), **rest}, named)
+    return {("anyOf" if key == "oneOf" else key): plain(value, named) for key, value in schema.items() if key not in DROPPED}
+
+
+def plain(value: object, named: Mapping[str, object]) -> object:
     match value:
         case Mapping():
-            return portable(cast(Mapping[str, object], value))
+            return inlined(cast(Mapping[str, object], value), named)
         case list():
-            return [plain(item) for item in cast(list[object], value)]
+            return [plain(item, named) for item in cast(list[object], value)]
         case _:
             return value
 

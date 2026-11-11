@@ -134,13 +134,13 @@ async def test_says_plainly_when_a_task_cannot_be_planned() -> None:
 
 async def test_throws_away_a_broken_plan_and_says_nothing_was_done() -> None:
     broken = structured('{"title": "Clean up", "steps": [{"summary": "Delete files", "spec": {"name": "shell", "command": "rm -rf ~"}}]}', PRIMARY)
-    provider = ScriptedProvider({"quick": [task(cost_micro_usd=55)], PRIMARY: [broken], FALLBACK: [structured("not json at all", FALLBACK)]})
+    provider = ScriptedProvider({"quick": [task(cost_micro_usd=55)], PRIMARY: [broken] * 2, FALLBACK: [structured("not json at all", FALLBACK)] * 2})
     final = (await run(provider, turn("Clean up my computer")))[-1]
 
     assert isinstance(final, TurnDone)
     assert (final.intent, final.text, final.plan, final.model) == ("task", BROKEN_PLAN, None, None)
     assert final.usage.cost_micro_usd == 55
-    assert [call.model for call in provider.calls] == ["quick", PRIMARY, FALLBACK]
+    assert [call.model for call in provider.calls] == ["quick", PRIMARY, PRIMARY, FALLBACK, FALLBACK]
 
 
 async def test_reports_a_planner_that_cannot_be_reached() -> None:

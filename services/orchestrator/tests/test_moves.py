@@ -91,12 +91,12 @@ async def test_falls_back_to_the_next_model_that_can_see() -> None:
 
 async def test_refuses_a_click_that_names_both_a_mark_and_a_point() -> None:
     both = move_json('{"name": "click", "mark": 1, "point": {"x": 5, "y": 5}, "double": false}')
-    provider = ScriptedProvider({HAIKU: [structured(both, HAIKU)], LUNA: [structured(both, LUNA)]})
+    provider = ScriptedProvider({HAIKU: [structured(both, HAIKU)] * 2, LUNA: [structured(both, LUNA)] * 2})
     reply = await chooser(provider).choose(asked())
 
     assert isinstance(reply, MoveFailed)
     assert reply.reason == "invalid_output"
-    assert len(provider.calls) == 2
+    assert [call.model for call in provider.calls] == [HAIKU, HAIKU, LUNA, LUNA]
 
 
 @pytest.mark.parametrize(

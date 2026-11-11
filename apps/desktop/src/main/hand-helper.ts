@@ -59,7 +59,7 @@ export type HandRequest =
   | { readonly op: "describe"; readonly window: number }
   | { readonly op: "front" }
   | { readonly op: "spot"; readonly x: number; readonly y: number }
-  | { readonly op: "observe"; readonly window: number | null }
+  | { readonly op: "observe"; readonly window: number | null; readonly desktop?: boolean }
   | { readonly op: "move"; readonly move: HandMove };
 
 export interface HandResult {

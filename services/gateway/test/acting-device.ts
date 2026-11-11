@@ -98,6 +98,9 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
       wake();
       return;
     }
+    if (body.kind !== "run_step") {
+      return;
+    }
     commands.push(body);
     wake();
     if (refusesUnconfirmed(body)) {

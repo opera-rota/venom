@@ -4,7 +4,7 @@ import { v7 as uuidv7 } from "uuid";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { scriptedBrain } from "../src/testing.ts";
 import { actingDevice, enrollKey, liveHeaders, type ActingDevice } from "./acting-device.ts";
-import { attachOverHttp, call, createEnvironment, destroyEnvironment, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
+import { attachOverHttp, call, createEnvironment, destroyEnvironment, drillMs, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
 
 let environment: Environment;
 let gateway: RunningGateway;
@@ -79,7 +79,7 @@ describe("Definition of done: a thirty second step stops within a second", () =>
     });
     expect(record.type === "task" && record.task.plan[1]?.output).toMatch(/^Stopped after \d+ of 30 seconds\.$/);
     expect(device.events.some((event) => event.type === "halt" && event.stop_id === receipt.stop_id)).toBe(true);
-  });
+  }, drillMs);
 
   it("answers a repeated stop with the same record", async () => {
     const { here } = await account();
@@ -134,7 +134,7 @@ describe("Definition of done: a sensitive step pauses for confirmation", () => {
     await device.until(taskState(task.id, ["done", "running", "pending"]));
     await stop(here);
     await device.until(taskState(task.id, ["done", "stopped", "pending"]));
-  });
+  }, drillMs);
 
   it("closes the open confirmation on every device when stopped", async () => {
     const { here } = await account();
@@ -149,7 +149,7 @@ describe("Definition of done: a sensitive step pauses for confirmation", () => {
       body: { decision: "approve" },
     });
     expect(late.status).toBe(409);
-  });
+  }, drillMs);
 
   it("pauses on a step that cannot be undone only when the account is strict", async () => {
     const { here } = await account();
