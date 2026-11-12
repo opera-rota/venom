@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { DeviceSession, GatewayEvent } from "@venom/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Api } from "../src/main/api.ts";
@@ -156,6 +157,25 @@ describe("gateway client in the main process", () => {
     expect(await client.saveMemory({ type: "fact", content: "" })).toMatchObject({ ok: false, code: "invalid_request" });
     const empty = await client.memory();
     expect(empty.ok && empty.list.items).toEqual([]);
+  });
+
+  it("lists the moves of a goal and answers a move question", async () => {
+    const client = startClient(session.device_token);
+    const goals = backend.goals();
+    const device = { id: session.device.id, account_id: session.device.account_id };
+    const task = await goals.begin(device, device.id, "Log in to Wikipedia", randomUUID());
+    const proposed = await goals.propose(
+      device.account_id,
+      task.id,
+      { intent: "Click Log in", seen: "Wikipedia is open.", move: { name: "click", mark: 2, point: null, double: false }, effects: ["uses_credential"], verdict: "ask", detail: null },
+      randomUUID(),
+    );
+    const listed = await client.moves(task.id);
+    expect(listed.ok && listed.list.moves.map((move) => [move.intent, move.status])).toEqual([["Click Log in", "asking"]]);
+    const answered = await client.confirmMove(task.id, proposed?.move.id ?? "", "decline");
+    expect(answered.ok && answered.move).toMatchObject({ status: "declined", detail: "You said no, so this move never ran." });
+    expect(await client.confirmMove(task.id, proposed?.move.id ?? "", "approve")).toMatchObject({ ok: false, code: "already_answered" });
+    expect(await client.moves("not-a-task")).toMatchObject({ ok: false, reason: "That task is not part of your VENOM." });
   });
 
   it("refuses to send nothing", async () => {

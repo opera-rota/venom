@@ -20,6 +20,8 @@ import {
   Task,
   TaskControl,
   TaskList,
+  TaskMove,
+  TaskMoves,
   type Capabilities,
   type CommandReport,
   type ObservationReport,
@@ -37,6 +39,8 @@ import type {
   EnginesResult,
   MemoryItemResult,
   MemoryResult,
+  MoveAnswerResult,
+  MovesResult,
   PowerResult,
   SafetyResult,
   SendResult,
@@ -349,6 +353,24 @@ export class GatewayClient {
     return this.#call(
       this.#api.request("POST", `/v1/tasks/${taskId}/steps/${stepId}/confirmation`, { schema: ConfirmationAnswered, body: { decision }, token: this.#token }),
       (answered) => ({ ok: true, answered }),
+    );
+  }
+
+  async moves(taskId: string): Promise<MovesResult> {
+    if (!Id.safeParse(taskId).success) {
+      return { ok: false, code: "invalid_request", reason: "That task is not part of your VENOM." };
+    }
+    return this.#call(this.#api.request("GET", `/v1/tasks/${taskId}/moves`, { schema: TaskMoves, token: this.#token }), (list) => ({ ok: true, list }));
+  }
+
+  async confirmMove(taskId: string, moveId: string, decision: ConfirmDecision): Promise<MoveAnswerResult> {
+    const ids = Id.safeParse(taskId).success && Id.safeParse(moveId).success;
+    if (!ids) {
+      return { ok: false, code: "invalid_request", reason: "That question does not exist any more." };
+    }
+    return this.#call(
+      this.#api.request("POST", `/v1/tasks/${taskId}/moves/${moveId}/confirmation`, { schema: TaskMove, body: { decision }, token: this.#token }),
+      (move) => ({ ok: true, move }),
     );
   }
 

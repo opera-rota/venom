@@ -1,5 +1,5 @@
 import type { ConfirmDecision, ConfirmRequest, DrillKind, SafetySettings, TaskControl } from "@venom/contracts";
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ConnectionState, HaltView, VenomBridge } from "../../shared/bridge.ts";
 import { initialTasks, isSafetyEvent, reduceTasks, type TasksState } from "./tasks-state.ts";
 
@@ -15,6 +15,8 @@ export interface TasksHandle {
   stop(): void;
   drill(kind: DrillKind): Promise<boolean>;
   answer(request: ConfirmRequest, decision: ConfirmDecision): Promise<void>;
+  answerMove(taskId: string, moveId: string, decision: ConfirmDecision): Promise<void>;
+  loadMoves(taskId: string): void;
   control(taskId: string, control: TaskControl): Promise<boolean>;
   stopTask(taskId: string): Promise<void>;
   dismiss(taskId: string): void;
@@ -42,6 +44,7 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
   const [settings, setSettings] = useState<SafetySettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [developer, setDeveloper] = useState(false);
+  const fetching = useRef(new Set<string>());
 
   useEffect(() => {
     let active = true;
@@ -59,11 +62,10 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
       if (active && isSafetyEvent(event)) {
         dispatch({ type: "event", event });
         if (event.type === "confirmation" && event.answered !== null) {
-          setSending((current) => {
-            const next = new Set(current);
-            next.delete(event.request.step_id);
-            return next;
-          });
+          setSending((current) => without(current, event.request.step_id));
+        }
+        if (event.type === "move" && event.move.status !== "asking") {
+          setSending((current) => without(current, event.move.id));
         }
       }
     });
@@ -110,6 +112,36 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
           return next;
         });
       }
+    },
+    [bridge],
+  );
+
+  const answerMove = useCallback(
+    async (taskId: string, moveId: string, decision: ConfirmDecision) => {
+      setSending((current) => new Set(current).add(moveId));
+      const result = await bridge.confirmMove(taskId, moveId, decision);
+      if (result.ok) {
+        dispatch({ type: "move", move: result.move });
+      } else {
+        setFailure(result.reason);
+      }
+      setSending((current) => without(current, moveId));
+    },
+    [bridge],
+  );
+
+  const loadMoves = useCallback(
+    (taskId: string) => {
+      if (fetching.current.has(taskId)) {
+        return;
+      }
+      fetching.current.add(taskId);
+      void bridge.moves(taskId).then((result) => {
+        fetching.current.delete(taskId);
+        if (result.ok) {
+          dispatch({ type: "moves", taskId, list: result.list });
+        }
+      });
     },
     [bridge],
   );
@@ -170,6 +202,8 @@ export function useTasks(bridge: VenomBridge, connection: ConnectionState): Task
     stop,
     drill,
     answer,
+    answerMove,
+    loadMoves,
     control,
     stopTask,
     save,

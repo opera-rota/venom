@@ -1,5 +1,6 @@
 import type { Device, Task, TaskControl } from "@venom/contracts";
 import { useState } from "react";
+import { movesSoFar } from "../move-words.ts";
 import { isOpen, isPlanOnly, taskGroups, type TaskGroupName } from "../tasks-state.ts";
 import { controlKey, type TasksHandle } from "../use-tasks.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
@@ -31,7 +32,7 @@ function TaskCard({ task, expanded, onToggle, handle, deviceId, devices }: TaskC
   const look = lookOfTask(task);
   const open = isOpen(task);
   const planned = task.status === "planned";
-  const canResume = resumable.has(task.status) && !isPlanOnly(task);
+  const canResume = task.kind === "plan" && resumable.has(task.status) && !isPlanOnly(task);
   const discarding = handle.controlling.has(controlKey(task.id, "discard"));
   const stopping = handle.controlling.has(controlKey(task.id, "stop"));
   const resuming = handle.controlling.has(controlKey(task.id, "resume"));
@@ -53,12 +54,16 @@ function TaskCard({ task, expanded, onToggle, handle, deviceId, devices }: TaskC
         </span>
         <Icon name="chevron" className={`mt-1 h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform duration-140 ease-ui ${expanded ? "rotate-180" : ""}`} />
       </button>
-      <ProgressBar progress={task.progress} />
+      {task.kind === "goal" ? (
+        <span className={`tabular-nums ${text.detail} text-ink-muted`}>{movesSoFar(task, open)}</span>
+      ) : (
+        <ProgressBar progress={task.progress} />
+      )}
       {task.result !== null && <p className={text.support}>{task.result}</p>}
       {expanded && (
         <>
           <div className={mark.divider} />
-          <StepList task={task} deviceId={deviceId} devices={devices} controls={controls} />
+          {task.kind === "plan" && <StepList task={task} deviceId={deviceId} devices={devices} controls={controls} />}
           {(open || canResume || planned) && (
             <div className="flex flex-wrap gap-2 pt-1">
               {open && (

@@ -112,6 +112,21 @@ describe("a goal is reached one counted move at a time", () => {
     await expect(tasks.control(here, task.id, { kind: "resume" }, uuidv7())).rejects.toMatchObject({ statusCode: 409 });
   });
 
+  it("lists the latest moves of a goal in order, only for its own account", async () => {
+    const here = await device();
+    const stranger = await device();
+    const task = await goals.begin(here, here.id, "Open Notepad and write a list", uuidv7());
+    expect(await goals.list(here.account_id, task.id)).toEqual([]);
+    for (let made = 0; made < 42; made += 1) {
+      const proposed = await goals.propose(here.account_id, task.id, { ...typing, intent: `Move ${made + 1}` }, uuidv7());
+      await goals.finish(here.account_id, proposed?.move.id ?? "", "done", "Did type.", uuidv7());
+    }
+    const listed = await goals.list(here.account_id, task.id);
+    expect(listed?.map((move) => move.number)).toEqual(Array.from({ length: 40 }, (_, at) => at + 3));
+    expect(listed?.at(-1)).toMatchObject({ intent: "Move 42", status: "done", detail: "Did type." });
+    expect(await goals.list(stranger.account_id, task.id)).toBeNull();
+  });
+
   it("fails open goals and their moves when VENOM restarts", async () => {
     const here = await device();
     const task = await goals.begin(here, here.id, "Open Notepad", uuidv7());

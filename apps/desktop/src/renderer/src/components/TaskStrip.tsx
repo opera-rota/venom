@@ -1,4 +1,5 @@
-import type { Device, Task } from "@venom/contracts";
+import type { Device, Task, TaskMove } from "@venom/contracts";
+import { movesSoFar } from "../move-words.ts";
 import { isOpen } from "../tasks-state.ts";
 import { button, mark, surface, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
@@ -9,11 +10,12 @@ export interface TaskStripProps {
   readonly task: Task;
   readonly deviceId: string;
   readonly devices: readonly Device[];
+  readonly latest: TaskMove | null;
   readonly onDismiss: (taskId: string) => void;
   readonly onOpenTasks: () => void;
 }
 
-export function TaskStrip({ task, deviceId, devices, onDismiss, onOpenTasks }: TaskStripProps) {
+export function TaskStrip({ task, deviceId, devices, latest, onDismiss, onOpenTasks }: TaskStripProps) {
   const look = taskLook[task.status];
   const open = isOpen(task);
 
@@ -41,8 +43,17 @@ export function TaskStrip({ task, deviceId, devices, onDismiss, onOpenTasks }: T
           )}
         </div>
       </div>
-      <ProgressBar progress={task.progress} />
-      <StepList task={task} deviceId={deviceId} devices={devices} compact />
+      {task.kind === "goal" ? (
+        <p className={`flex min-w-0 flex-wrap gap-x-1.5 ${text.detail}`}>
+          <span className="tabular-nums text-ink">{movesSoFar(task, open)}</span>
+          {open && latest !== null && <span className="min-w-0 truncate text-ink-muted">· {latest.intent}</span>}
+        </p>
+      ) : (
+        <>
+          <ProgressBar progress={task.progress} />
+          <StepList task={task} deviceId={deviceId} devices={devices} compact />
+        </>
+      )}
       {task.result !== null && <p className={`border-t border-line-subtle pt-3 ${text.support}`}>{task.result}</p>}
     </section>
   );

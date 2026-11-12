@@ -9,6 +9,8 @@ import type {
   Task,
   TaskControl,
   TaskList,
+  TaskMove,
+  TaskMoves,
   Device,
   DeviceList,
   EngineId,
@@ -48,6 +50,10 @@ export type TasksResult = { readonly ok: true; readonly list: TaskList } | Failu
 export type TaskResult = { readonly ok: true; readonly task: Task } | Failure;
 
 export type TaskStopResult = { readonly ok: true; readonly receipt: StopReceipt } | Failure;
+
+export type MovesResult = { readonly ok: true; readonly list: TaskMoves } | Failure;
+
+export type MoveAnswerResult = { readonly ok: true; readonly move: TaskMove } | Failure;
 
 export type AnswerResult = { readonly ok: true; readonly answered: ConfirmationAnswered } | Failure;
 
@@ -104,6 +110,8 @@ export interface VenomBridge {
   taskControl(taskId: string, control: TaskControl): Promise<TaskResult>;
   stopTask(taskId: string): Promise<TaskStopResult>;
   confirm(taskId: string, stepId: string, decision: ConfirmDecision): Promise<AnswerResult>;
+  moves(taskId: string): Promise<MovesResult>;
+  confirmMove(taskId: string, moveId: string, decision: ConfirmDecision): Promise<MoveAnswerResult>;
   safety(): Promise<SafetyResult>;
   setSafety(settings: SafetySettings): Promise<SafetyResult>;
   developer(): Promise<boolean>;
@@ -143,6 +151,8 @@ export const channels = {
   taskControl: "venom:task-control",
   stopTask: "venom:stop-task",
   confirm: "venom:confirm",
+  moves: "venom:moves",
+  confirmMove: "venom:confirm-move",
   safety: "venom:safety",
   setSafety: "venom:set-safety",
   developer: "venom:developer",

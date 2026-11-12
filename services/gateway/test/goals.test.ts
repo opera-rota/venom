@@ -1,10 +1,10 @@
-import { Observation, Task, TaskMove, type DeviceSession, type GatewayEvent, type MessageEvent, type MoveEvent, type NextMove, type ScreenMark, type TaskEvent } from "@venom/contracts";
+import { Observation, Task, TaskMove, TaskMoves, type DeviceSession, type GatewayEvent, type MessageEvent, type MoveEvent, type NextMove, type ScreenMark, type TaskEvent } from "@venom/contracts";
 import { encode } from "jpeg-js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { thumbnailOf } from "../src/thumbnail.ts";
 import { handToLoop, movesWith, type MoveScript } from "../src/testing.ts";
 import { actingDevice, type ActingDevice, type Screen } from "./acting-device.ts";
-import { call, createEnvironment, destroyEnvironment, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
+import { call, createEnvironment, destroyEnvironment, drillMs, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
 
 let environment: Environment;
 let gateway: RunningGateway;
@@ -147,8 +147,13 @@ describe("Definition of done 1: a goal is reached one move at a time", () => {
       ["Open Notepad: done", "Type the shopping list into the text editor: done"],
     ]);
     const reports = near.events.filter(venom("report", "")).map((event) => event.message.text);
-    expect(reports).toContain("1. Open Notepad. Did open.");
-    expect(reports).toContain("2. Type the shopping list into the text editor. Did type.");
+    expect(reports).toEqual([started.message.text, done.message.text]);
+    const listed = await call(gateway.base, "GET", `/v1/tasks/${completed.task.id}/moves`, { token: here.device_token });
+    expect(listed.status).toBe(200);
+    expect(TaskMoves.parse(await listed.json()).moves.map((move) => [move.number, move.intent, move.status, move.detail])).toEqual([
+      [1, "Open Notepad", "done", "Did open."],
+      [2, "Type the shopping list into the text editor", "done", "Did type."],
+    ]);
     const pictures = near.events.filter((event): event is MoveEvent => event.type === "move" && event.picture !== null);
     expect(pictures.length).toBeGreaterThanOrEqual(2);
   });
@@ -163,6 +168,7 @@ describe("Definition of done 5 and 6: sensitive moves ask, password boxes are re
     const question = (await near.until(venom("question", "Quick check, buddy."))) as MessageEvent;
     expect(question.message.move_id).not.toBeNull();
     expect(question.message.text).toContain('It presses the link named "Log in".');
+    expect(question.message.text).toContain("Next I would click Log in on ");
     expect(near.moves).toHaveLength(0);
 
     const yes = await say(here, "yes");
@@ -276,7 +282,7 @@ describe("Definition of done 7 and 8: stop wins, and long goals ask to keep goin
       near.close();
       await limited.stop();
     }
-  });
+  }, drillMs);
 });
 
 describe("the computer's answers come back on their own routes", () => {
@@ -289,6 +295,17 @@ describe("the computer's answers come back on their own routes", () => {
     expect(look.status).toBe(404);
     const spot = await call(gateway.base, "POST", "/v1/commands/spot", { token: here.device_token, body: { command_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e99", spot: null } });
     expect(spot.status).toBe(404);
+  });
+
+  it("lists the moves of a goal only for its own account", async () => {
+    const { here } = await account();
+    const { here: stranger } = await account();
+    const task = await gateway.goals.begin({ id: here.device.id, account_id: here.device.account_id }, here.device.id, "Open Notepad", "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e98");
+    const own = await call(gateway.base, "GET", `/v1/tasks/${task.id}/moves`, { token: here.device_token });
+    expect(TaskMoves.parse(await own.json())).toEqual({ moves: [] });
+    const other = await call(gateway.base, "GET", `/v1/tasks/${task.id}/moves`, { token: stranger.device_token });
+    expect(other.status).toBe(404);
+    await gateway.goals.end(here.device.account_id, task.id, "cancelled", "Cleaned up after the test.", "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e97");
   });
 
   it("makes a small picture of the screen for the live view", () => {

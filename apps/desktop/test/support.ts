@@ -8,7 +8,7 @@ import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identi
 import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
 import { createCommandSigner, createTrust, newKeyPair } from "@venom/safety";
-import { createGoals, createTasks } from "@venom/tasks";
+import { createGoals, createTasks, type Goals } from "@venom/tasks";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { Api } from "../src/main/api.ts";
@@ -19,6 +19,7 @@ export interface Backend {
   readonly mailer: RecordingMailer;
   readonly brain: ScriptedBrain;
   readonly url: () => string;
+  goals(): Goals;
   start(port?: number): Promise<number>;
   stop(): Promise<void>;
   destroy(): Promise<void>;
@@ -30,7 +31,7 @@ export async function createBackend(): Promise<Backend> {
   const serverSetup = await createEphemeralServerSetup();
   const brain = scriptedBrain();
   const commandKey = newKeyPair();
-  let running: { app: FastifyInstance; store: Store; sql: Sql } | null = null;
+  let running: { app: FastifyInstance; store: Store; sql: Sql; goals: Goals } | null = null;
   let lastPort = 0;
 
   async function stop(): Promise<void> {
@@ -48,6 +49,12 @@ export async function createBackend(): Promise<Backend> {
     brain,
     stop,
     url: () => `http://127.0.0.1:${lastPort}`,
+    goals() {
+      if (running === null) {
+        throw new Error("The test gateway is not running");
+      }
+      return running.goals;
+    },
     async start(port = 0) {
       const store = createStore(database.appUrl);
       const sql = connect(database.appUrl);
@@ -65,7 +72,7 @@ export async function createBackend(): Promise<Backend> {
         throw new Error("Gateway has no port");
       }
       lastPort = address.port;
-      running = { app, store, sql };
+      running = { app, store, sql, goals };
       return address.port;
     },
     async destroy() {

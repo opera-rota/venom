@@ -217,6 +217,10 @@ export const TaskMove = z
   })
   .register(contracts, { id: "TaskMove" });
 
+export const TaskMoves = z
+  .strictObject({ moves: z.array(TaskMove).max(screenLimits.moves) })
+  .register(contracts, { id: "TaskMoves" });
+
 export const Thumbnail = z
   .string()
   .min(1)
@@ -241,6 +245,7 @@ export type ScreenMove = z.infer<typeof ScreenMove>;
 export type MoveOutcome = z.infer<typeof MoveOutcome>;
 export type MoveStatus = z.infer<typeof MoveStatus>;
 export type TaskMove = z.infer<typeof TaskMove>;
+export type TaskMoves = z.infer<typeof TaskMoves>;
 export type Thumbnail = z.infer<typeof Thumbnail>;
 export type PastMove = z.infer<typeof PastMove>;
 export type MakeMove = z.infer<typeof MakeMove>;

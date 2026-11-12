@@ -33,6 +33,7 @@ export interface Goals {
   open(accountId: string): Promise<OpenGoal | null>;
   state(accountId: string, taskId: string): Promise<Task | null>;
   move(accountId: string, moveId: string): Promise<TaskMove | null>;
+  list(accountId: string, taskId: string): Promise<TaskMove[] | null>;
   history(accountId: string, taskId: string): Promise<PastMove[]>;
   propose(accountId: string, taskId: string, proposal: Proposal, requestId: string): Promise<MoveChange | null>;
   answer(device: DeviceRef, taskId: string, moveId: string, decision: ConfirmDecision, requestId: string): Promise<MoveChange>;
@@ -146,6 +147,20 @@ export function createGoals({ sql }: { readonly sql: Sql }): Goals {
     async move(accountId, moveId) {
       const row = await moveRow(sql, accountId, moveId);
       return row === null ? null : toMove(row);
+    },
+
+    async list(accountId, taskId) {
+      const task = await taskRow(sql, accountId, taskId);
+      if (task === null) {
+        return null;
+      }
+      const rows = await sql.unsafe<MoveRow[]>(
+        `select ${moveColumns} from (
+           select * from moves where task_id = $1 and account_id = $2 order by number desc limit $3
+         ) recent order by number`,
+        [taskId, accountId, screenLimits.moves],
+      );
+      return rows.map(toMove);
     },
 
     async history(accountId, taskId) {

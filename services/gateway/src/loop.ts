@@ -42,7 +42,6 @@ import {
   guidedWords,
   keepGoingWords,
   moveQuestionWords,
-  moveWords,
   refusedMoveWords,
   stopHereWords,
   timeUpWords,
@@ -369,7 +368,6 @@ export class GoalLoop {
       return false;
     }
     this.#publish(turn, finished.task, finished.move, null);
-    await this.#tell(finished.task, "report", moveWords(finished.move), null);
     if (outcome === "stopped") {
       return false;
     }

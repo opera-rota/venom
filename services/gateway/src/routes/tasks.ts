@@ -1,4 +1,4 @@
-import { CommandReport, ConfirmAnswer, Id, ObservationReport, SpotReport, StepOutputChunk, TaskControl, TaskDrill } from "@venom/contracts";
+import { CommandReport, ConfirmAnswer, Id, ObservationReport, SpotReport, StepOutputChunk, TaskControl, TaskDrill, TaskMoves } from "@venom/contracts";
 import { refuseTasks } from "@venom/tasks";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -17,10 +17,20 @@ const lookBodyLimit = 3 * 1024 * 1024;
 const notWaiting = "That command is not waiting for an answer.";
 
 export function taskRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { tasks, runner, loop, acting, broadcastTask } = context;
+  const { tasks, goals, runner, loop, acting, broadcastTask } = context;
 
   app.get("/v1/tasks", async (request) => {
     return tasks.list(requireSignedIn(request).account_id);
+  });
+
+  app.get("/v1/tasks/:task_id/moves", async (request) => {
+    const { account_id } = requireSignedIn(request);
+    const { task_id } = TaskParams.parse(request.params);
+    const moves = await goals.list(account_id, task_id);
+    if (moves === null) {
+      throw refuseTasks.taskNotFound();
+    }
+    return TaskMoves.parse({ moves });
   });
 
   app.post("/v1/tasks/drill", async (request, reply) => {

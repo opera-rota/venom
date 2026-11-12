@@ -409,6 +409,9 @@
       "$ref": "#/$defs/TaskMove"
     },
     {
+      "$ref": "#/$defs/TaskMoves"
+    },
+    {
       "$ref": "#/$defs/TaskProgress"
     },
     {
@@ -5001,6 +5004,22 @@
         "detail",
         "created_at",
         "finished_at"
+      ],
+      "additionalProperties": false
+    },
+    "TaskMoves": {
+      "type": "object",
+      "properties": {
+        "moves": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskMove"
+          }
+        }
+      },
+      "required": [
+        "moves"
       ],
       "additionalProperties": false
     },

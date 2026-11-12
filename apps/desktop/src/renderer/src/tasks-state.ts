@@ -1,6 +1,22 @@
-import { safetyLimits, type ConfirmationAnswered, type ConfirmationEvent, type ConfirmRequest, type GatewayEvent, type HaltEvent, type StepOutputEvent, type Task, type TaskEvent, type TaskList } from "@venom/contracts";
+import {
+  safetyLimits,
+  type ConfirmationAnswered,
+  type ConfirmationEvent,
+  type ConfirmRequest,
+  type GatewayEvent,
+  type HaltEvent,
+  type MoveEvent,
+  type MoveStatus,
+  type StepOutputEvent,
+  type Task,
+  type TaskEvent,
+  type TaskList,
+  type TaskMove,
+  type TaskMoves,
+  type Thumbnail,
+} from "@venom/contracts";
 
-export type SafetyEvent = TaskEvent | ConfirmationEvent | HaltEvent | StepOutputEvent;
+export type SafetyEvent = TaskEvent | ConfirmationEvent | HaltEvent | StepOutputEvent | MoveEvent;
 
 export interface Closed {
   readonly request: ConfirmRequest;
@@ -14,12 +30,17 @@ export interface TasksState {
   readonly halted: HaltEvent | null;
   readonly dismissed: ReadonlySet<string>;
   readonly output: ReadonlyMap<string, ReadonlyMap<number, string>>;
+  readonly moves: ReadonlyMap<string, ReadonlyMap<string, TaskMove>>;
+  readonly loaded: ReadonlySet<string>;
+  readonly pictures: ReadonlyMap<string, Thumbnail>;
 }
 
 export type TasksAction =
   | { readonly type: "list"; readonly list: TaskList }
   | { readonly type: "event"; readonly event: SafetyEvent }
   | { readonly type: "task"; readonly task: Task }
+  | { readonly type: "moves"; readonly taskId: string; readonly list: TaskMoves }
+  | { readonly type: "move"; readonly move: TaskMove }
   | { readonly type: "dismiss"; readonly taskId: string }
   | { readonly type: "seen"; readonly stepId: string };
 
@@ -30,11 +51,28 @@ export const initialTasks: TasksState = {
   halted: null,
   dismissed: new Set(),
   output: new Map(),
+  moves: new Map(),
+  loaded: new Set(),
+  pictures: new Map(),
 };
 
-const safetyEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["task", "confirmation", "halt", "step_output"]);
+const safetyEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["task", "confirmation", "halt", "step_output", "move"]);
 
 const keptOutputSteps = 20;
+
+const keptPictures = 5;
+
+const keptMoves = 200;
+
+const moveStage: Record<MoveStatus, number> = {
+  asking: 0,
+  running: 1,
+  done: 2,
+  failed: 2,
+  refused: 2,
+  declined: 2,
+  stopped: 2,
+};
 
 const openStatuses: ReadonlySet<Task["status"]> = new Set(["running", "awaiting_confirmation"]);
 
@@ -98,8 +136,54 @@ export function liveOutput(state: Pick<TasksState, "output">, stepId: string): s
   return text.length <= safetyLimits.stepOutput ? text : text.slice(text.length - safetyLimits.stepOutput);
 }
 
+function withMoves(all: TasksState["moves"], incoming: readonly TaskMove[]): TasksState["moves"] {
+  const next = new Map(all);
+  for (const move of incoming) {
+    const known = next.get(move.task_id) ?? new Map<string, TaskMove>();
+    const current = known.get(move.id);
+    if (current !== undefined && moveStage[current.status] > moveStage[move.status]) {
+      continue;
+    }
+    const moves = new Map(known).set(move.id, move);
+    if (moves.size > keptMoves) {
+      const [oldest] = [...moves.values()].sort((left, right) => left.number - right.number);
+      if (oldest !== undefined) {
+        moves.delete(oldest.id);
+      }
+    }
+    next.set(move.task_id, moves);
+  }
+  return next;
+}
+
+function withPicture(pictures: TasksState["pictures"], taskId: string, picture: Thumbnail): TasksState["pictures"] {
+  const next = new Map(pictures);
+  next.delete(taskId);
+  next.set(taskId, picture);
+  while (next.size > keptPictures) {
+    const [oldest] = next.keys();
+    if (oldest === undefined) {
+      break;
+    }
+    next.delete(oldest);
+  }
+  return next;
+}
+
+export function movesOf(state: Pick<TasksState, "moves">, taskId: string): readonly TaskMove[] {
+  return [...(state.moves.get(taskId)?.values() ?? [])].sort((left, right) => left.number - right.number);
+}
+
+export function moveOf(state: Pick<TasksState, "moves">, taskId: string, moveId: string): TaskMove | null {
+  return state.moves.get(taskId)?.get(moveId) ?? null;
+}
+
 function apply(state: TasksState, event: SafetyEvent): TasksState {
   switch (event.type) {
+    case "move": {
+      const moves = withMoves(state.moves, [event.move]);
+      return event.picture === null ? { ...state, moves } : { ...state, moves, pictures: withPicture(state.pictures, event.move.task_id, event.picture) };
+    }
     case "step_output":
       return { ...state, output: withOutput(state.output, event) };
     case "task": {
@@ -133,8 +217,13 @@ export function reduceTasks(state: TasksState, action: TasksAction): TasksState 
         tasks: withTasks(new Map(), action.list.tasks),
         queue: [...action.list.confirmations].sort(byAsked),
         dismissed: new Set([...state.dismissed, ...settledBefore]),
+        loaded: new Set(),
       };
     }
+    case "moves":
+      return { ...state, moves: withMoves(state.moves, action.list.moves), loaded: new Set(state.loaded).add(action.taskId) };
+    case "move":
+      return { ...state, moves: withMoves(state.moves, [action.move]) };
     case "event":
       return apply(state, action.event);
     case "task":

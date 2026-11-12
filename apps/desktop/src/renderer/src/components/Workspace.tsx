@@ -7,7 +7,7 @@ import { isAnswering } from "../conversation.ts";
 import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
-import { liveOutput, taskCount, taskInView } from "../tasks-state.ts";
+import { liveOutput, moveOf, movesOf, taskCount, taskInView } from "../tasks-state.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
@@ -51,7 +51,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const inView = taskInView(tasks.state);
   const [panel, setPanel] = useState<SidePanel | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
-  const { control, controlling, state, sending, answer } = tasks;
+  const { control, controlling, state, sending, answer, answerMove, loadMoves, stopTask } = tasks;
   const messages = useStore(store, (current) => current.messages);
   const plans = useMemo<Plans>(
     () => ({
@@ -66,8 +66,16 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       run: (taskId) => void control(taskId, { kind: "run" }),
       output: (stepId) => liveOutput(state, stepId),
       answer: (request, decision) => void answer(request, decision),
+      moves: (taskId) => movesOf(state, taskId),
+      move: (taskId, moveId) => moveOf(state, taskId, moveId),
+      loaded: (taskId) => state.loaded.has(taskId),
+      picture: (taskId) => state.pictures.get(taskId) ?? null,
+      stopping: (taskId) => controlling.has(controlKey(taskId, "stop")),
+      stop: (taskId) => void stopTask(taskId),
+      loadMoves,
+      answerMove: (taskId, moveId, decision) => void answerMove(taskId, moveId, decision),
     }),
-    [state, device.id, devices.devices, controlling, control, sending, answer],
+    [state, device.id, devices.devices, controlling, control, sending, answer, answerMove, loadMoves, stopTask],
   );
   const inChat = useMemo(() => new Set(messages.filter((message) => message.kind === "plan" && message.task_id !== null).map((message) => message.task_id)), [messages]);
   const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);
@@ -90,7 +98,14 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
           taskCount={taskCount(tasks.state)}
         />
         {inView !== null && panel !== "tasks" && (
-          <TaskStrip task={inView} deviceId={device.id} devices={devices.devices} onDismiss={tasks.dismiss} onOpenTasks={() => setPanel("tasks")} />
+          <TaskStrip
+            task={inView}
+            deviceId={device.id}
+            devices={devices.devices}
+            latest={movesOf(state, inView.id).at(-1) ?? null}
+            onDismiss={tasks.dismiss}
+            onOpenTasks={() => setPanel("tasks")}
+          />
         )}
         <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} />
         <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />

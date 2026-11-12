@@ -1,12 +1,14 @@
-import type { ConfirmDecision, ConfirmRequest, Device, Message, Task } from "@venom/contracts";
+import type { ConfirmDecision, ConfirmRequest, Device, Message, Task, TaskMove, Thumbnail } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import type { ConversationStore } from "../conversation-store.ts";
 import { arrange, sentFrom, type Answer } from "../conversation.ts";
+import { moveAnswerWords } from "../move-words.ts";
 import { button, mark, surface, text } from "../ui.ts";
 import { LogoMark } from "./Header.tsx";
 import { Icon } from "./Icon.tsx";
+import { JobCard } from "./JobCard.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { PlanCard } from "./PlanCard.tsx";
 
@@ -46,6 +48,14 @@ export interface Plans {
   run(taskId: string): void;
   output(stepId: string): string | null;
   answer(request: ConfirmRequest, decision: ConfirmDecision): void;
+  moves(taskId: string): readonly TaskMove[];
+  move(taskId: string, moveId: string): TaskMove | null;
+  loaded(taskId: string): boolean;
+  picture(taskId: string): Thumbnail | null;
+  stopping(taskId: string): boolean;
+  stop(taskId: string): void;
+  loadMoves(taskId: string): void;
+  answerMove(taskId: string, moveId: string, decision: ConfirmDecision): void;
 }
 
 interface MessageItemProps {
@@ -53,6 +63,7 @@ interface MessageItemProps {
   readonly from: string | null;
   readonly plans: Plans;
   readonly task: Task | undefined;
+  readonly job: boolean;
   readonly onOpenLink: (url: string) => void;
 }
 
@@ -83,22 +94,19 @@ function answeredWords(task: Task | undefined, stepId: string | null): string {
   return "This question is closed.";
 }
 
-function Question({ message, plans, task }: { readonly message: Message; readonly plans: Plans; readonly task: Task | undefined }) {
-  if (message.move_id !== null) {
-    return <p className={`mt-2 ${text.support}`}>{task?.status === "awaiting_confirmation" ? "Type yes or no to answer." : "This question is closed."}</p>;
-  }
-  const request = plans.open.find((candidate) => candidate.step_id === message.step_id);
-  if (request === undefined) {
-    return <p className={`mt-2 ${text.support}`}>{answeredWords(task, message.step_id)}</p>;
-  }
-  const busy = plans.sending.has(request.step_id);
+interface AnswerButtonsProps {
+  readonly busy: boolean;
+  readonly onAnswer: (decision: ConfirmDecision) => void;
+}
+
+function AnswerButtons({ busy, onAnswer }: AnswerButtonsProps) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Your answer">
-      <button type="button" disabled={busy} onClick={() => plans.answer(request, "approve")} className={button.gateApprove}>
+      <button type="button" disabled={busy} onClick={() => onAnswer("approve")} className={button.gateApprove}>
         <Icon name="check" className="h-3.5 w-3.5 text-status-ok" />
         <span>{busy ? "Sending…" : "Yes, do it"}</span>
       </button>
-      <button type="button" disabled={busy} onClick={() => plans.answer(request, "decline")} className={button.gateCancel}>
+      <button type="button" disabled={busy} onClick={() => onAnswer("decline")} className={button.gateCancel}>
         <Icon name="cross" className="h-3.5 w-3.5" />
         <span>No</span>
       </button>
@@ -107,7 +115,26 @@ function Question({ message, plans, task }: { readonly message: Message; readonl
   );
 }
 
-const MessageItem = memo(function MessageItem({ message, from, plans, task, onOpenLink }: MessageItemProps) {
+function MoveQuestion({ taskId, moveId, plans, task }: { readonly taskId: string; readonly moveId: string; readonly plans: Plans; readonly task: Task | undefined }) {
+  const move = plans.move(taskId, moveId);
+  if (move?.status === "asking" && task?.status === "awaiting_confirmation") {
+    return <AnswerButtons busy={plans.sending.has(moveId)} onAnswer={(decision) => plans.answerMove(taskId, moveId, decision)} />;
+  }
+  return <p className={`mt-2 ${text.support}`}>{move === null && task?.status === "awaiting_confirmation" ? "Type yes or no to answer." : moveAnswerWords(move)}</p>;
+}
+
+function Question({ message, plans, task }: { readonly message: Message; readonly plans: Plans; readonly task: Task | undefined }) {
+  if (message.move_id !== null && message.task_id !== null) {
+    return <MoveQuestion taskId={message.task_id} moveId={message.move_id} plans={plans} task={task} />;
+  }
+  const request = plans.open.find((candidate) => candidate.step_id === message.step_id);
+  if (request === undefined) {
+    return <p className={`mt-2 ${text.support}`}>{answeredWords(task, message.step_id)}</p>;
+  }
+  return <AnswerButtons busy={plans.sending.has(request.step_id)} onAnswer={(decision) => plans.answer(request, decision)} />;
+}
+
+const MessageItem = memo(function MessageItem({ message, from, plans, task, job, onOpenLink }: MessageItemProps) {
   const mine = message.speaker === "user";
   const edge = message.kind === "question" ? "border-l-4 border-l-status-wait" : message.kind === "report" ? (reportEdge[task?.status ?? "completed"] ?? "") : "";
   return (
@@ -131,6 +158,19 @@ const MessageItem = memo(function MessageItem({ message, from, plans, task, onOp
             />
           )}
           {message.kind === "question" && <Question message={message} plans={plans} task={task} />}
+          {job && message.task_id !== null && (
+            <JobCard
+              task={task}
+              moves={plans.moves(message.task_id)}
+              loaded={plans.loaded(message.task_id)}
+              picture={plans.picture(message.task_id)}
+              deviceId={plans.deviceId}
+              devices={plans.devices}
+              stopping={plans.stopping(message.task_id)}
+              onLoad={plans.loadMoves}
+              onStop={plans.stop}
+            />
+          )}
         </div>
       )}
     </article>
@@ -213,9 +253,21 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
   const retry = useStore(store, (state) => state.retry);
   const { placed, loose } = useMemo(() => arrange({ messages, answers }), [messages, answers]);
   const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLOListElement>(null);
+  const stuck = useRef(true);
   const [pinned, setPinned] = useState(true);
+  const empty = messages.length === 0 && loose.length === 0;
   const [unseen, setUnseen] = useState(false);
   const lastSpoken = messages.findLast((message) => message.speaker === "venom");
+  const jobs = useMemo(() => {
+    const first = new Map<string, string>();
+    for (const message of messages) {
+      if (message.kind === "report" && message.task_id !== null && !first.has(message.task_id) && plans.tasks.get(message.task_id)?.kind === "goal") {
+        first.set(message.task_id, message.id);
+      }
+    }
+    return new Set(first.values());
+  }, [messages, plans.tasks]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
@@ -227,13 +279,29 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
     } else {
       setUnseen(true);
     }
-  }, [messages, answers, plans.tasks, pinned]);
+  }, [messages, answers, plans, pinned]);
 
   useEffect(() => {
+    stuck.current = pinned;
     if (pinned) {
       setUnseen(false);
     }
   }, [pinned]);
+
+  useEffect(() => {
+    const element = scroller.current;
+    const list = content.current;
+    if (empty || element === null || list === null) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (stuck.current) {
+        element.scrollTop = element.scrollHeight;
+      }
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [empty]);
 
   function onScroll() {
     const element = scroller.current;
@@ -250,14 +318,14 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
     setPinned(true);
   }
 
-  if (messages.length === 0 && loose.length === 0) {
+  if (empty) {
     return <EmptyState />;
   }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto">
-        <ol className="mx-auto flex max-w-[72ch] flex-col gap-5 px-5 py-6" aria-label="Conversation">
+        <ol ref={content} className="mx-auto flex max-w-[72ch] flex-col gap-5 px-5 py-6" aria-label="Conversation">
           {placed.map(({ message, answers: pending }) => (
             <li key={message.id} className="flex flex-col gap-5">
               <MessageItem
@@ -265,6 +333,7 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
                 from={sentFrom(message, devices, deviceId)}
                 plans={plans}
                 task={message.task_id === null ? undefined : plans.tasks.get(message.task_id)}
+                job={jobs.has(message.id)}
                 onOpenLink={onOpenLink}
               />
               {pending.map((answer) => (

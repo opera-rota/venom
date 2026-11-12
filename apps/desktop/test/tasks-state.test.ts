@@ -1,6 +1,6 @@
-import { progressOf, type ConfirmRequest, type GatewayEvent, type Task } from "@venom/contracts";
+import { progressOf, type ConfirmRequest, type GatewayEvent, type MoveStatus, type Task, type TaskMove } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
-import { initialTasks, liveOutput, reduceTasks, taskCount, taskGroups, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
+import { initialTasks, liveOutput, moveOf, movesOf, reduceTasks, taskCount, taskGroups, taskInView, type SafetyEvent, type TasksState } from "../src/renderer/src/tasks-state.ts";
 
 const accountId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01";
 const deviceId = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02";
@@ -159,5 +159,60 @@ describe("the Tasks view groups tasks by what they need", () => {
     const fresh = reduceTasks(newer, { type: "task", task: task("stopped", "stopped", "2026-10-31T19:00:09.000Z") });
     expect(fresh.tasks.get(taskId)?.progress.percent).toBe(0);
     expect(fresh.tasks.get(taskId)?.status).toBe("stopped");
+  });
+});
+
+function move(number: number, status: MoveStatus, task = taskId): TaskMove {
+  return {
+    id: `0199d2a0-7c1e-7a3b-9f2d-${String(number).padStart(4, "0")}${task.slice(-8)}`,
+    task_id: task,
+    number,
+    intent: `Move ${number}`,
+    seen: "Notepad is open.",
+    move: { name: "key", key: "enter" },
+    effects: [],
+    status,
+    detail: status === "asking" || status === "running" ? null : "Pressed it.",
+    created_at: "2026-11-12T08:00:00.000Z",
+    finished_at: status === "asking" || status === "running" ? null : "2026-11-12T08:00:02.000Z",
+  };
+}
+
+function moved(entry: TaskMove, picture: string | null = null): SafetyEvent {
+  return { type: "move", ...stamp, move: entry, picture };
+}
+
+describe("a goal's moves and live picture follow the cloud", () => {
+  it("keeps each move in order, and a late running copy never undoes a finished one", () => {
+    const state = play([moved(move(2, "running")), moved(move(1, "done")), moved(move(2, "done")), moved(move(2, "running"))]);
+    expect(movesOf(state, taskId).map((entry) => [entry.number, entry.status])).toEqual([
+      [1, "done"],
+      [2, "done"],
+    ]);
+    expect(moveOf(state, taskId, move(2, "done").id)?.status).toBe("done");
+    expect(movesOf(state, otherDevice)).toEqual([]);
+  });
+
+  it("merges the moves fetched after a reload with live ones, and a new list asks for them again", () => {
+    const live = play([moved(move(3, "asking"))]);
+    expect(live.loaded.has(taskId)).toBe(false);
+    const fetched = reduceTasks(live, { type: "moves", taskId, list: { moves: [move(1, "done"), move(2, "failed"), move(3, "asking")] } });
+    expect(fetched.loaded.has(taskId)).toBe(true);
+    expect(movesOf(fetched, taskId).map((entry) => entry.status)).toEqual(["done", "failed", "asking"]);
+    const answered = reduceTasks(fetched, { type: "move", move: move(3, "running") });
+    expect(moveOf(answered, taskId, move(3, "running").id)?.status).toBe("running");
+    const relisted = reduceTasks(answered, { type: "list", list: { tasks: [], confirmations: [] } });
+    expect(relisted.loaded.has(taskId)).toBe(false);
+    expect(movesOf(relisted, taskId)).toHaveLength(3);
+  });
+
+  it("shows the newest picture of each goal and keeps pictures of the last 5 goals only", () => {
+    const goals = Array.from({ length: 6 }, (_, at) => `0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5f${String(at).padStart(2, "0")}`);
+    const state = play([moved(move(1, "done"), "Zmlyc3Q="), moved(move(2, "done"), null), ...goals.map((goal) => moved(move(1, "done", goal), "bmV4dA=="))]);
+    expect(state.pictures.size).toBe(5);
+    expect(state.pictures.has(taskId)).toBe(false);
+    expect(state.pictures.has(goals[0] ?? "")).toBe(false);
+    expect(state.pictures.get(goals[5] ?? "")).toBe("bmV4dA==");
+    expect(play([moved(move(1, "done"), "Zmlyc3Q="), moved(move(2, "done"), null)]).pictures.get(taskId)).toBe("Zmlyc3Q=");
   });
 });

@@ -217,6 +217,11 @@ function wire(): void {
     const parsed = ConfirmDecision.safeParse(decision);
     return parsed.success && typeof taskId === "string" && typeof stepId === "string" ? gateway.confirm(taskId, stepId, parsed.data) : unreadable;
   });
+  handle(channels.moves, (taskId) => (typeof taskId === "string" ? gateway.moves(taskId) : unreadable));
+  handle(channels.confirmMove, (taskId, moveId, decision) => {
+    const parsed = ConfirmDecision.safeParse(decision);
+    return parsed.success && typeof taskId === "string" && typeof moveId === "string" ? gateway.confirmMove(taskId, moveId, parsed.data) : unreadable;
+  });
   handle(channels.safety, () => gateway.safety());
   handle(channels.setSafety, (settings) => {
     const parsed = SafetySettings.safeParse(settings);

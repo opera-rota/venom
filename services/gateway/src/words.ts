@@ -66,6 +66,10 @@ function sentence(text: string): string {
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
+function clause(text: string): string {
+  return text.replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
+}
+
 function lowered(text: string): string {
   return text.length === 0 ? text : `${text[0]?.toLowerCase() ?? ""}${text.slice(1)}`;
 }
@@ -76,27 +80,7 @@ export function goalStartWords(task: Task, target: string, elsewhere: boolean): 
 }
 
 export function moveQuestionWords(move: TaskMove, because: readonly string[], target: string): string {
-  return `Quick check, buddy. Next I would ${lowered(sentence(move.intent))} on ${target}. ${because.join(" ")} Shall I do it? Just say yes or no.`;
-}
-
-export function moveWords(move: TaskMove): string {
-  const what = `${move.number}. ${sentence(move.intent)}`;
-  const detail = move.detail === null ? "" : ` ${sentence(move.detail)}`;
-  switch (move.status) {
-    case "done":
-      return `${what}${detail}`;
-    case "failed":
-      return `${what} That did not work.${detail}`;
-    case "refused":
-      return `${what} This computer refused it.${detail}`;
-    case "stopped":
-      return `${what} Stopped.`;
-    case "declined":
-      return `${what} You said no, so it never ran.`;
-    case "asking":
-    case "running":
-      return what;
-  }
+  return `Quick check, buddy. Next I would ${lowered(clause(move.intent))} on ${target}. ${because.join(" ")} Shall I do it? Just say yes or no.`;
 }
 
 export function refusedMoveWords(detail: string): string {
