@@ -12,6 +12,7 @@
     "text": "Next I would run a PowerShell script on RS-APP-CED: List the five biggest files in the work folder. A script cannot be undone. You sure, buddy? Say yes or no.",
     "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
     "step_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05",
+    "move_id": null,
     "created_at": "2026-11-03T19:00:02.000Z"
   }
 }

@@ -16,6 +16,10 @@ export const ConversationEntry = z
   })
   .register(contracts, { id: "ConversationEntry" });
 
+export const TaskMode = z
+  .enum(["plan", "loop"])
+  .register(contracts, { id: "TaskMode" });
+
 export const TurnRequest = z
   .strictObject({
     request_id: Id,
@@ -26,6 +30,7 @@ export const TurnRequest = z
     memories: z.array(MemoryContext).max(40),
     remembered: MemoryContext.nullable(),
     connectors: z.array(ConnectorService).max(2),
+    task_mode: TaskMode,
     text: MessageText,
   })
   .register(contracts, { id: "TurnRequest" });
@@ -189,6 +194,7 @@ export const MoveReply = z
   .register(contracts, { id: "MoveReply" });
 
 export type ConversationEntry = z.infer<typeof ConversationEntry>;
+export type TaskMode = z.infer<typeof TaskMode>;
 export type TurnRequest = z.infer<typeof TurnRequest>;
 export type IntentKind = z.infer<typeof IntentKind>;
 export type Intent = z.infer<typeof Intent>;

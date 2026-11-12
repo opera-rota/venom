@@ -3,7 +3,7 @@ import { createIdentity, createSmtpMailer, loadServerSetup } from "@venom/identi
 import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
 import { createCommandSigner, createTrust, loadCommandKey } from "@venom/safety";
-import { createTasks } from "@venom/tasks";
+import { createGoals, createTasks } from "@venom/tasks";
 import { v7 as uuidv7 } from "uuid";
 import { brainEmbedder, buildGateway, createBrainClient } from "./app.ts";
 import { loadConfig } from "./config.ts";
@@ -19,6 +19,7 @@ const commandKey = await loadCommandKey(config.commandKeyFile);
 const signer = createCommandSigner(commandKey.pair);
 const trust = createTrust({ sql: serviceSql, serverKey: signer.publicKey });
 const tasks = createTasks({ sql: serviceSql });
+const goals = createGoals({ sql: serviceSql });
 const power = createPower({ sql: serviceSql, freeDailyAnswers: config.freeDailyAnswers });
 const brain = createBrainClient({ url: config.brainUrl });
 const memory = createMemory({
@@ -35,6 +36,7 @@ const app = await buildGateway({
   power,
   memory,
   tasks,
+  goals,
   trust,
   signer,
   logger: {

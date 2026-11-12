@@ -1,14 +1,15 @@
-import { TurnRequest, type EngineId, type MemoryContext, type MemoryItem, type Message, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
+import { TurnRequest, type Device, type EngineId, type MemoryContext, type MemoryItem, type Message, type MessageKind, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
 import type { DeviceRef, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import { addUsage, detect, MemoryError, nothingUsed, type Memory } from "@venom/memory";
 import type { Power } from "@venom/power";
-import { route, type RoutedPlan, type Tasks } from "@venom/tasks";
+import { route, TaskError, type RoutedPlan, type Tasks } from "@venom/tasks";
 import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { RequestTrace } from "./live-hub.ts";
-import { planWaiting } from "./words.ts";
+import type { GoalLoop } from "./loop.ts";
+import { goalStartWords, planWaiting } from "./words.ts";
 
 export const historyLimit = 20;
 
@@ -19,6 +20,7 @@ export interface Exchange {
   readonly memory: Memory;
   readonly tasks: Tasks;
   readonly identity: Pick<Identity, "devices">;
+  readonly loop: GoalLoop;
   readonly engine: EngineId;
   readonly trace: RequestTrace;
   readonly device: DeviceRef;
@@ -32,6 +34,8 @@ export interface Exchange {
 interface Reply {
   readonly text: string;
   readonly taskId: string | null;
+  readonly kind: MessageKind;
+  readonly started?: { readonly task: Task; readonly target: Device };
 }
 
 export interface Question {
@@ -85,12 +89,13 @@ async function remember(exchange: Exchange, question: Question): Promise<Remembe
 }
 
 async function answer(exchange: Exchange, question: Question): Promise<void> {
-  const { store, brain, memory, engine, trace, device, signal } = exchange;
+  const { store, brain, memory, loop, engine, trace, device, signal } = exchange;
   const asked = question.message;
   const remembered = await remember(exchange, question);
-  const [history, recall] = await Promise.all([
+  const [history, recall, target] = await Promise.all([
     store.conversationBefore(device.account_id, asked.id, historyLimit),
     memory.recall(device.account_id, asked.text, trace.requestId),
+    loop.target(device),
   ]);
   const request = TurnRequest.parse({
     request_id: trace.requestId,
@@ -101,6 +106,7 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
     memories: recall.memories.filter((item) => item.content !== remembered?.context.content),
     remembered: remembered?.context ?? null,
     connectors: [],
+    task_mode: target === null ? "plan" : "loop",
     text: asked.text,
   });
   const spentBeforeAnswer = addUsage(recall.usage, remembered?.usage ?? nothingUsed);
@@ -111,16 +117,24 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
         trace.answer(event.text);
         break;
       case "done": {
-        const { text, taskId } = event.plan === null ? { text: event.text, taskId: null } : await planned(exchange, asked, event.plan);
+        const { text, taskId, kind, started } = event.plan !== null
+          ? await planned(exchange, asked, event.plan)
+          : event.intent === "task" && target !== null
+            ? await goal(exchange, asked, target)
+            : { text: event.text, taskId: null, kind: "text" as const };
         const reply = await store.recordMessage({
           device,
           requestId: question.requestId,
           speaker: "venom",
+          kind,
           text,
           ...(taskId === null ? {} : { taskId }),
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);
+        if (started !== undefined) {
+          loop.run(started.task, started.target, trace.requestId);
+        }
         await charge(exchange, event, spentBeforeAnswer);
         trace.completed();
         return;
@@ -161,15 +175,28 @@ async function planned({ tasks, identity, device, trace, onTask }: Exchange, ask
   const devices = await identity.devices(device.account_id);
   const origin = devices.find((candidate) => candidate.id === device.id);
   if (origin === undefined) {
-    return { text: "I could not find this device in your VENOM, so I did not plan anything.", taskId: null };
+    return { text: "I could not find this device in your VENOM, so I did not plan anything.", taskId: null, kind: "text" };
   }
   const routing = route(draft, { origin, devices, connectors: [] });
   if (routing.kind === "refused") {
-    return { text: routing.reason, taskId: null };
+    return { text: routing.reason, taskId: null, kind: "text" };
   }
   const task = await tasks.plan(device, asked.text, routing.plan, trace.requestId);
   onTask(task, uuidv7());
-  return { text: planReply(routing.plan, task), taskId: task.id };
+  return { text: planReply(routing.plan, task), taskId: task.id, kind: "plan" };
+}
+
+async function goal({ loop, device, trace, onTask }: Exchange, asked: Message, target: Device): Promise<Reply> {
+  try {
+    const task = await loop.begin(device, asked.text, target, trace.requestId);
+    onTask(task, uuidv7());
+    return { text: goalStartWords(task, target.name, target.id !== device.id), taskId: task.id, kind: "report", started: { task, target } };
+  } catch (error) {
+    if (error instanceof TaskError) {
+      return { text: error.message, taskId: null, kind: "text" };
+    }
+    throw error;
+  }
 }
 
 async function charge({ power, engine, device, trace, log, onPower }: Exchange, done: TurnDone, spentBeforeAnswer: TokenUsage): Promise<void> {

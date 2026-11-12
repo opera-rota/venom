@@ -19,6 +19,7 @@ import {
   type StopRequest,
   type StopScope,
   type TaskControl,
+  type TaskKind,
   type TaskStatus,
 } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
@@ -86,12 +87,13 @@ export interface Tasks {
   saveSettings(device: DeviceRef, settings: SafetySettings, requestId: string): Promise<SafetySettings>;
 }
 
-interface TaskRow {
+export interface TaskRow {
   readonly id: string;
   readonly account_id: string;
   readonly origin_device_id: string;
   readonly target_device_id: string | null;
   readonly request_text: string;
+  readonly kind: TaskKind;
   readonly status: TaskStatus;
   readonly result: string | null;
   readonly created_at: Date;
@@ -120,9 +122,9 @@ interface StepRow {
   readonly finished_at: Date | null;
 }
 
-type Db = Sql | TransactionSql;
+export type Db = Sql | TransactionSql;
 
-type Actor = DeviceRef | { readonly account_id: string; readonly id: null };
+export type Actor = DeviceRef | { readonly account_id: string; readonly id: null };
 
 const finishedAs: Record<CommandOutcome, "done" | "stopped" | "failed"> = {
   done: "done",
@@ -131,7 +133,7 @@ const finishedAs: Record<CommandOutcome, "done" | "stopped" | "failed"> = {
   refused: "failed",
 };
 
-const taskColumns = "id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at";
+export const taskColumns = "id, account_id, origin_device_id, target_device_id, request_text, kind, status, result, created_at, updated_at";
 
 function count(total: number, one: string, many = `${one}s`): string {
   return `${total} ${total === 1 ? one : many}`;
@@ -167,13 +169,42 @@ function describe(status: TaskStatus, steps: readonly StepRow[]): string | null 
   }
 }
 
-function toTask(row: TaskRow, steps: readonly StepRow[]): Task {
+function describeGoal(row: TaskRow, moves: number): string | null {
+  const made = count(moves, "move");
+  switch (row.status) {
+    case "completed":
+      return row.result ?? `Finished after ${made}.`;
+    case "failed":
+      return row.result ?? `Failed after ${made}.`;
+    case "cancelled":
+      return row.result ?? `Cancelled after ${made}.`;
+    case "stopped":
+      return `Stopped after ${made}.`;
+    default:
+      return null;
+  }
+}
+
+async function countMoves(db: Db, taskIds: readonly string[]): Promise<Map<string, number>> {
+  if (taskIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db<{ task_id: string; done: number }[]>`
+    select task_id, count(*)::int as done from moves
+    where task_id = any(${taskIds}::uuid[]) and status = 'done'
+    group by task_id
+  `;
+  return new Map(rows.map((row) => [row.task_id, row.done]));
+}
+
+function toTask(row: TaskRow, steps: readonly StepRow[], moves = 0): Task {
   return Task.parse({
     id: row.id,
     account_id: row.account_id,
     origin_device_id: row.origin_device_id,
     target_device_id: row.target_device_id,
     request_text: row.request_text,
+    kind: row.kind,
     plan: steps.map((step) => ({
       id: step.id,
       task_id: step.task_id,
@@ -193,6 +224,7 @@ function toTask(row: TaskRow, steps: readonly StepRow[]): Task {
     })),
     status: row.status,
     progress: progressOf(steps.map((step) => step.status)),
+    moves,
     result: row.result,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
@@ -227,36 +259,36 @@ async function loadSteps(db: Db, taskIds: readonly string[]): Promise<StepRow[]>
   `;
 }
 
-async function loadTasks(db: Db, rows: readonly TaskRow[]): Promise<Task[]> {
-  const steps = await loadSteps(
-    db,
-    rows.map((row) => row.id),
-  );
+export async function loadTasks(db: Db, rows: readonly TaskRow[]): Promise<Task[]> {
+  const ids = rows.map((row) => row.id);
+  const [steps, moves] = await Promise.all([loadSteps(db, ids), countMoves(db, ids)]);
   return rows.map((row) =>
     toTask(
       row,
       steps.filter((step) => step.task_id === row.id),
+      moves.get(row.id) ?? 0,
     ),
   );
 }
 
-async function taskRow(db: Db, accountId: string, taskId: string, lock = false): Promise<TaskRow | null> {
+export async function taskRow(db: Db, accountId: string, taskId: string, lock = false): Promise<TaskRow | null> {
   const [row] = await db.unsafe<TaskRow[]>(`select ${taskColumns} from tasks where id = $1 and account_id = $2${lock ? " for update" : ""}`, [taskId, accountId]);
   return row ?? null;
 }
 
-async function settle(db: Db, accountId: string, taskId: string): Promise<Task | null> {
+export async function settle(db: Db, accountId: string, taskId: string): Promise<Task | null> {
   const row = await taskRow(db, accountId, taskId);
   if (row === null) {
     return null;
   }
-  const steps = await loadSteps(db, [row.id]);
-  const result = describe(row.status, steps);
+  const [steps, counted] = await Promise.all([loadSteps(db, [row.id]), countMoves(db, [row.id])]);
+  const moves = counted.get(row.id) ?? 0;
+  const result = row.kind === "goal" ? describeGoal(row, moves) : describe(row.status, steps);
   if (result === row.result) {
-    return toTask(row, steps);
+    return toTask(row, steps, moves);
   }
   const [updated] = await db.unsafe<TaskRow[]>(`update tasks set result = $1, updated_at = clock_timestamp() where id = $2 returning ${taskColumns}`, [result, row.id]);
-  return updated === undefined ? null : toTask(updated, steps);
+  return updated === undefined ? null : toTask(updated, steps, moves);
 }
 
 async function settled(db: Db, accountId: string, taskId: string): Promise<Task> {
@@ -267,14 +299,14 @@ async function settled(db: Db, accountId: string, taskId: string): Promise<Task>
   return task;
 }
 
-async function audit(db: Db, actor: Actor, requestId: string | null, kind: "user" | "venom" | "system", action: string, subjectId: string, detail: Record<string, string | number | boolean | null> = {}): Promise<void> {
+export async function audit(db: Db, actor: Actor, requestId: string | null, kind: "user" | "venom" | "system", action: string, subjectId: string, detail: Record<string, string | number | boolean | null> = {}): Promise<void> {
   await db`
     insert into audit_log (account_id, device_id, request_id, actor, action, subject_id, detail)
     values (${actor.account_id}, ${actor.id}, ${requestId}, ${kind}, ${action}, ${subjectId}, ${db.json(detail)})
   `;
 }
 
-async function readSettings(db: Db, accountId: string): Promise<SafetySettings> {
+export async function readSettings(db: Db, accountId: string): Promise<SafetySettings> {
   const [row] = await db<{ confirmation_strictness: ConfirmationStrictness; skip_asking: SafetySettings["skip_asking"] }[]>`
     select confirmation_strictness, skip_asking from accounts where id = ${accountId}
   `;
@@ -302,7 +334,7 @@ function withOutput(detail: string, output: string | null): string {
   return whole.length <= safetyLimits.stepOutput ? whole : `${whole.slice(0, safetyLimits.stepOutput - 1)}…`;
 }
 
-async function holdActiveSlot(db: TransactionSql, accountId: string): Promise<void> {
+export async function holdActiveSlot(db: TransactionSql, accountId: string): Promise<void> {
   await db`select pg_advisory_xact_lock(hashtextextended(${accountId}::text, 5))`;
   const [active] = await db<{ total: number }[]>`
     select count(*)::int as total from tasks where account_id = ${accountId} and status = any(${openTaskStatuses})
@@ -387,7 +419,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         const [task] = await tx<TaskRow[]>`
           insert into tasks (account_id, origin_device_id, target_device_id, request_text, status)
           values (${device.account_id}, ${device.id}, ${device.id}, ${plan.requestText}, 'running')
-          returning id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at
+          returning id, account_id, origin_device_id, target_device_id, request_text, kind, status, result, created_at, updated_at
         `;
         if (task === undefined) {
           throw new Error("Task insert returned no row");
@@ -417,7 +449,7 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         const [task] = await tx<TaskRow[]>`
           insert into tasks (account_id, origin_device_id, target_device_id, request_text, status)
           values (${device.account_id}, ${device.id}, ${plan.target.id}, ${requestText}, 'planned')
-          returning id, account_id, origin_device_id, target_device_id, request_text, status, result, created_at, updated_at
+          returning id, account_id, origin_device_id, target_device_id, request_text, kind, status, result, created_at, updated_at
         `;
         if (task === undefined) {
           throw new Error("Task insert returned no row");
@@ -648,6 +680,9 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         if (task === null) {
           throw refuseTasks.taskNotFound();
         }
+        if (task.kind === "goal") {
+          throw refuseTasks.goalControl();
+        }
         const steps = await loadSteps(tx, [task.id]);
         if (control.kind === "discard") {
           if (task.status !== "planned") {
@@ -760,6 +795,12 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
         if (closing.length > 0) {
           await tx`update steps set status = 'pending' where id = any(${closing.map((step) => step.id)}::uuid[])`;
         }
+        if (stopped.length > 0) {
+          await tx`
+            update moves set status = 'stopped', detail = 'Closed, because the task was stopped.', finished_at = clock_timestamp()
+            where task_id = any(${stopped.map((row) => row.id)}::uuid[]) and status = 'asking'
+          `;
+        }
         if (inserted !== undefined) {
           await audit(tx, device, requestId, "user", "safety.stopped", stop_id, { scope: scope.kind, tasks: stopped.length });
         }
@@ -794,6 +835,11 @@ export function createTasks({ sql }: { readonly sql: Sql }): Tasks {
           where task_id = any(${ids}::uuid[]) and status = 'running'
         `;
         await tx`update steps set status = 'pending' where task_id = any(${ids}::uuid[]) and status = 'waiting'`;
+        await tx`
+          update moves set status = 'failed', detail = 'VENOM restarted before this move finished.', finished_at = clock_timestamp()
+          where task_id = any(${ids}::uuid[]) and status in ('asking', 'running')
+        `;
+        await tx`update tasks set result = 'VENOM restarted before this goal was reached.' where id = any(${ids}::uuid[]) and kind = 'goal'`;
         for (const row of rows) {
           await audit(tx, system(row.account_id), null, "system", "task.interrupted", row.id);
           await settle(tx, row.account_id, row.id);

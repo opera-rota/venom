@@ -7,10 +7,11 @@ import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identi
 import { createMemory, type Memory } from "@venom/memory";
 import { createPower, type Power } from "@venom/power";
 import { createCommandSigner, createTrust, newKeyPair, type CommandSigner } from "@venom/safety";
-import { createTasks, type Tasks } from "@venom/tasks";
+import { createGoals, createTasks, type Goals, type Tasks } from "@venom/tasks";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { brainEmbedder, buildGateway } from "../src/app.ts";
+import type { LoopLimits } from "../src/loop.ts";
 import { scriptedBrain, type ScriptedBrain } from "../src/testing.ts";
 
 export interface Environment {
@@ -28,6 +29,7 @@ export interface RunningGateway {
   readonly power: Power;
   readonly memory: Memory;
   readonly tasks: Tasks;
+  readonly goals: Goals;
   readonly signer: CommandSigner;
   stop(): Promise<void>;
 }
@@ -54,11 +56,12 @@ export interface GatewayStart {
   readonly brain?: ScriptedBrain;
   readonly freeDailyAnswers?: number;
   readonly commandGraceMs?: number;
+  readonly loopLimits?: Partial<LoopLimits>;
 }
 
 export async function startGateway(
   environment: Environment,
-  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100, commandGraceMs }: GatewayStart = {},
+  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100, commandGraceMs, loopLimits }: GatewayStart = {},
 ): Promise<RunningGateway> {
   const store: Store = createStore(environment.database.appUrl);
   const sql = connect(environment.database.appUrl);
@@ -67,6 +70,7 @@ export async function startGateway(
   const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
   const signer = createCommandSigner(newKeyPair());
   const tasks = createTasks({ sql });
+  const goals = createGoals({ sql });
   const trust = createTrust({ sql, serverKey: signer.publicKey });
   const app = await buildGateway({
     store,
@@ -75,11 +79,13 @@ export async function startGateway(
     power,
     memory,
     tasks,
+    goals,
     trust,
     signer,
     logger: false,
     ...(heartbeatMs === undefined ? {} : { heartbeatMs }),
     ...(commandGraceMs === undefined ? {} : { commandGraceMs }),
+    ...(loopLimits === undefined ? {} : { loopLimits }),
   });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 
@@ -91,6 +97,7 @@ export async function startGateway(
     power,
     memory,
     tasks,
+    goals,
     signer,
     async stop() {
       await app.close();

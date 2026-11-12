@@ -84,6 +84,9 @@ function answeredWords(task: Task | undefined, stepId: string | null): string {
 }
 
 function Question({ message, plans, task }: { readonly message: Message; readonly plans: Plans; readonly task: Task | undefined }) {
+  if (message.move_id !== null) {
+    return <p className={`mt-2 ${text.support}`}>{task?.status === "awaiting_confirmation" ? "Type yes or no to answer." : "This question is closed."}</p>;
+  }
   const request = plans.open.find((candidate) => candidate.step_id === message.step_id);
   if (request === undefined) {
     return <p className={`mt-2 ${text.support}`}>{answeredWords(task, message.step_id)}</p>;

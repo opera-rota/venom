@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { EngineId, type EmbeddingRequest, type PlanDraft, type TokenUsage, type TurnEvent, type TurnRequest } from "@venom/contracts";
+import { EngineId, type EmbeddingRequest, type MoveReply, type MoveRequest, type NextMove, type PlanDraft, type TokenUsage, type TurnEvent, type TurnRequest } from "@venom/contracts";
 import { wordVector } from "@venom/memory/testing";
 import { BrainError, type Brain, type BrainProblem } from "./brain.ts";
 
@@ -7,10 +7,14 @@ export type BrainStep = TurnEvent | { readonly pause: number } | { readonly hold
 
 export type BrainScript = (request: TurnRequest) => readonly BrainStep[];
 
+export type MoveScript = (request: MoveRequest) => MoveReply | Promise<MoveReply>;
+
 export interface ScriptedBrain extends Brain {
   readonly requests: TurnRequest[];
   readonly embedded: EmbeddingRequest[];
+  readonly moves: MoveRequest[];
   script: BrainScript;
+  mover: MoveScript;
   available: readonly EngineId[];
   embedding: { model: string; working: boolean; usage: TokenUsage };
 }
@@ -34,15 +38,43 @@ export function planWith(plan: PlanDraft | null, usage: TokenUsage = scriptedUsa
 
 export const echoAnswers = answerWith((text) => `You asked: ${text}`);
 
+export const understood: TokenUsage = { input_tokens: 300, output_tokens: 8, cost_micro_usd: 400 };
+
+export const handToLoop: BrainScript = (request) => [{ type: "done", intent: "task", text: request.text, plan: null, model: null, usage: understood }];
+
+export function choose(next: NextMove, usage: TokenUsage = scriptedUsage): MoveReply {
+  return { type: "chosen", next, model: "scripted-eyes", usage };
+}
+
+export function movesWith(choices: readonly NextMove[]): MoveScript {
+  let turn = 0;
+  return () => {
+    const next = choices[Math.min(turn, choices.length - 1)];
+    turn += 1;
+    if (next === undefined) {
+      return { type: "failed", reason: "invalid_output", detail: "No move was scripted.", usage: { input_tokens: 0, output_tokens: 0, cost_micro_usd: 0 } };
+    }
+    return choose(next);
+  };
+}
+
+const giveUp = movesWith([{ seen: "Nothing was scripted.", next: { kind: "cannot", reason: "No moves were scripted for this test." } }]);
+
 export function scriptedBrain(script: BrainScript = echoAnswers): ScriptedBrain {
   const brain: ScriptedBrain = {
     requests: [],
     embedded: [],
+    moves: [],
     script,
+    mover: giveUp,
     available: EngineId.options,
     embedding: { model: "scripted-embedding", working: true, usage: { input_tokens: 8, output_tokens: 0, cost_micro_usd: 0 } },
     async engines() {
       return brain.available;
+    },
+    async move(request) {
+      brain.moves.push(request);
+      return brain.mover(request);
     },
     async embed(request) {
       brain.embedded.push(request);

@@ -28,6 +28,7 @@ TURN: dict[str, object] = {
     "memories": [],
     "remembered": None,
     "connectors": [],
+    "task_mode": "loop",
     "text": "Explain what a mutex is",
 }
 

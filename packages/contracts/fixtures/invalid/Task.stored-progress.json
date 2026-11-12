@@ -4,9 +4,11 @@
   "origin_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "target_device_id": null,
   "request_text": "Tidy my downloads folder",
+  "kind": "plan",
   "plan": [],
   "status": "running",
   "progress": 70,
+  "moves": 0,
   "result": null,
   "created_at": "2026-10-11T09:30:00Z",
   "updated_at": "2026-10-11T09:30:00Z"

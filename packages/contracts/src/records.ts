@@ -82,12 +82,13 @@ export const Message = z
     text: z.string().min(1),
     task_id: Id.nullable(),
     step_id: Id.nullable(),
+    move_id: Id.nullable(),
     created_at: Timestamp,
   })
   .superRefine((message, context) => {
-    const linked = message.kind === "text" ? message.task_id === null && message.step_id === null
-      : message.kind === "question" ? message.task_id !== null && message.step_id !== null
-      : message.task_id !== null && message.step_id === null;
+    const linked = message.kind === "text" ? message.task_id === null && message.step_id === null && message.move_id === null
+      : message.kind === "question" ? message.task_id !== null && (message.step_id === null) !== (message.move_id === null)
+      : message.task_id !== null && message.step_id === null && message.move_id === null;
     if (!linked) {
       context.addIssue({ code: "custom", path: ["kind"], message: "A message links to a task and a step exactly as its kind says." });
     }
@@ -250,6 +251,10 @@ export const Step = z
   .superRefine(specMatchesAction)
   .register(contracts, { id: "Step" });
 
+export const TaskKind = z
+  .enum(["plan", "goal"])
+  .register(contracts, { id: "TaskKind" });
+
 export const TaskStatus = z
   .enum(["created", "planned", "running", "awaiting_confirmation", "completed", "failed", "cancelled", "stopped"])
   .register(contracts, { id: "TaskStatus" });
@@ -274,9 +279,11 @@ export const Task = z
     origin_device_id: Id,
     target_device_id: Id.nullable(),
     request_text: z.string().min(1),
+    kind: TaskKind,
     plan: z.array(Step),
     status: TaskStatus,
     progress: TaskProgress,
+    moves: stepCount,
     result: z.string().nullable(),
     created_at: Timestamp,
     updated_at: Timestamp,
@@ -284,6 +291,12 @@ export const Task = z
   .superRefine((task, context) => {
     if (!sameProgress(task.progress, progressOf(task.plan.map((step) => step.status)))) {
       context.addIssue({ code: "custom", path: ["progress"], message: "Progress must be counted from the steps of the plan." });
+    }
+    if (task.kind === "goal" && task.plan.length > 0) {
+      context.addIssue({ code: "custom", path: ["plan"], message: "A goal is reached one move at a time, so it has no written plan." });
+    }
+    if (task.kind === "plan" && task.moves > 0) {
+      context.addIssue({ code: "custom", path: ["moves"], message: "Only a goal counts moves." });
     }
   })
   .register(contracts, { id: "Task" });
@@ -381,6 +394,7 @@ export type StepStatus = z.infer<typeof StepStatus>;
 export type SetAsideReason = z.infer<typeof SetAsideReason>;
 export type StepTemplate = z.infer<typeof StepTemplate>;
 export type Step = z.infer<typeof Step>;
+export type TaskKind = z.infer<typeof TaskKind>;
 export type TaskStatus = z.infer<typeof TaskStatus>;
 export type TaskProgress = z.infer<typeof TaskProgress>;
 export type Task = z.infer<typeof Task>;

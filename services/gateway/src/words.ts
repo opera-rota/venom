@@ -1,4 +1,4 @@
-import type { ConfirmRequest, DeviceAction, Effect, SkippableEffect, Task } from "@venom/contracts";
+import type { ConfirmRequest, DeviceAction, Effect, SkippableEffect, Task, TaskMove } from "@venom/contracts";
 
 const because: Record<Effect, string> = {
   deletes: "it deletes something",
@@ -56,3 +56,81 @@ export function declinedWords(task: Task): string {
 }
 
 export const planWaiting = 'Say "run it" or press Run it when you are ready.';
+
+function moves(total: number): string {
+  return `${total} ${total === 1 ? "move" : "moves"}`;
+}
+
+function sentence(text: string): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+}
+
+function lowered(text: string): string {
+  return text.length === 0 ? text : `${text[0]?.toLowerCase() ?? ""}${text.slice(1)}`;
+}
+
+export function goalStartWords(task: Task, target: string, elsewhere: boolean): string {
+  const where = elsewhere ? `This device cannot do it, so I am doing it on ${target}.` : `I am doing it on ${target}.`;
+  return `On it, buddy. ${where} I look at the screen, make one move, look again, and tell you each move here. Type to guide me while I work, or say stop at any moment.`;
+}
+
+export function moveQuestionWords(move: TaskMove, because: readonly string[], target: string): string {
+  return `Quick check, buddy. Next I would ${lowered(sentence(move.intent))} on ${target}. ${because.join(" ")} Shall I do it? Just say yes or no.`;
+}
+
+export function moveWords(move: TaskMove): string {
+  const what = `${move.number}. ${sentence(move.intent)}`;
+  const detail = move.detail === null ? "" : ` ${sentence(move.detail)}`;
+  switch (move.status) {
+    case "done":
+      return `${what}${detail}`;
+    case "failed":
+      return `${what} That did not work.${detail}`;
+    case "refused":
+      return `${what} This computer refused it.${detail}`;
+    case "stopped":
+      return `${what} Stopped.`;
+    case "declined":
+      return `${what} You said no, so it never ran.`;
+    case "asking":
+    case "running":
+      return what;
+  }
+}
+
+export function refusedMoveWords(detail: string): string {
+  return `${sentence(detail)} Say no if you want me to stop here.`;
+}
+
+export function goalDoneWords(task: Task, answer: string): string {
+  return `Done. ${sentence(answer)} (${moves(task.moves)} on ${quoted(task.request_text)}.)`;
+}
+
+export function goalCannotWords(task: Task, reason: string): string {
+  return `I could not finish ${quoted(task.request_text)}: ${lowered(sentence(reason))} I stopped after ${moves(task.moves)}.`;
+}
+
+export function goalFailedWords(task: Task, detail: string): string {
+  return `That did not work. ${sentence(detail)} I stopped working on ${quoted(task.request_text)} after ${moves(task.moves)}.`;
+}
+
+export function keepGoingWords(task: Task, made: number, more: number): string {
+  return `I have made ${moves(made)} on ${quoted(task.request_text)} and I am not done yet, so I paused. Shall I keep going? Say yes for ${more} more, or no to stop here.`;
+}
+
+export function timeUpWords(task: Task, minutes: number): string {
+  return `I have worked on ${quoted(task.request_text)} for ${minutes} minutes, so I stopped there after ${moves(task.moves)}. Ask me again if you want me to carry on.`;
+}
+
+export function goalDeclinedWords(task: Task): string {
+  return `Okay, I did not do it, and I stopped working on ${quoted(task.request_text)}.`;
+}
+
+export function stopHereWords(goal: string): string {
+  return `Okay, I stopped working on ${quoted(goal)} there.`;
+}
+
+export const guidedWords = "Got it. I will use that in my next move.";
+
+export const carryOnWords = "Okay, carrying on.";

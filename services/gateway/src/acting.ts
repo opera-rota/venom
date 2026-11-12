@@ -1,9 +1,10 @@
 import type { ConfirmDecision, StopReceipt, StopRequest, Task } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import { refuseSafety } from "@venom/safety";
-import { refuseTasks, type Answered } from "@venom/tasks";
+import { refuseTasks, type Answered, type MoveChange } from "@venom/tasks";
 import type { GatewayContext } from "./context.ts";
-import { declinedWords, stoppedWords } from "./words.ts";
+import { moveEvent } from "./live-hub.ts";
+import { declinedWords, goalDeclinedWords, stoppedWords } from "./words.ts";
 
 const rememberedStops = 500;
 
@@ -12,13 +13,14 @@ export interface Acting {
   ensureTaskCanAct(device: DeviceRef, task: Task): Promise<void>;
   run(device: DeviceRef, taskId: string, requestId: string): Promise<Task>;
   answer(device: DeviceRef, taskId: string, stepId: string, decision: ConfirmDecision, requestId: string, tell?: boolean): Promise<Answered>;
+  answerMove(device: DeviceRef, taskId: string, moveId: string, decision: ConfirmDecision, requestId: string, tell?: boolean): Promise<MoveChange>;
   halt(device: DeviceRef, stop: StopRequest, requestId: string): Promise<StopReceipt>;
 }
 
-export type ActingNeeds = Pick<GatewayContext, "hub" | "identity" | "tasks" | "trust" | "signer" | "runner" | "broadcastTask" | "broadcastConfirmation" | "broadcastHalt" | "say">;
+export type ActingNeeds = Pick<GatewayContext, "hub" | "identity" | "tasks" | "goals" | "loop" | "trust" | "signer" | "runner" | "broadcastTask" | "broadcastConfirmation" | "broadcastHalt" | "say">;
 
 export function createActing(context: ActingNeeds): Acting {
-  const { hub, identity, tasks, trust, signer, runner, broadcastTask, broadcastConfirmation, broadcastHalt, say } = context;
+  const { hub, identity, tasks, goals, loop, trust, signer, runner, broadcastTask, broadcastConfirmation, broadcastHalt, say } = context;
   const reportedStops = new Set<string>();
 
   async function ensureCanAct(device: DeviceRef): Promise<void> {
@@ -79,6 +81,17 @@ export function createActing(context: ActingNeeds): Acting {
       return answered;
     },
 
+    async answerMove(device, taskId, moveId, decision, requestId, tell = true) {
+      const changed = await goals.answer(device, taskId, moveId, decision, requestId);
+      broadcastTask(device.account_id, requestId, changed.task);
+      hub.publishToAccount(device.account_id, moveEvent(requestId, changed.move, null));
+      loop.answered(taskId);
+      if (tell && changed.move.status === "declined") {
+        await say(changed.task, "report", goalDeclinedWords(changed.task), null);
+      }
+      return changed;
+    },
+
     async halt(device, stop, requestId) {
       const { scope } = stop;
       const reached = hub.devicesOf(device.account_id).filter((deviceId) => scope.kind !== "device" || deviceId === scope.device_id);
@@ -88,6 +101,7 @@ export function createActing(context: ActingNeeds): Acting {
       }
       const { receipt, closed } = await tasks.stop(device, stop, requestId);
       runner.wakeAll();
+      loop.halted(receipt.tasks.map((task) => task.id));
       broadcastHalt(device.account_id, requestId, receipt);
       for (const task of receipt.tasks) {
         broadcastTask(device.account_id, requestId, task);

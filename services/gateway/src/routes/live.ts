@@ -5,7 +5,7 @@ import { v7 as uuidv7 } from "uuid";
 import { closeCodes, type GatewayContext } from "../context.ts";
 
 export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
-  const { hub, identity, trust, runner, heartbeatMs, track, isClosing, broadcastDevices } = context;
+  const { hub, identity, trust, runner, loop, heartbeatMs, track, isClosing, broadcastDevices } = context;
   const queue = new Map<string, Promise<void>>();
   const proven = new WeakSet<FastifyRequest>();
 
@@ -81,6 +81,7 @@ export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
       clearInterval(heartbeat);
       if (attachment.detach().last) {
         runner.deviceLost(device.id);
+        loop.deviceLost(device.id);
         presence(device, false, request.log);
       }
     });

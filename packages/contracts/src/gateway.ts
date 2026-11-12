@@ -5,6 +5,7 @@ import { Id, Timestamp } from "./primitives.ts";
 import { Device, MemoryItem, Message, Task } from "./records.ts";
 import { ConfirmationAnswered } from "./safety.ts";
 import { contracts } from "./registry.ts";
+import { TaskMove, Thumbnail } from "./screen.ts";
 
 export const MessageText = z
   .string()
@@ -152,6 +153,15 @@ export const StepOutputEvent = z
   })
   .register(contracts, { id: "StepOutputEvent" });
 
+export const MoveEvent = z
+  .strictObject({
+    type: z.literal("move"),
+    ...eventFields,
+    move: TaskMove,
+    picture: Thumbnail.nullable(),
+  })
+  .register(contracts, { id: "MoveEvent" });
+
 export const HaltEvent = z
   .strictObject({
     type: z.literal("halt"),
@@ -174,6 +184,7 @@ export const GatewayEvent = z
     TaskEvent,
     ConfirmationEvent,
     StepOutputEvent,
+    MoveEvent,
     HaltEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
@@ -196,5 +207,6 @@ export type ForgottenEvent = z.infer<typeof ForgottenEvent>;
 export type TaskEvent = z.infer<typeof TaskEvent>;
 export type ConfirmationEvent = z.infer<typeof ConfirmationEvent>;
 export type StepOutputEvent = z.infer<typeof StepOutputEvent>;
+export type MoveEvent = z.infer<typeof MoveEvent>;
 export type HaltEvent = z.infer<typeof HaltEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

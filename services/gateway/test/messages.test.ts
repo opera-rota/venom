@@ -36,6 +36,7 @@ function label(event: GatewayEvent): string {
     case "confirmation":
     case "halt":
     case "step_output":
+    case "move":
       return event.type;
   }
 }

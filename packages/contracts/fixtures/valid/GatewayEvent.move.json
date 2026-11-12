@@ -1,0 +1,25 @@
+{
+  "type": "move",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e62",
+  "sequence": 0,
+  "emitted_at": "2026-11-12T08:00:21.000Z",
+  "move": {
+    "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e61",
+    "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e60",
+    "number": 3,
+    "intent": "Type the shopping list into the text editor",
+    "seen": "Notepad is open with an empty page and the cursor in the text editor.",
+    "move": {
+      "name": "type",
+      "text": "Milk\nBread\nEggs",
+      "mark": 19,
+      "enter": false
+    },
+    "effects": [],
+    "status": "done",
+    "detail": "Typed 15 characters and read them back.",
+    "created_at": "2026-11-12T08:00:15.000Z",
+    "finished_at": "2026-11-12T08:00:21.000Z"
+  },
+  "picture": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+}

@@ -193,6 +193,9 @@
       "$ref": "#/$defs/MoveCommand"
     },
     {
+      "$ref": "#/$defs/MoveEvent"
+    },
+    {
       "$ref": "#/$defs/MoveFailed"
     },
     {
@@ -401,6 +404,9 @@
     },
     {
       "$ref": "#/$defs/TaskList"
+    },
+    {
+      "$ref": "#/$defs/TaskMove"
     },
     {
       "$ref": "#/$defs/TaskProgress"
@@ -1833,6 +1839,9 @@
           "$ref": "#/$defs/StepOutputEvent"
         },
         {
+          "$ref": "#/$defs/MoveEvent"
+        },
+        {
           "$ref": "#/$defs/HaltEvent"
         }
       ],
@@ -2324,6 +2333,17 @@
             }
           ]
         },
+        "move_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "created_at": {
           "type": "string",
           "format": "date-time"
@@ -2338,6 +2358,7 @@
         "text",
         "task_id",
         "step_id",
+        "move_id",
         "created_at"
       ],
       "additionalProperties": false
@@ -2492,6 +2513,50 @@
       ],
       "additionalProperties": false
     },
+    "MoveEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "move"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "move": {
+          "$ref": "#/$defs/TaskMove"
+        },
+        "picture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Thumbnail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "move",
+        "picture"
+      ],
+      "additionalProperties": false
+    },
     "MoveFailed": {
       "type": "object",
       "properties": {
@@ -2594,6 +2659,18 @@
         "observation"
       ],
       "additionalProperties": false
+    },
+    "MoveStatus": {
+      "type": "string",
+      "enum": [
+        "asking",
+        "running",
+        "done",
+        "failed",
+        "refused",
+        "declined",
+        "stopped"
+      ]
     },
     "NextMove": {
       "type": "object",
@@ -4680,6 +4757,9 @@
           "type": "string",
           "minLength": 1
         },
+        "kind": {
+          "$ref": "#/$defs/TaskKind"
+        },
         "plan": {
           "type": "array",
           "items": {
@@ -4691,6 +4771,11 @@
         },
         "progress": {
           "$ref": "#/$defs/TaskProgress"
+        },
+        "moves": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "result": {
           "type": [
@@ -4713,9 +4798,11 @@
         "origin_device_id",
         "target_device_id",
         "request_text",
+        "kind",
         "plan",
         "status",
         "progress",
+        "moves",
         "result",
         "created_at",
         "updated_at"
@@ -4795,6 +4882,13 @@
       ],
       "additionalProperties": false
     },
+    "TaskKind": {
+      "type": "string",
+      "enum": [
+        "plan",
+        "goal"
+      ]
+    },
     "TaskList": {
       "type": "object",
       "properties": {
@@ -4815,6 +4909,98 @@
       "required": [
         "tasks",
         "confirmations"
+      ],
+      "additionalProperties": false
+    },
+    "TaskMode": {
+      "type": "string",
+      "enum": [
+        "plan",
+        "loop"
+      ]
+    },
+    "TaskMove": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "seen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "move": {
+          "$ref": "#/$defs/ScreenMove"
+        },
+        "effects": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/MoveStatus"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "number",
+        "intent",
+        "seen",
+        "move",
+        "effects",
+        "status",
+        "detail",
+        "created_at",
+        "finished_at"
       ],
       "additionalProperties": false
     },
@@ -4887,6 +5073,12 @@
         "kind"
       ],
       "additionalProperties": false
+    },
+    "Thumbnail": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200000,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
     },
     "TokenUsage": {
       "type": "object",
@@ -5068,6 +5260,9 @@
             "$ref": "#/$defs/ConnectorService"
           }
         },
+        "task_mode": {
+          "$ref": "#/$defs/TaskMode"
+        },
         "text": {
           "$ref": "#/$defs/MessageText"
         }
@@ -5081,6 +5276,7 @@
         "memories",
         "remembered",
         "connectors",
+        "task_mode",
         "text"
       ],
       "additionalProperties": false

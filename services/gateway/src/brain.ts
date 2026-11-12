@@ -1,8 +1,9 @@
-import { AvailableEngines, EmbeddingFailure, Embeddings, TurnEvent, type EmbeddingRequest, type EngineId, type TurnRequest } from "@venom/contracts";
+import { AvailableEngines, EmbeddingFailure, Embeddings, MoveReply, TurnEvent, type EmbeddingRequest, type EngineId, type MoveRequest, type TurnRequest } from "@venom/contracts";
 import type { Embedder } from "@venom/memory";
 
 export interface Brain {
   turn(request: TurnRequest, signal: AbortSignal): AsyncGenerator<TurnEvent>;
+  move(request: MoveRequest, signal: AbortSignal): Promise<MoveReply>;
   engines(): Promise<readonly EngineId[]>;
   embed(request: EmbeddingRequest): Promise<Embeddings>;
 }
@@ -32,10 +33,12 @@ export interface BrainClientOptions {
   readonly idleMs?: number;
   readonly totalMs?: number;
   readonly embedMs?: number;
+  readonly moveMs?: number;
 }
 
-export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000, embedMs = 20_000 }: BrainClientOptions): Brain {
+export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000, embedMs = 20_000, moveMs = 150_000 }: BrainClientOptions): Brain {
   const endpoint = new URL("/v1/turns", url);
+  const movesEndpoint = new URL("/v1/moves", url);
   const enginesEndpoint = new URL("/v1/engines", url);
   const embeddingsEndpoint = new URL("/v1/embeddings", url);
 
@@ -60,6 +63,30 @@ export function createBrainClient({ url, idleMs = 45_000, totalMs = 180_000, emb
       const parsed = Embeddings.safeParse(body);
       if (!parsed.success || parsed.data.vectors.length !== request.texts.length) {
         throw new BrainError("malformed", { cause: parsed.error ?? new Error("the brain returned the wrong number of vectors") });
+      }
+      return parsed.data;
+    },
+
+    async move(request, signal) {
+      const overall = AbortSignal.timeout(moveMs);
+      let response: Response;
+      try {
+        response = await fetch(movesEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify(request),
+          signal: AbortSignal.any([signal, overall]),
+        });
+      } catch (error) {
+        throw new BrainError(signal.aborted ? "stopped" : overall.aborted ? "timeout" : "unreachable", { cause: error });
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new BrainError("refused", { cause: new Error(`brain answered ${response.status}`) });
+      }
+      const parsed = MoveReply.safeParse(await response.json().catch(() => undefined));
+      if (!parsed.success) {
+        throw new BrainError("malformed", { cause: parsed.error });
       }
       return parsed.data;
     },

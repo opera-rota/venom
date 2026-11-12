@@ -1,14 +1,17 @@
 import { SafetySettings, type ConfirmDecision, type Effect, type SkippableEffect } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
-import type { Tasks } from "@venom/tasks";
+import type { Goals, Tasks } from "@venom/tasks";
 import { v7 as uuidv7 } from "uuid";
 import type { GatewayContext } from "./context.ts";
-import type { Spoken } from "./spoken.ts";
-import { declinedWords, effectWords, quoted } from "./words.ts";
+import type { Word } from "./loop.ts";
+import { understand } from "./spoken.ts";
+import { declinedWords, effectWords, goalDeclinedWords, quoted } from "./words.ts";
 
 export type Command =
   | { readonly kind: "stop" }
   | { readonly kind: "answer"; readonly taskId: string; readonly stepId: string; readonly decision: ConfirmDecision }
+  | { readonly kind: "answer_move"; readonly taskId: string; readonly moveId: string; readonly decision: ConfirmDecision }
+  | { readonly kind: "guide"; readonly taskId: string; readonly text: string; readonly word: Word }
   | { readonly kind: "run"; readonly taskId: string }
   | { readonly kind: "asking"; readonly ask: boolean; readonly effect: Effect | null }
   | { readonly kind: "say"; readonly text: string };
@@ -23,16 +26,27 @@ function skippable(effect: Effect): effect is SkippableEffect {
   return effect === "deletes" || effect === "posts" || effect === "reaches_outside";
 }
 
-export async function decide(tasks: Tasks, accountId: string, spoken: Spoken): Promise<Command | null> {
-  if (spoken.kind === "stop" || spoken.kind === "asking") {
+export async function decide(tasks: Tasks, goals: Goals, accountId: string, text: string): Promise<Command | null> {
+  const spoken = understand(text);
+  if (spoken?.kind === "stop" || spoken?.kind === "asking") {
     return spoken;
   }
-  const { tasks: recent, confirmations } = await tasks.list(accountId);
+  const [{ tasks: recent, confirmations }, goal] = await Promise.all([tasks.list(accountId), goals.open(accountId)]);
   const open = [...confirmations].sort((a, b) => b.asked_at.localeCompare(a.asked_at))[0];
-  if (open !== undefined) {
-    return { kind: "answer", taskId: open.task_id, stepId: open.step_id, decision: spoken.kind === "yes" ? "approve" : "decline" };
+  const asking = goal?.asking ?? null;
+  if (spoken !== null) {
+    const decision = spoken.kind === "yes" ? "approve" : "decline";
+    if (asking !== null && (open === undefined || asking.created_at >= open.asked_at)) {
+      return { kind: "answer_move", taskId: asking.task_id, moveId: asking.id, decision };
+    }
+    if (open !== undefined) {
+      return { kind: "answer", taskId: open.task_id, stepId: open.step_id, decision };
+    }
   }
-  if (spoken.kind === "no" || !spoken.runs) {
+  if (goal !== null) {
+    return { kind: "guide", taskId: goal.task.id, text, word: spoken === null ? null : spoken.kind === "yes" ? "yes" : "no" };
+  }
+  if (spoken === null || spoken.kind === "no" || !spoken.runs) {
     return null;
   }
   const waiting = recent.filter((task) => task.status === "planned").sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
@@ -68,6 +82,12 @@ export async function obey(context: GatewayContext, device: DeviceRef, requestId
       const { task, answered } = await acting.answer(device, command.taskId, command.stepId, command.decision, requestId, false);
       return answered.outcome === "approved" ? "Okay, doing it now." : declinedWords(task);
     }
+    case "answer_move": {
+      const { task, move } = await acting.answerMove(device, command.taskId, command.moveId, command.decision, requestId, false);
+      return move.status === "running" ? "Okay, doing it now." : goalDeclinedWords(task);
+    }
+    case "guide":
+      return context.loop.hear(command.taskId, command.text, command.word);
     case "run": {
       const task = await acting.run(device, command.taskId, requestId);
       return `On it. I am starting ${quoted(task.request_text)} now.`;

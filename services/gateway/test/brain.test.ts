@@ -15,6 +15,7 @@ const turn: TurnRequest = {
   memories: [],
   remembered: null,
   connectors: [],
+  task_mode: "plan",
   text: "Explain what a mutex is",
 };
 

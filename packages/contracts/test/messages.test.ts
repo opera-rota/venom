@@ -10,27 +10,33 @@ const base = {
 };
 const task = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03";
 const step = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e05";
+const move = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e06";
 
-describe("a message links to a task and a step exactly as its kind says", () => {
+describe("a message links to a task, a step or a move exactly as its kind says", () => {
   it.each([
-    ["user", "text", null, null],
-    ["venom", "text", null, null],
-    ["venom", "plan", task, null],
-    ["venom", "report", task, null],
-    ["venom", "question", task, step],
-  ] as const)("accepts %s %s", (speaker, kind, task_id, step_id) => {
-    expect(Message.safeParse({ ...base, speaker, kind, task_id, step_id }).success).toBe(true);
+    ["user", "text", null, null, null],
+    ["venom", "text", null, null, null],
+    ["venom", "plan", task, null, null],
+    ["venom", "report", task, null, null],
+    ["venom", "question", task, step, null],
+    ["venom", "question", task, null, move],
+  ] as const)("accepts %s %s with task %s, step %s and move %s", (speaker, kind, task_id, step_id, move_id) => {
+    expect(Message.safeParse({ ...base, speaker, kind, task_id, step_id, move_id }).success).toBe(true);
   });
 
   it.each([
-    ["venom", "text", task, null],
-    ["venom", "plan", null, null],
-    ["venom", "plan", task, step],
-    ["venom", "report", null, null],
-    ["venom", "question", task, null],
-    ["user", "plan", task, null],
-    ["user", "question", task, step],
-  ] as const)("refuses %s %s with task %s and step %s", (speaker, kind, task_id, step_id) => {
-    expect(Message.safeParse({ ...base, speaker, kind, task_id, step_id }).success).toBe(false);
+    ["venom", "text", task, null, null],
+    ["venom", "text", null, null, move],
+    ["venom", "plan", null, null, null],
+    ["venom", "plan", task, step, null],
+    ["venom", "report", null, null, null],
+    ["venom", "report", task, null, move],
+    ["venom", "question", task, null, null],
+    ["venom", "question", task, step, move],
+    ["user", "plan", task, null, null],
+    ["user", "question", task, step, null],
+    ["user", "question", task, null, move],
+  ] as const)("refuses %s %s with task %s, step %s and move %s", (speaker, kind, task_id, step_id, move_id) => {
+    expect(Message.safeParse({ ...base, speaker, kind, task_id, step_id, move_id }).success).toBe(false);
   });
 });

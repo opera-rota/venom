@@ -8,7 +8,7 @@ import { deviceInfo, recordingMailer, type RecordingMailer } from "@venom/identi
 import { createMemory } from "@venom/memory";
 import { createPower } from "@venom/power";
 import { createCommandSigner, createTrust, newKeyPair } from "@venom/safety";
-import { createTasks } from "@venom/tasks";
+import { createGoals, createTasks } from "@venom/tasks";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { Api } from "../src/main/api.ts";
@@ -56,8 +56,9 @@ export async function createBackend(): Promise<Backend> {
       const memory = createMemory({ sql, embedder: brainEmbedder(brain) });
       const signer = createCommandSigner(commandKey);
       const tasks = createTasks({ sql });
+      const goals = createGoals({ sql });
       const trust = createTrust({ sql, serverKey: signer.publicKey });
-      const app = await buildGateway({ store, identity, brain, power, memory, tasks, trust, signer, logger: false });
+      const app = await buildGateway({ store, identity, brain, power, memory, tasks, goals, trust, signer, logger: false });
       await app.listen({ host: "127.0.0.1", port });
       const address = app.server.address();
       if (address === null || typeof address === "string") {

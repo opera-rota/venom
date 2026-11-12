@@ -1,7 +1,28 @@
-import { CommandFrame, DeviceKeyEnrolled, GatewayEvent, LiveChallenge, type CommandOutcome, type DeviceAction, type DeviceSession, type RunStepCommand } from "@venom/contracts";
+import {
+  CommandFrame,
+  DeviceKeyEnrolled,
+  GatewayEvent,
+  LiveChallenge,
+  type CommandOutcome,
+  type DeviceAction,
+  type DeviceSession,
+  type MoveCommand,
+  type Observation,
+  type ObserveCommand,
+  type RunStepCommand,
+  type ScreenPoint,
+  type ScreenSpot,
+  type SpotCommand,
+} from "@venom/contracts";
 import { CommandGuard, liveChallengeText, newKeyPair, signText, type KeyPair } from "@venom/safety";
-import { refusesUnconfirmed, unconfirmedScriptWords } from "@venom/safety/device";
+import { refusesMove, refusesUnconfirmed, unconfirmedScriptWords, type Seen } from "@venom/safety/device";
 import { call } from "./harness.ts";
+
+export interface Screen {
+  look(count: number): Observation | null;
+  spot?(point: ScreenPoint): ScreenSpot | null;
+  move?(command: MoveCommand): { readonly outcome: CommandOutcome; readonly detail: string };
+}
 
 export interface Report {
   readonly stepId: string;
@@ -14,6 +35,9 @@ export interface ActingDevice {
   readonly reports: Report[];
   readonly stops: string[];
   readonly commands: RunStepCommand[];
+  readonly looks: ObserveCommand[];
+  readonly spots: SpotCommand[];
+  readonly moves: MoveCommand[];
   readonly closed: Promise<number>;
   until(match: (event: GatewayEvent) => boolean): Promise<GatewayEvent>;
   reported(stepId: string): Promise<Report>;
@@ -38,7 +62,7 @@ export async function liveHeaders(base: string, session: DeviceSession, pair: Ke
   };
 }
 
-export async function actingDevice(base: string, session: DeviceSession, { speed = 1 }: { readonly speed?: number } = {}): Promise<ActingDevice> {
+export async function actingDevice(base: string, session: DeviceSession, { speed = 1, screen }: { readonly speed?: number; readonly screen?: Screen } = {}): Promise<ActingDevice> {
   const { pair, serverKey } = await enrollKey(base, session);
   const socket = new WebSocket(`${base.replace("http", "ws")}/v1/live`, { headers: await liveHeaders(base, session, pair) });
   const guard = new CommandGuard(serverKey, session.device.id);
@@ -46,7 +70,12 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
   const reports: Report[] = [];
   const stops: string[] = [];
   const commands: RunStepCommand[] = [];
+  const looks: ObserveCommand[] = [];
+  const spots: SpotCommand[] = [];
+  const moves: MoveCommand[] = [];
   const waiters = new Set<() => void>();
+  let seen: Seen = { marks: [], focused: null };
+  let spotted: { readonly point: ScreenPoint; readonly spot: ScreenSpot | null } | null = null;
   let running: { readonly abort: AbortController; readonly taskId: string; readonly timer: NodeJS.Timeout } | null = null;
   let shut = false;
 
@@ -84,6 +113,55 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     }
   }
 
+  function observe(commandId: string, body: ObserveCommand): void {
+    looks.push(body);
+    wake();
+    const observation = screen?.look(looks.length) ?? null;
+    if (observation === null) {
+      void report(commandId, body.task_id, "failed", "The screen could not be read.");
+      return;
+    }
+    seen = { marks: observation.marks, focused: observation.focused };
+    spotted = null;
+    if (!shut) {
+      void call(base, "POST", "/v1/commands/observation", { token: session.device_token, body: { command_id: commandId, observation } });
+    }
+  }
+
+  function spot(commandId: string, body: SpotCommand): void {
+    spots.push(body);
+    wake();
+    const read = screen?.spot?.(body.point) ?? null;
+    spotted = { point: body.point, spot: read };
+    if (!shut) {
+      void call(base, "POST", "/v1/commands/spot", { token: session.device_token, body: { command_id: commandId, spot: read } });
+    }
+  }
+
+  function move(commandId: string, body: MoveCommand): void {
+    moves.push(body);
+    wake();
+    const { move: chosen } = body;
+    const read = chosen.name === "click" && chosen.point !== null && spotted?.point.x === chosen.point.x && spotted.point.y === chosen.point.y ? spotted.spot : null;
+    const refusal = refusesMove(chosen, seen, read, body.confirmed);
+    if (refusal !== null) {
+      void report(commandId, body.move_id, "refused", refusal);
+      return;
+    }
+    const result = screen?.move?.(body) ?? { outcome: "done" as const, detail: `Did ${chosen.name}.` };
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      running = null;
+      void report(commandId, body.move_id, result.outcome, result.detail);
+    }, (chosen.name === "pause" ? chosen.seconds * 1000 : 100) / speed);
+    running = { abort, taskId: body.task_id, timer };
+    abort.signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      running = null;
+      void report(commandId, body.move_id, "stopped", "Stopped before it finished.");
+    });
+  }
+
   function execute(frame: CommandFrame): void {
     const checked = guard.check(frame.command);
     if (!checked.ok) {
@@ -98,8 +176,18 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
       wake();
       return;
     }
-    if (body.kind !== "run_step") {
-      return;
+    switch (body.kind) {
+      case "observe":
+        observe(command_id, body);
+        return;
+      case "spot":
+        spot(command_id, body);
+        return;
+      case "move":
+        move(command_id, body);
+        return;
+      case "run_step":
+        break;
     }
     commands.push(body);
     wake();
@@ -163,6 +251,9 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
     reports,
     stops,
     commands,
+    looks,
+    spots,
+    moves,
     closed,
     until: (match) => waitFor(() => events.find(match)),
     reported: (stepId) => waitFor(() => reports.find((entry) => entry.stepId === stepId)),

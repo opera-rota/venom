@@ -22,5 +22,6 @@
   ],
   "remembered": null,
   "connectors": [],
+  "task_mode": "loop",
   "text": "Explain what a mutex is"
 }

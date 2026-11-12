@@ -38,4 +38,6 @@ export const refuseTasks = {
   needsService: (position: number) =>
     new TaskError(409, "conflict", `Step ${position + 1} needs a connected service, and connecting services is not possible yet. Nothing was done.`),
   cannotRestore: () => new TaskError(409, "conflict", "Only a skipped or ignored step can be counted again."),
+  goalControl: () => new TaskError(409, "conflict", "VENOM works on a goal one move at a time, so it has no steps to change. Ask me again to start over."),
+  moveNotFound: () => new TaskError(404, "not_found", "That move is not part of this task."),
 } as const;

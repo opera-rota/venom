@@ -11,6 +11,7 @@ from venom_contracts.models import (
     MemoryContext,
     OpenAppAction,
     PlanDraft,
+    TaskMode,
     TurnDelta,
     TurnDone,
     TurnEvent,
@@ -37,6 +38,7 @@ def turn(
     *,
     memories: list[MemoryContext] | None = None,
     remembered: MemoryContext | None = None,
+    task_mode: TaskMode = "plan",
 ) -> TurnRequest:
     return TurnRequest(
         request_id=UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01"),
@@ -47,6 +49,7 @@ def turn(
         memories=memories or [],
         remembered=remembered,
         connectors=[],
+        task_mode=task_mode,
         text=text,
     )
 
@@ -121,6 +124,17 @@ async def test_plans_a_task_without_doing_anything() -> None:
     assert plan_call.schema is not None
     properties = plan_call.schema["properties"]
     assert isinstance(properties, dict) and "steps" in properties
+
+
+async def test_hands_a_task_to_the_loop_without_planning() -> None:
+    provider = ScriptedProvider({"quick": [task(cost_micro_usd=55)]})
+    events = await run(provider, turn("Open Notepad and write my shopping list", task_mode="loop"))
+
+    assert len(events) == 1 and len(provider.calls) == 1
+    final = events[0]
+    assert isinstance(final, TurnDone)
+    assert (final.intent, final.text, final.plan, final.model) == ("task", "Open Notepad and write my shopping list", None, None)
+    assert final.usage.cost_micro_usd == 55
 
 
 async def test_says_plainly_when_a_task_cannot_be_planned() -> None:

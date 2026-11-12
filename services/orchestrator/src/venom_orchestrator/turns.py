@@ -78,6 +78,11 @@ class Orchestrator:
             intent, understood = "question", NOTHING_USED
             log.info("the message asked me to remember something; answering with what was saved", extra=context)
 
+        if intent == "task" and turn.task_mode == "loop":
+            log.info("handing the task to the look, think, act loop", extra=context)
+            yield TurnDone(type="done", intent="task", text=fit(turn.text), plan=None, model=None, usage=understood)
+            return
+
         if intent == "task":
             async for event in self._plan(turn, history, models, understood):
                 yield event

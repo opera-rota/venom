@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Id, Timestamp } from "./primitives.ts";
 import { Effect } from "./records.ts";
 import { contracts } from "./registry.ts";
 
@@ -20,6 +21,8 @@ export const screenLimits = {
   detail: 300,
   moves: 40,
   guidance: 10,
+  thumbnail: 200_000,
+  thumbnailWidth: 480,
 } as const;
 
 const said = (limit: number) => z.string().min(1).max(limit).regex(/\S/);
@@ -153,6 +156,10 @@ export const MoveOutcome = z
   .enum(["done", "failed", "refused", "declined", "stopped"])
   .register(contracts, { id: "MoveOutcome" });
 
+export const MoveStatus = z
+  .enum(["asking", "running", ...MoveOutcome.options])
+  .register(contracts, { id: "MoveStatus" });
+
 export const PastMove = z
   .strictObject({
     intent: said(screenLimits.intent),
@@ -194,6 +201,29 @@ export const NextMove = z
   })
   .register(contracts, { id: "NextMove" });
 
+export const TaskMove = z
+  .strictObject({
+    id: Id,
+    task_id: Id,
+    number: z.int().min(1),
+    intent: said(screenLimits.intent),
+    seen: said(screenLimits.seen),
+    move: ScreenMove,
+    effects: z.array(Effect).max(5),
+    status: MoveStatus,
+    detail: said(screenLimits.detail).nullable(),
+    created_at: Timestamp,
+    finished_at: Timestamp.nullable(),
+  })
+  .register(contracts, { id: "TaskMove" });
+
+export const Thumbnail = z
+  .string()
+  .min(1)
+  .max(screenLimits.thumbnail)
+  .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+  .register(contracts, { id: "Thumbnail" });
+
 export type ScreenPoint = z.infer<typeof ScreenPoint>;
 export type ScreenBox = z.infer<typeof ScreenBox>;
 export type ScreenMarkKind = z.infer<typeof ScreenMarkKind>;
@@ -209,6 +239,9 @@ export type ScreenOpen = z.infer<typeof ScreenOpen>;
 export type ScreenPause = z.infer<typeof ScreenPause>;
 export type ScreenMove = z.infer<typeof ScreenMove>;
 export type MoveOutcome = z.infer<typeof MoveOutcome>;
+export type MoveStatus = z.infer<typeof MoveStatus>;
+export type TaskMove = z.infer<typeof TaskMove>;
+export type Thumbnail = z.infer<typeof Thumbnail>;
 export type PastMove = z.infer<typeof PastMove>;
 export type MakeMove = z.infer<typeof MakeMove>;
 export type AskUser = z.infer<typeof AskUser>;

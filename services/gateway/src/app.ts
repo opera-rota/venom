@@ -5,7 +5,7 @@ import type { Identity } from "@venom/identity";
 import type { Memory } from "@venom/memory";
 import type { Availability, Power } from "@venom/power";
 import type { CommandSigner, Trust } from "@venom/safety";
-import type { Tasks } from "@venom/tasks";
+import type { Goals, Tasks } from "@venom/tasks";
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions, type RawServerDefault } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { createActing } from "./acting.ts";
@@ -13,7 +13,8 @@ import { identify } from "./auth.ts";
 import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
-import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, LiveHub, memoryEvent, messageEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
+import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
+import { GoalLoop, type LoopLimits } from "./loop.ts";
 import { LiveRequests } from "./requests.ts";
 import { TaskRunner, type SaidKind } from "./runner.ts";
 import { deviceRoutes } from "./routes/devices.ts";
@@ -35,9 +36,11 @@ export interface GatewayOptions {
   readonly power: Power;
   readonly memory: Memory;
   readonly tasks: Tasks;
+  readonly goals: Goals;
   readonly trust: Trust;
   readonly signer: CommandSigner;
   readonly commandGraceMs?: number;
+  readonly loopLimits?: Partial<LoopLimits>;
   readonly logger: NonNullable<FastifyServerOptions<RawServerDefault>["logger"]>;
   readonly heartbeatMs?: number;
 }
@@ -45,7 +48,7 @@ export interface GatewayOptions {
 const availabilityMs = 30_000;
 const everyEngine: Availability = new Set(EngineId.options);
 
-export async function buildGateway({ store, identity, brain, power, memory, tasks, trust, signer, commandGraceMs, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
+export async function buildGateway({ store, identity, brain, power, memory, tasks, goals, trust, signer, commandGraceMs, loopLimits, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     bodyLimit: 64 * 1024,
@@ -62,7 +65,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     inflight.add(work);
     void work.finally(() => inflight.delete(work));
   };
-  const say = async (task: Task, kind: SaidKind, text: string, stepId: string | null) => {
+  const tell = async (task: Task, kind: SaidKind, text: string, link: { readonly stepId?: string; readonly moveId?: string }) => {
     try {
       const message = await store.recordMessage({
         device: { id: task.origin_device_id, account_id: task.account_id },
@@ -71,13 +74,14 @@ export async function buildGateway({ store, identity, brain, power, memory, task
         kind,
         text,
         taskId: task.id,
-        ...(stepId === null ? {} : { stepId }),
+        ...link,
       });
       hub.publishToAccount(task.account_id, messageEvent(uuidv7(), message));
     } catch (error) {
       app.log.error({ err: error, task_id: task.id }, "could not tell the chat about this task");
     }
   };
+  const say = (task: Task, kind: SaidKind, text: string, stepId: string | null) => tell(task, kind, text, stepId === null ? {} : { stepId });
   const runner = new TaskRunner({
     tasks,
     signer,
@@ -91,6 +95,37 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     publishOutput: (accountId, requestId, taskId, stepId, chunk, text) => hub.publishToAccount(accountId, stepOutputEvent(requestId, taskId, stepId, chunk, text)),
     say,
   });
+  const availableEngines = async (): Promise<Availability> => {
+    if (known !== null && Date.now() - known.at < availabilityMs) {
+      return known.engines;
+    }
+    try {
+      known = { engines: new Set(await brain.engines()), at: Date.now() };
+      return known.engines;
+    } catch (error) {
+      app.log.warn({ err: error }, "could not ask the brain which engines are available; offering all of them");
+      return known?.engines ?? everyEngine;
+    }
+  };
+  const loop = new GoalLoop({
+    goals,
+    tasks,
+    brain,
+    power,
+    memory,
+    identity,
+    signer,
+    hub,
+    log: app.log,
+    closing: stopping.signal,
+    limits: { ...(commandGraceMs === undefined ? {} : { graceMs: commandGraceMs }), ...loopLimits },
+    track,
+    availableEngines,
+    publishTask: (accountId, requestId, task) => hub.publishToAccount(accountId, taskEvent(requestId, task)),
+    publishMove: (accountId, requestId, move, picture) => hub.publishToAccount(accountId, moveEvent(requestId, move, picture)),
+    publishPower: (accountId, requestId, status) => hub.publishToAccount(accountId, powerEvent(requestId, status)),
+    tell: (task, kind, text, moveId) => tell(task, kind, text, moveId === null ? {} : { moveId }),
+  });
 
   const shared: Omit<GatewayContext, "acting"> = {
     store,
@@ -101,6 +136,8 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     power,
     memory,
     tasks,
+    goals,
+    loop,
     trust,
     signer,
     runner,
@@ -131,18 +168,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
       hub.publishToAccount(accountId, haltEvent(requestId, receipt));
     },
     say,
-    async availableEngines() {
-      if (known !== null && Date.now() - known.at < availabilityMs) {
-        return known.engines;
-      }
-      try {
-        known = { engines: new Set(await brain.engines()), at: Date.now() };
-        return known.engines;
-      } catch (error) {
-        app.log.warn({ err: error }, "could not ask the brain which engines are available; offering all of them");
-        return known?.engines ?? everyEngine;
-      }
-    },
+    availableEngines,
   };
 
   const context: GatewayContext = { ...shared, acting: createActing(shared) };

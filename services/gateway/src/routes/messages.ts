@@ -10,7 +10,6 @@ import { decide, obey, type Command } from "../chat.ts";
 import { converse, type Question } from "../conversation.ts";
 import { conflict, GatewayError, notFound, unsaved } from "../errors.ts";
 import { RequestTrace } from "../live-hub.ts";
-import { understand } from "../spoken.ts";
 
 const notDone = "VENOM could not do that. Try again.";
 
@@ -19,7 +18,7 @@ const HistoryQuery = z.strictObject({
 });
 
 export function messageRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { store, hub, requests, brain, power, memory, tasks, identity, stopping, track, availableEngines, broadcastPower, broadcastMemory, broadcastTask } = context;
+  const { store, hub, requests, brain, power, memory, tasks, goals, loop, identity, stopping, track, availableEngines, broadcastPower, broadcastMemory, broadcastTask } = context;
   const answering = new Set<string>();
 
   async function save(device: DeviceRef, requestId: string, text: string, log: FastifyBaseLogger): Promise<Message> {
@@ -44,7 +43,7 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
     const onMemory = (item: MemoryItem, eventId: string) => broadcastMemory(device.account_id, eventId, item);
     const onTask = (task: Task, eventId: string) => broadcastTask(device.account_id, eventId, task);
     track(
-      converse({ store, brain, power, memory, tasks, identity, engine, trace, device, signal: stopping, log, onPower, onMemory, onTask }, question).finally(() => {
+      converse({ store, brain, power, memory, tasks, identity, loop, engine, trace, device, signal: stopping, log, onPower, onMemory, onTask }, question).finally(() => {
         answering.delete(question.requestId);
       }),
     );
@@ -87,8 +86,7 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
   app.post("/v1/messages", async (request, reply) => {
     const device = requireSignedIn(request);
     const { text } = SendMessage.parse(request.body);
-    const spoken = understand(text);
-    const command = spoken === null ? null : await decide(tasks, device.account_id, spoken);
+    const command = await decide(tasks, goals, device.account_id, text);
     if (command !== null) {
       const message = await save(device, request.id, text, request.log);
       track(carryOut(device, request.id, message, command, request.log));

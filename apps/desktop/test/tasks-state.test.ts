@@ -15,6 +15,7 @@ function task(status: Task["status"], stepStatus: Task["plan"][number]["status"]
     origin_device_id: deviceId,
     target_device_id: deviceId,
     request_text: "Safety drill: a step that needs your confirmation",
+    kind: "plan",
     plan: [
       {
         id: stepId,
@@ -36,6 +37,7 @@ function task(status: Task["status"], stepStatus: Task["plan"][number]["status"]
     ],
     status,
     progress: progressOf([stepStatus]),
+    moves: 0,
     result: null,
     created_at: "2026-10-31T19:00:00.000Z",
     updated_at: updatedAt,

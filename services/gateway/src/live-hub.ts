@@ -11,6 +11,8 @@ import {
   type QuestionRef,
   type StopReceipt,
   type Task,
+  type TaskMove,
+  type Thumbnail,
 } from "@venom/contracts";
 import type { LiveRequests } from "./requests.ts";
 
@@ -139,6 +141,10 @@ export function messageEvent(requestId: string, message: Message): GatewayEvent 
 
 export function stepOutputEvent(requestId: string, taskId: string, stepId: string, chunk: number, text: string): GatewayEvent {
   return GatewayEvent.parse({ type: "step_output", ...stamp(requestId, chunk), task_id: taskId, step_id: stepId, chunk, text });
+}
+
+export function moveEvent(requestId: string, move: TaskMove, picture: Thumbnail | null): GatewayEvent {
+  return GatewayEvent.parse({ type: "move", ...stamp(requestId, 0), move, picture });
 }
 
 export function haltEvent(requestId: string, receipt: StopReceipt): GatewayEvent {

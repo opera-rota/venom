@@ -23,6 +23,7 @@
     "@venom/safety": "workspace:*",
     "@venom/tasks": "workspace:*",
     "fastify": "5.12.5",
+    "jpeg-js": "0.4.4",
     "uuid": "14.0.2",
     "zod": "4.6.5"
   },

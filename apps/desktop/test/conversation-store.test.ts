@@ -14,6 +14,7 @@ const question: Message = {
   text: "Explain what a mutex is",
   task_id: null,
   step_id: null,
+  move_id: null,
   created_at: at,
 };
 const asked = { request_id: requestId, message_id: question.id };

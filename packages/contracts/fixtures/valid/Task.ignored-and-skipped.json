@@ -4,6 +4,7 @@
   "origin_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "target_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "request_text": "Progress drill: five practice steps",
+  "kind": "plan",
   "plan": [
     {
       "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e10",
@@ -130,6 +131,7 @@
     "total": 5,
     "percent": 50
   },
+  "moves": 0,
   "result": null,
   "created_at": "2026-10-11T09:30:00Z",
   "updated_at": "2026-10-11T09:30:04+02:00"

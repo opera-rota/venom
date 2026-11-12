@@ -4,6 +4,7 @@
   "origin_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "target_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "request_text": "Open my notes app and write today's date",
+  "kind": "plan",
   "plan": [
     {
       "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e04",
