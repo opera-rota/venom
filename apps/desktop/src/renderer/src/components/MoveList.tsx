@@ -18,7 +18,7 @@ function MoveRow({ move }: { readonly move: TaskMove }) {
             <Icon name={look.icon} className="h-3 w-3" />
             {look.word}
           </span>
-          {move.detail !== null && <span className="break-words text-ink-faint">· {move.detail}</span>}
+          {move.detail !== null && move.status !== "declined" && <span className="break-words text-ink-faint">· {move.detail}</span>}
         </span>
       </div>
     </li>

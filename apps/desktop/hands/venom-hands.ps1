@@ -655,7 +655,7 @@ function Get-Marks($Window, [double]$Scale, [int]$Width, [int]$Height) {
             $rank = if ($editable -or $focus) { 0 } else { $MarkRanks[$kind] }
             if ($editable) { $kind = 'box' }
             [void]$marks.Add([pscustomobject]@{
-                    Rank = $rank; Kind = $kind; Name = $name; Editable = $editable
+                    Rank = $rank; Kind = $kind; Name = $name; Editable = $editable; Line = ($editable -and $type -ne 'Document')
                     Password = [bool]$cached.IsPassword; Focused = $focus
                     X = $left; Y = $top; W = $right - $left; H = $bottom - $top; Row = [int][Math]::Floor($top / 12)
                 })
@@ -813,6 +813,15 @@ function Invoke-MoveClick($Window, $Move) {
     return New-Result $true "$how $($target.Label) in '$($Window.Name)'." @{ window = $Window.Handle }
 }
 
+function Get-TypeCheck($After, [string]$Text, [bool]$Replace) {
+    if ($null -eq $After) { return 'unreadable' }
+    $wanted = (ConvertTo-Lines $Text).TrimEnd("`n")
+    $arrived = ConvertTo-Lines ([string]$After)
+    $fits = if ($Replace) { $arrived.Trim().StartsWith($wanted.Trim(), [StringComparison]::Ordinal) } else { $arrived.Contains($wanted) }
+    if ($fits) { return 'match' }
+    return 'different'
+}
+
 function Invoke-MoveType($Window, $Move) {
     $text = [string](Get-Arg $Move 'text')
     if ($text.Length -eq 0 -or $text.Length -gt $TypeLimit) { return New-Result $false "I can type 1 to $TypeLimit characters in one move." }
@@ -824,6 +833,11 @@ function Invoke-MoveType($Window, $Move) {
         }
         Start-Sleep -Milliseconds 200
     }
+    $replace = $null -ne $target -and $null -ne $target.Mark -and $target.Mark.Line -eq $true
+    if ($replace) {
+        if (-not [Venom.Hands]::Chord($Window.Handle, [int[]]@(0x11, 0x41))) { return New-Result $false "'$($Window.Name)' was not in front, so I typed nothing." }
+        Start-Sleep -Milliseconds 120
+    }
     $done = 0
     while ($done -lt $text.Length) {
         if (Test-PasswordFocus) { return New-Result $false "The place to type is a password box, and VENOM never types passwords. Typed $done of $($text.Length) characters." @{ typed = $done } }
@@ -833,12 +847,16 @@ function Invoke-MoveType($Window, $Move) {
         if ($typed -lt $chunk.Length) { return New-Result $false "'$($Window.Name)' lost focus, so I stopped after $done of $($text.Length) characters." @{ typed = $done } }
     }
     Start-Sleep -Milliseconds 250
-    $after = Read-FocusedText
-    $verified = if ($null -eq $after) { 'unreadable' } elseif ((ConvertTo-Lines $after).Contains((ConvertTo-Lines $text).TrimEnd("`n"))) { 'match' } else { 'different' }
-    if ((Get-Arg $Move 'enter') -eq $true) { [void][Venom.Hands]::Chord($Window.Handle, [int[]]@(0x0D)) }
-    $where = if ($null -ne $target) { " into $($target.Label)" } else { '' }
+    if ($replace) {
+        [void][Venom.Hands]::Chord($Window.Handle, [int[]]@(0x2E))
+        Start-Sleep -Milliseconds 120
+    }
+    $verified = Get-TypeCheck (Read-FocusedText) $text $replace
+    $enterWanted = (Get-Arg $Move 'enter') -eq $true
+    if ($enterWanted -and $verified -ne 'different') { [void][Venom.Hands]::Chord($Window.Handle, [int[]]@(0x0D)) }
+    $where = if ($replace) { " into $($target.Label) in place of what was there" } elseif ($null -ne $target) { " into $($target.Label)" } else { '' }
     $check = switch ($verified) { 'match' { ' and checked that it arrived' } 'different' { ', but what arrived looks different' } default { '' } }
-    $enter = if ((Get-Arg $Move 'enter') -eq $true) { ', then pressed Enter' } else { '' }
+    $enter = if (-not $enterWanted) { '' } elseif ($verified -eq 'different') { ', so I did not press Enter' } else { ', then pressed Enter' }
     return New-Result ($verified -ne 'different') "Typed $($text.Length) characters$where$check$enter." @{ window = $Window.Handle; verified = $verified; typed = $done }
 }
 
@@ -905,7 +923,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 8; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 9; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 import { HandHelper, type HandHello, type HandResult } from "../src/main/hand-helper.ts";
@@ -24,12 +24,13 @@ const Observed = z.object({
   picture: z.string().min(1),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
-  marks: z.array(z.object({ id: z.number().int(), editable: z.boolean() })),
+  marks: z.array(z.object({ id: z.number().int(), name: z.string(), editable: z.boolean() })),
   focused: z.number().int().nullable(),
 });
 
 let hello: HandHello | null = null;
 let notepad: number | null = null;
+let chrome: number | null = null;
 
 const page = [
   "<!doctype html>",
@@ -38,6 +39,7 @@ const page = [
   "<h1>VENOM hands check</h1>",
   "<button onclick=\"document.title = 'Hello from VENOM'; this.textContent = 'Hello received'\">Say hello</button>",
   '<div style="position: relative; margin-top: 24px"><button>Say hello</button><div style="position: absolute; inset: 0; background: white"></div></div>',
+  '<p><input aria-label="Name box" value="old name" style="font-size: 18px; padding: 6px"></p>',
   "</body></html>",
 ].join("\n");
 
@@ -292,7 +294,7 @@ const checks: readonly Check[] = [
       await writeFile(file, page, "utf8");
       const opened = await helper.send({ op: "open_app", app: "Chrome", open: file, task });
       say(opened);
-      const chrome = windowOf(opened);
+      chrome = windowOf(opened);
       if (!opened.ok || chrome === null) {
         return "failed";
       }
@@ -307,6 +309,38 @@ const checks: readonly Check[] = [
         await sleep(250);
       }
       console.log("      the page title never changed, so the click did not reach the page");
+      return "failed";
+    },
+  },
+  {
+    name: "Type over the text in a box and in Chrome's address bar",
+    run: async () => {
+      if (chrome === null) {
+        return "skipped";
+      }
+      const looked = await helper.send({ op: "observe", window: chrome });
+      const seen = Observed.safeParse(looked.data["observation"]);
+      const marks = seen.success ? seen.data.marks : [];
+      const box = marks.find((mark) => mark.editable && mark.name === "Name box");
+      const address = marks.find((mark) => mark.editable && mark.name.startsWith("Address"));
+      console.log(`      the name box: ${box === undefined ? "not found" : `mark ${box.id}`}, the address bar: ${address === undefined ? "not found" : `mark ${address.id}`}`);
+      if (!looked.ok || box === undefined || address === undefined) {
+        say(looked);
+        return "failed";
+      }
+      const named = await helper.send({ op: "move", move: { kind: "type", text: "new name", mark: box.id, enter: false } });
+      say(named);
+      const addressed = await helper.send({ op: "move", move: { kind: "type", text: pathToFileURL(work(task, "page.html")).href, mark: address.id, enter: true } });
+      say(addressed);
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const described = await helper.send({ op: "describe", window: chrome });
+        if (described.detail.includes("VENOM hands check")) {
+          console.log(`      the page loaded again from the typed address: ${described.detail}`);
+          return named.data["verified"] === "match" && addressed.data["verified"] === "match" ? "passed" : "failed";
+        }
+        await sleep(250);
+      }
+      console.log("      the page did not load from the typed address, so the old address was not replaced");
       return "failed";
     },
   },
