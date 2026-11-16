@@ -126,6 +126,7 @@ MOVE: dict[str, object] = {
     "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
     "engine": "turbo",
     "goal": "Write hello in Notepad",
+    "earlier": None,
     "moves": [],
     "guidance": [],
     "memories": [],

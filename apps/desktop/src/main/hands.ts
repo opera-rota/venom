@@ -298,8 +298,9 @@ export class Hands {
 
   async #observe(worker: HandWorker, { task_id: task }: ObserveCommand, signal: AbortSignal): Promise<Sent> {
     const window = this.#windows.get(task) ?? null;
-    const desktop = window === null && (await this.#ownWindowInFront(worker, signal));
-    const result = await worker.send({ op: "observe", window, desktop }, { signal, timeoutMs: observeMs });
+    const behind = window === null ? await this.#ownWindowsInFront(worker, signal) : [];
+    const request: HandRequest = behind.length > 0 ? { op: "observe", window, behind } : { op: "observe", window, desktop: false };
+    const result = await worker.send(request, { signal, timeoutMs: observeMs });
     if (result.stopped) {
       return finished("stopped", "Stopped before it finished.");
     }
@@ -310,9 +311,7 @@ export class Hands {
     if (!seen.success) {
       return failure(unreadLook);
     }
-    if (!desktop) {
-      this.#remember(task, result);
-    }
+    this.#remember(task, result);
     this.#looks.delete(task);
     this.#looks.set(task, { marks: seen.data.marks, focused: seen.data.focused });
     this.#forgetOldest(this.#looks);
@@ -360,14 +359,14 @@ export class Hands {
     return finished(result.ok ? "done" : "failed", clip(result.detail, detailLimit) || "The hands gave no answer.");
   }
 
-  async #ownWindowInFront(worker: HandWorker, signal: AbortSignal): Promise<boolean> {
+  async #ownWindowsInFront(worker: HandWorker, signal: AbortSignal): Promise<readonly number[]> {
     const own = this.#options.ownWindows?.() ?? [];
     if (own.length === 0) {
-      return false;
+      return [];
     }
     const front = await worker.send({ op: "front" }, { signal, timeoutMs: spotMs });
     const window = front.data["window"];
-    return front.ok && typeof window === "number" && own.includes(window);
+    return front.ok && typeof window === "number" && own.includes(window) ? own : [];
   }
 
   #deliver(commandId: string, sent: Sent): void {

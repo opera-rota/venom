@@ -241,9 +241,8 @@ describe("the hands in VENOM's look, think, act loop", () => {
     ]);
   });
 
-  it("looks only at the desktop when VENOM's own window is in front", async () => {
-    const desktop = { ...look, window: "", app: "", marks: [], focused: null };
-    const { hands, calls, answered } = bench(async (request) => (request.op === "front" ? ok("The window in front.", { window: 77 }) : looked(0, desktop)), [77]);
+  it("looks at the window just behind VENOM's own window, and keeps working in it", async () => {
+    const { hands, calls, answered } = bench(async (request) => (request.op === "front" ? ok("The window in front.", { window: 77 }) : request.op === "observe" ? looked(4242) : ok("Pressed enter.", { window: 4242 })), [77]);
     const task = randomUUID();
     hands.receive(signed({ kind: "observe", task_id: task }).frame);
     await answered(1);
@@ -252,10 +251,25 @@ describe("the hands in VENOM's look, think, act loop", () => {
     await answered(3);
     expect(calls.map((call) => call.request)).toEqual([
       { op: "front" },
-      { op: "observe", window: null, desktop: true },
+      { op: "observe", window: null, behind: [77] },
       { op: "move", move: { kind: "key", key: "enter" } },
+      { op: "observe", window: 4242, desktop: false },
+    ]);
+  });
+
+  it("looks only at the desktop when nothing is behind VENOM's own window", async () => {
+    const desktop = { ...look, window: "", app: "", marks: [], focused: null };
+    const { hands, calls, answered } = bench(async (request) => (request.op === "front" ? ok("The window in front.", { window: 77 }) : looked(0, desktop)), [77]);
+    const task = randomUUID();
+    hands.receive(signed({ kind: "observe", task_id: task }).frame);
+    await answered(1);
+    hands.receive(signed({ kind: "observe", task_id: task }).frame);
+    await answered(2);
+    expect(calls.map((call) => call.request)).toEqual([
       { op: "front" },
-      { op: "observe", window: null, desktop: true },
+      { op: "observe", window: null, behind: [77] },
+      { op: "front" },
+      { op: "observe", window: null, behind: [77] },
     ]);
   });
 

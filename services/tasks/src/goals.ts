@@ -1,4 +1,4 @@
-import { PastMove, ScreenMove, screenLimits, TaskMove, type ConfirmDecision, type Effect, type MoveOutcome, type MoveStatus, type Task } from "@venom/contracts";
+import { EarlierGoal, PastMove, ScreenMove, screenLimits, TaskMove, type ConfirmDecision, type Effect, type MoveOutcome, type MoveStatus, type Task } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { Sql } from "postgres";
 import { refuseTasks } from "./errors.ts";
@@ -35,6 +35,7 @@ export interface Goals {
   move(accountId: string, moveId: string): Promise<TaskMove | null>;
   list(accountId: string, taskId: string): Promise<TaskMove[] | null>;
   history(accountId: string, taskId: string): Promise<PastMove[]>;
+  earlier(accountId: string, taskId: string): Promise<EarlierGoal | null>;
   propose(accountId: string, taskId: string, proposal: Proposal, requestId: string): Promise<MoveChange | null>;
   answer(device: DeviceRef, taskId: string, moveId: string, decision: ConfirmDecision, requestId: string): Promise<MoveChange>;
   finish(accountId: string, moveId: string, outcome: MoveOutcome, detail: string, requestId: string): Promise<MoveChange | null>;
@@ -60,6 +61,15 @@ interface MoveRow {
 const moveColumns = "id, task_id, number, intent, seen, move, effects, status, detail, created_at, finished_at";
 
 const resultLimit = 600;
+
+const earlierMinutes = 15;
+
+const endedWords: Record<string, string> = {
+  completed: "It finished.",
+  failed: "It did not work.",
+  cancelled: "It was cancelled.",
+  stopped: "The user stopped it.",
+};
 
 function toMove(row: MoveRow): TaskMove {
   return TaskMove.parse({
@@ -181,6 +191,21 @@ export function createGoals({ sql }: { readonly sql: Sql }): Goals {
           detail: move.detail ?? "No detail was given.",
         });
       });
+    },
+
+    async earlier(accountId, taskId) {
+      const [row] = await sql<{ request_text: string; status: string; result: string | null }[]>`
+        select request_text, status, result from tasks
+        where account_id = ${accountId} and kind = 'goal' and id <> ${taskId}
+          and status in ('completed', 'failed', 'cancelled', 'stopped')
+          and updated_at > clock_timestamp() - make_interval(mins => ${earlierMinutes})
+        order by updated_at desc, id desc
+        limit 1
+      `;
+      if (row === undefined) {
+        return null;
+      }
+      return EarlierGoal.parse({ goal: row.request_text, result: clip(row.result ?? endedWords[row.status] ?? "It ended.", resultLimit) });
     },
 
     async propose(accountId, taskId, { intent, seen, move, effects, verdict, detail }, requestId) {

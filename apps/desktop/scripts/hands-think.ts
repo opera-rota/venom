@@ -166,6 +166,7 @@ async function main(): Promise<void> {
       account_id: randomUUID(),
       engine: engine.data,
       goal: goal.data,
+      earlier: null,
       moves: [],
       guidance: [],
       memories: [],

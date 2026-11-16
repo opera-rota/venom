@@ -101,6 +101,8 @@ def blind(engine: EngineId, *, test_drive: bool) -> str:
 
 def briefing(asked: MoveRequest) -> list[ConversationEntry]:
     entries = [said(f"The user's goal:\n{asked.goal}")]
+    if asked.earlier is not None:
+        entries.insert(0, said(f"What the user asked just before this:\n{asked.earlier.goal}\nHow it ended: {flat(asked.earlier.result)}"))
     if asked.moves:
         for start, group in enumerate(batched(asked.moves, MOVES_PER_ENTRY)):
             heading = "Moves you made so far, oldest first:" if start == 0 else "More moves, continued:"

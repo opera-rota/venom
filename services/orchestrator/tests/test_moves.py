@@ -33,13 +33,14 @@ EDITOR = ScreenMark(id=1, kind="box", name="Text editor", editable=True, passwor
 SAVE = ScreenMark(id=2, kind="button", name='Save "now"', editable=False, password=False, box=ScreenBox(x=10, y=40, width=60, height=24))
 
 
-def asked(*, engine: str = "turbo", moves: list[PastMove] | None = None, guidance: list[str] | None = None) -> MoveRequest:
+def asked(*, engine: str = "turbo", moves: list[PastMove] | None = None, guidance: list[str] | None = None, earlier: dict[str, str] | None = None) -> MoveRequest:
     return MoveRequest.model_validate(
         {
             "request_id": UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01"),
             "account_id": UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02"),
             "engine": engine,
             "goal": "Write hello in Notepad",
+            "earlier": earlier,
             "moves": moves or [],
             "guidance": guidance or [],
             "memories": [],
@@ -150,6 +151,14 @@ def test_briefs_the_model_with_the_goal_moves_guidance_and_marks() -> None:
     assert "1. box \"Text editor\" [can type here, has the keyboard] at 0,80,1280,600" in texts[4]
     assert "2. button \"Save 'now'\" at 10,40,60,24" in texts[4]
     assert all(entry.speaker == "user" for entry in entries)
+
+
+def test_tells_the_model_what_the_user_asked_just_before() -> None:
+    entries = briefing(asked(earlier={"goal": "press 7 on the calculator", "result": "Done. The display shows 7."}))
+    texts = [entry.text for entry in entries]
+
+    assert texts[0] == "What the user asked just before this:\npress 7 on the calculator\nHow it ended: Done. The display shows 7."
+    assert texts[1] == "The user's goal:\nWrite hello in Notepad"
 
 
 def test_says_when_it_is_the_first_look() -> None:

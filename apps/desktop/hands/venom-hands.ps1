@@ -669,8 +669,10 @@ function Get-Marks($Window, [double]$Scale, [int]$Width, [int]$Height) {
 function Invoke-Observe($Request) {
     $handle = Get-Arg $Request 'window'
     $desktop = (Get-Arg $Request 'desktop') -eq $true
+    $behind = [long[]]@(@(Get-Arg $Request 'behind') | Where-Object { $null -ne $_ } | ForEach-Object { [long]$_ })
     $front = [Venom.Hands]::Foreground()
-    $target = if ($desktop) { [long]0 } elseif ($null -ne $handle) { [long]$handle } else { $front }
+    $target = if ($desktop) { [long]0 } elseif ($null -ne $handle) { [long]$handle } elseif ($behind.Length -gt 0 -and $behind -contains $front) { [Venom.Hands]::Behind($behind) } else { $front }
+    if ($target -eq 0) { $desktop = $true }
     $window = @(if (-not $desktop) { Get-TopWindows | Where-Object { $_.Handle -eq $target } })
     $screen = [Venom.Hands]::Screen()
     $scale = [Math]::Min(1.0, $PictureWidth / [double]$screen[0])
@@ -727,8 +729,8 @@ $KeyCodes = @{
     'up' = @(0x26); 'down' = @(0x28); 'left' = @(0x25); 'right' = @(0x27)
     'page_up' = @(0x21); 'page_down' = @(0x22); 'home' = @(0x24); 'end' = @(0x23)
     'ctrl+a' = @(0x11, 0x41); 'ctrl+c' = @(0x11, 0x43); 'ctrl+v' = @(0x11, 0x56); 'ctrl+f' = @(0x11, 0x46)
-    'ctrl+l' = @(0x11, 0x4C); 'ctrl+t' = @(0x11, 0x54); 'ctrl+w' = @(0x11, 0x57)
-    'alt+left' = @(0x12, 0x25); 'alt+tab' = @(0x12, 0x09); 'win' = @(0x5B); 'f5' = @(0x74)
+    'ctrl+l' = @(0x11, 0x4C); 'ctrl+t' = @(0x11, 0x54); 'ctrl+w' = @(0x11, 0x57); 'ctrl+home' = @(0x11, 0x24); 'ctrl+end' = @(0x11, 0x23)
+    'alt+left' = @(0x12, 0x25); 'alt+tab' = @(0x12, 0x09); 'win' = @(0x5B); 'win+d' = @(0x5B, 0x44); 'f5' = @(0x74)
 }
 $script:LastLook = $null
 
@@ -941,7 +943,7 @@ try {
     $appNames = @(@($special) + @(Get-StartApps $true | ForEach-Object { $_.Name }) | Sort-Object -Unique)
     $scripts = @('powershell')
     if ($null -ne $Python) { $scripts += 'python' }
-    Send-Line @{ type = 'hello'; version = 10; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
+    Send-Line @{ type = 'hello'; version = 11; apps = $appNames; scripts = $scripts; sandbox = [Venom.Hands]::SandboxReady(); screen = $screen; work = $WorkRoot }
 }
 catch {
     Send-Line @{ type = 'fatal'; detail = "The hands could not start: $($_.Exception.Message)" }

@@ -5,6 +5,7 @@ import {
   type CommandOutcome,
   type CommandReport,
   type Device,
+  type EarlierGoal,
   type EngineId,
   type MakeMove,
   type MemoryContext,
@@ -106,6 +107,7 @@ interface Driving {
 
 interface Turn {
   task: Task;
+  readonly earlier: EarlierGoal | null;
   readonly target: Device;
   readonly memories: readonly MemoryContext[];
   readonly deadline: number;
@@ -244,9 +246,13 @@ export class GoalLoop {
 
   async #drive(driving: Driving, task: Task, target: Device, requestId: string): Promise<void> {
     const { memory } = this.#options;
-    const recalled = await memory.recall(task.account_id, task.request_text, requestId).catch(() => ({ memories: [], usage: nothingUsed }));
+    const [recalled, earlier] = await Promise.all([
+      memory.recall(task.account_id, task.request_text, requestId).catch(() => ({ memories: [], usage: nothingUsed })),
+      this.#options.goals.earlier(task.account_id, task.id).catch(() => null),
+    ]);
     const turn: Turn = {
       task,
+      earlier,
       target,
       memories: recalled.memories.slice(0, 40),
       deadline: Date.now() + this.#limits.totalMs,
@@ -293,6 +299,7 @@ export class GoalLoop {
           account_id: driving.accountId,
           engine,
           goal: turn.task.request_text,
+          earlier: turn.earlier,
           moves: await goals.history(driving.accountId, driving.taskId),
           guidance,
           memories: turn.memories,

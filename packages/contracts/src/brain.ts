@@ -158,12 +158,20 @@ export const TurnEvent = z
   .discriminatedUnion("type", [TurnDelta, TurnDone, TurnFailed])
   .register(contracts, { id: "TurnEvent" });
 
+export const EarlierGoal = z
+  .strictObject({
+    goal: MessageText,
+    result: z.string().min(1).max(600),
+  })
+  .register(contracts, { id: "EarlierGoal" });
+
 export const MoveRequest = z
   .strictObject({
     request_id: Id,
     account_id: Id,
     engine: EngineId,
     goal: MessageText,
+    earlier: EarlierGoal.nullable(),
     moves: z.array(PastMove).max(screenLimits.moves),
     guidance: z.array(MessageText).max(screenLimits.guidance),
     memories: z.array(MemoryContext).max(40),
@@ -216,6 +224,7 @@ export type TurnDelta = z.infer<typeof TurnDelta>;
 export type TurnDone = z.infer<typeof TurnDone>;
 export type TurnFailed = z.infer<typeof TurnFailed>;
 export type TurnEvent = z.infer<typeof TurnEvent>;
+export type EarlierGoal = z.infer<typeof EarlierGoal>;
 export type MoveRequest = z.infer<typeof MoveRequest>;
 export type MoveChosen = z.infer<typeof MoveChosen>;
 export type MoveFailed = z.infer<typeof MoveFailed>;

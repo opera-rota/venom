@@ -3,6 +3,10 @@
   "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
   "engine": "turbo",
   "goal": "Open Notepad and write a shopping list with milk, bread and eggs",
+  "earlier": {
+    "goal": "Open Notepad",
+    "result": "Done. Notepad is open."
+  },
   "moves": [
     {
       "intent": "Open Notepad",

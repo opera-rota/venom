@@ -352,6 +352,20 @@ const checks: readonly Check[] = [
     },
   },
   {
+    name: "Look at the window just behind the one in front",
+    run: async () => {
+      if (chrome === null) {
+        return "skipped";
+      }
+      const front = await helper.send({ op: "front" });
+      const looked = await helper.send({ op: "observe", window: null, behind: [Number(front.data["window"])] });
+      say(looked);
+      const behind = Number(looked.data["window"]);
+      console.log(`      in front: ${String(front.data["window"])}, looked behind it at: ${behind}`);
+      return front.ok && looked.ok && behind > 0 && behind !== Number(front.data["window"]) ? "passed" : "failed";
+    },
+  },
+  {
     name: "Stop a long script at once",
     run: async () => {
       const controller = new AbortController();

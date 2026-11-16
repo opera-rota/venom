@@ -88,8 +88,8 @@ export const Observation = z
 export const screenKeys = [
   "enter", "tab", "escape", "backspace", "delete",
   "up", "down", "left", "right", "page_up", "page_down", "home", "end",
-  "ctrl+a", "ctrl+c", "ctrl+v", "ctrl+f", "ctrl+l", "ctrl+t", "ctrl+w",
-  "alt+left", "alt+tab", "win", "f5",
+  "ctrl+a", "ctrl+c", "ctrl+v", "ctrl+f", "ctrl+l", "ctrl+t", "ctrl+w", "ctrl+home", "ctrl+end",
+  "alt+left", "alt+tab", "win", "win+d", "f5",
 ] as const;
 
 export const ScreenKey = z.enum(screenKeys).register(contracts, { id: "ScreenKey" });

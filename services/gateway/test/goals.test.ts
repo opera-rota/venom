@@ -159,6 +159,21 @@ describe("Definition of done 1: a goal is reached one move at a time", () => {
   });
 });
 
+describe("step by step: a short follow-up hears what was asked just before", () => {
+  it("tells the brain the earlier request and how it ended", async () => {
+    gateway.brain.mover = movesWith([finished]);
+    const { here, near } = await account();
+    await say(here, "press 7 on the calculator");
+    await near.until(goal("completed"));
+    gateway.brain.mover = movesWith([finished]);
+    const before = gateway.brain.moves.length;
+    await say(here, "now press plus, 3 and equals");
+    await near.until((event) => event.type === "task" && event.task.status === "completed" && event.task.request_text === "now press plus, 3 and equals");
+    const asked = gateway.brain.moves.slice(before);
+    expect(asked[0]?.earlier).toEqual({ goal: "press 7 on the calculator", result: "Done. Your shopping list is in Notepad." });
+  });
+});
+
 describe("Definition of done 5 and 6: sensitive moves ask, password boxes are refused", () => {
   it("asks in the chat before a sign in, and a typed yes sends the move as confirmed", async () => {
     gateway.brain.mover = movesWith([signingIn, finished]);

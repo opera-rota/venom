@@ -127,6 +127,20 @@ describe("a goal is reached one counted move at a time", () => {
     expect(await goals.list(stranger.account_id, task.id)).toBeNull();
   });
 
+  it("remembers the request just before, for a short follow-up", async () => {
+    const here = await device();
+    const first = await goals.begin(here, here.id, "press 7 on the calculator", uuidv7());
+    expect(await goals.earlier(here.account_id, first.id)).toBeNull();
+    await goals.end(here.account_id, first.id, "completed", "Done. The display shows 7.", uuidv7());
+    const second = await goals.begin(here, here.id, "now press plus, 3 and equals", uuidv7());
+    expect(await goals.earlier(here.account_id, second.id)).toEqual({ goal: "press 7 on the calculator", result: "Done. The display shows 7." });
+    const stranger = await device();
+    expect(await goals.earlier(stranger.account_id, second.id)).toBeNull();
+    await owner`update tasks set updated_at = clock_timestamp() - interval '16 minutes' where id = ${first.id}`;
+    expect(await goals.earlier(here.account_id, second.id)).toBeNull();
+    await goals.end(here.account_id, second.id, "cancelled", "Cleaned up after the test.", uuidv7());
+  });
+
   it("fails open goals and their moves when VENOM restarts", async () => {
     const here = await device();
     const task = await goals.begin(here, here.id, "Open Notepad", uuidv7());

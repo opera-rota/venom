@@ -115,6 +115,9 @@
       "$ref": "#/$defs/DraftStep"
     },
     {
+      "$ref": "#/$defs/EarlierGoal"
+    },
+    {
       "$ref": "#/$defs/EmbeddingFailure"
     },
     {
@@ -1542,6 +1545,24 @@
         "progress"
       ]
     },
+    "EarlierGoal": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "$ref": "#/$defs/MessageText"
+        },
+        "result": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      },
+      "required": [
+        "goal",
+        "result"
+      ],
+      "additionalProperties": false
+    },
     "Effect": {
       "type": "string",
       "enum": [
@@ -2626,6 +2647,16 @@
         "goal": {
           "$ref": "#/$defs/MessageText"
         },
+        "earlier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EarlierGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "moves": {
           "maxItems": 40,
           "type": "array",
@@ -2656,6 +2687,7 @@
         "account_id",
         "engine",
         "goal",
+        "earlier",
         "moves",
         "guidance",
         "memories",
@@ -3678,9 +3710,12 @@
         "ctrl+l",
         "ctrl+t",
         "ctrl+w",
+        "ctrl+home",
+        "ctrl+end",
         "alt+left",
         "alt+tab",
         "win",
+        "win+d",
         "f5"
       ]
     },

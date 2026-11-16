@@ -232,6 +232,12 @@ namespace Venom
         [DllImport("user32.dll")] internal static extern bool SetProcessDpiAwarenessContext(IntPtr context);
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
         [DllImport("dwmapi.dll")] internal static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect rect, int size);
+        [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] internal static extern int DwmGetCloaked(IntPtr window, int attribute, out int cloaked, int size);
+        [DllImport("user32.dll")] internal static extern IntPtr GetTopWindow(IntPtr parent);
+        [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr window, uint command);
+        [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr window);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern int GetWindowTextLength(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
         [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
         [DllImport("kernel32.dll")] internal static extern IntPtr GetCurrentProcess();
         [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool CloseHandle(IntPtr handle);
@@ -273,6 +279,10 @@ namespace Venom
         private const uint VirtualToScan = 0;
         private const uint VirtualToCharacter = 2;
         private const int ModifierPause = 60;
+        private const uint NextWindow = 2;
+        private const int ExtendedStyleIndex = -20;
+        private const long ToolWindowStyle = 0x80;
+        private const int CloakedAttribute = 14;
 
         public static void Init()
         {
@@ -297,6 +307,35 @@ namespace Venom
         public static long Foreground()
         {
             return Root(Native.GetForegroundWindow()).ToInt64();
+        }
+
+        public static long Behind(long[] skip)
+        {
+            string[] shell = { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Progman", "WorkerW" };
+            for (IntPtr window = Native.GetTopWindow(IntPtr.Zero); window != IntPtr.Zero; window = Native.GetWindow(window, NextWindow))
+            {
+                if (Array.IndexOf(skip, window.ToInt64()) >= 0 || Root(window) != window || !Native.IsWindowVisible(window) || Native.IsIconic(window))
+                {
+                    continue;
+                }
+                if (Native.GetWindowTextLength(window) == 0 || (Native.GetWindowLongPtr(window, ExtendedStyleIndex).ToInt64() & ToolWindowStyle) != 0)
+                {
+                    continue;
+                }
+                int cloaked;
+                if (Native.DwmGetCloaked(window, CloakedAttribute, out cloaked, sizeof(int)) == 0 && cloaked != 0)
+                {
+                    continue;
+                }
+                StringBuilder name = new StringBuilder(256);
+                Native.GetClassName(window, name, name.Capacity);
+                if (Array.IndexOf(shell, name.ToString()) >= 0)
+                {
+                    continue;
+                }
+                return window.ToInt64();
+            }
+            return 0;
         }
 
         public static bool Exists(long window)
