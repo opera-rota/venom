@@ -150,7 +150,7 @@ const checks: readonly Check[] = [
     },
   },
   {
-    name: "Click the place to type by its number, then type and press keys",
+    name: "Click the place to type by its number, type, add at the end and press keys",
     run: async () => {
       if (notepad === null) {
         return "skipped";
@@ -168,9 +168,16 @@ const checks: readonly Check[] = [
       say(ended);
       const typed = await helper.send({ op: "move", move: { kind: "type", text: " typed by mark", mark: null, enter: true } });
       say(typed);
+      const appended = await helper.send({ op: "move", move: { kind: "type", text: "added at the end", mark: box.id, enter: false } });
+      say(appended);
+      for (const result of [typed, appended]) {
+        if (result.data["verified"] === "different") {
+          console.log(`      what arrived (the end of it): ${JSON.stringify(String(result.data["arrived"] ?? ""))}`);
+        }
+      }
       const refused = await helper.send({ op: "move", move: { kind: "key", key: "ctrl+alt+delete" } });
       say(refused);
-      return clicked.ok && ended.ok && typed.ok && typed.data["verified"] === "match" && !refused.ok ? "passed" : "failed";
+      return clicked.ok && ended.ok && typed.ok && typed.data["verified"] === "match" && appended.data["verified"] === "match" && !refused.ok ? "passed" : "failed";
     },
   },
   {

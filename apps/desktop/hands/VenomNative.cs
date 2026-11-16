@@ -272,7 +272,7 @@ namespace Venom
         private const int CapsLockKey = 0x14;
         private const uint VirtualToScan = 0;
         private const uint VirtualToCharacter = 2;
-        private const int ModifierPause = 30;
+        private const int ModifierPause = 60;
 
         public static void Init()
         {
