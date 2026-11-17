@@ -50,6 +50,7 @@ const bridge: VenomBridge = {
   setSafety: (settings) => ipcRenderer.invoke(channels.setSafety, settings),
   developer: () => ipcRenderer.invoke(channels.developer),
   openLink: (url) => ipcRenderer.invoke(channels.openLink, url),
+  saveDocument: (document) => ipcRenderer.invoke(channels.saveDocument, document),
   connection: () => ipcRenderer.invoke(channels.connection),
   onEvent: (listener) => subscribe<GatewayEvent>(channels.event, listener),
   onConnection: (listener) => subscribe<ConnectionState>(channels.connectionChanged, listener),

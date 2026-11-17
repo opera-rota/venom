@@ -1,0 +1,16 @@
+{
+  "type": "done",
+  "intent": "question",
+  "text": "Here it is.",
+  "document": {
+    "title": " ",
+    "body": "- Milk"
+  },
+  "plan": null,
+  "model": null,
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_micro_usd": 0
+  }
+}

@@ -2,6 +2,7 @@
   "type": "done",
   "intent": "task",
   "text": "Here is my plan.",
+  "document": null,
   "plan": {
     "title": "Shopping list on the desktop",
     "steps": [

@@ -28,19 +28,19 @@ export function answerWith(reply: (text: string) => string, chunk = 6, usage: To
     for (let start = 0; start < text.length; start += chunk) {
       deltas.push({ type: "delta", text: text.slice(start, start + chunk) });
     }
-    return [...deltas, { type: "done", intent: "question", text, plan: null, model: "scripted-model", usage }];
+    return [...deltas, { type: "done", intent: "question", text, document: null, plan: null, model: "scripted-model", usage }];
   };
 }
 
 export function planWith(plan: PlanDraft | null, usage: TokenUsage = scriptedUsage): BrainScript {
-  return () => [{ type: "done", intent: "task", text: plan === null ? "My plan came back broken. Nothing was done." : plan.title, plan, model: plan === null ? null : "scripted-model", usage }];
+  return () => [{ type: "done", intent: "task", text: plan === null ? "My plan came back broken. Nothing was done." : plan.title, document: null, plan, model: plan === null ? null : "scripted-model", usage }];
 }
 
 export const echoAnswers = answerWith((text) => `You asked: ${text}`);
 
 export const understood: TokenUsage = { input_tokens: 300, output_tokens: 8, cost_micro_usd: 400 };
 
-export const handToLoop: BrainScript = (request) => [{ type: "done", intent: "task", text: request.text, plan: null, model: null, usage: understood }];
+export const handToLoop: BrainScript = (request) => [{ type: "done", intent: "task", text: request.text, document: null, plan: null, model: null, usage: understood }];
 
 export function choose(next: NextMove, usage: TokenUsage = scriptedUsage): MoveReply {
   return { type: "chosen", next, model: "scripted-eyes", usage };

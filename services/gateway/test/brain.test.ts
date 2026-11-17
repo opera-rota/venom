@@ -66,7 +66,7 @@ describe("brain client", () => {
     const url = await serve((request, response, body) => {
       received = `${request.method} ${request.url} ${body}`;
       response.writeHead(200, { "content-type": "application/x-ndjson" });
-      const text = line({ type: "delta", text: "A mutex " }) + line({ type: "done", intent: "question", text: "A mutex is a lock.", plan: null, model: "m", usage });
+      const text = line({ type: "delta", text: "A mutex " }) + line({ type: "done", intent: "question", text: "A mutex is a lock.", document: null, plan: null, model: "m", usage });
       response.write(text.slice(0, 11));
       setTimeout(() => response.end(text.slice(11)), 20);
     });
@@ -74,7 +74,7 @@ describe("brain client", () => {
     const events = await collect(url);
     expect(events).toEqual([
       { type: "delta", text: "A mutex " },
-      { type: "done", intent: "question", text: "A mutex is a lock.", plan: null, model: "m", usage },
+      { type: "done", intent: "question", text: "A mutex is a lock.", document: null, plan: null, model: "m", usage },
     ]);
     expect(received).toBe(`POST /v1/turns ${JSON.stringify(turn)}`);
   });

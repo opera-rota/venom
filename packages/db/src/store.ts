@@ -1,5 +1,5 @@
 import postgres, { type Sql } from "postgres";
-import { ConversationEntry, Message, type IntentKind, type MessageKind, type QuestionRef, type Speaker } from "@venom/contracts";
+import { ConversationEntry, Message, type ChatDocument, type IntentKind, type MessageKind, type QuestionRef, type Speaker } from "@venom/contracts";
 
 export interface DeviceRef {
   readonly id: string;
@@ -15,6 +15,7 @@ export interface RecordMessage {
   readonly taskId?: string;
   readonly stepId?: string;
   readonly moveId?: string;
+  readonly document?: ChatDocument;
   readonly answer?: { readonly model: string | null; readonly intent: IntentKind };
 }
 
@@ -60,11 +61,14 @@ interface MessageRow {
   task_id: string | null;
   step_id: string | null;
   move_id: string | null;
+  document: ChatDocument | null;
   created_at: Date;
 }
 
-function toMessage({ id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, created_at }: MessageRow): Message {
-  return Message.parse({ id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, created_at: created_at.toISOString() });
+const historyCharacters = 16_000;
+
+function toMessage({ id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, document, created_at }: MessageRow): Message {
+  return Message.parse({ id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, document, created_at: created_at.toISOString() });
 }
 
 export function connect(url: string, options: { max?: number } = {}): Sql {
@@ -81,13 +85,13 @@ export function createStore(url: string): Store {
   const sql = connect(url);
 
   return {
-    async recordMessage({ device, requestId, speaker, text, kind: requested, taskId = null, stepId = null, moveId = null, answer }) {
+    async recordMessage({ device, requestId, speaker, text, kind: requested, taskId = null, stepId = null, moveId = null, document = null, answer }) {
       const kind = requested ?? (taskId === null ? "text" : "plan");
       return sql.begin(async (tx) => {
         const [row] = await tx<MessageRow[]>`
-          insert into messages (account_id, device_id, request_id, speaker, kind, text, task_id, step_id, move_id)
-          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${kind}, ${text}, ${taskId}, ${stepId}, ${moveId})
-          returning id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, created_at
+          insert into messages (account_id, device_id, request_id, speaker, kind, text, task_id, step_id, move_id, document)
+          values (${device.account_id}, ${device.id}, ${requestId}, ${speaker}, ${kind}, ${text}, ${taskId}, ${stepId}, ${moveId}, ${document === null ? null : tx.json(document)})
+          returning id, account_id, device_id, speaker, kind, text, task_id, step_id, move_id, document, created_at
         `;
         if (row === undefined) {
           throw new Error("Message insert returned no row");
@@ -96,7 +100,7 @@ export function createStore(url: string): Store {
           insert into audit_log (account_id, device_id, request_id, actor, action, subject_id, detail)
           values (
             ${device.account_id}, ${device.id}, ${requestId}, ${speaker}, 'message.recorded', ${row.id},
-            ${tx.json({ speaker, ...(kind === "text" ? {} : { kind }), characters: text.length, ...(taskId === null ? {} : { task_id: taskId }), ...(stepId === null ? {} : { step_id: stepId }), ...(moveId === null ? {} : { move_id: moveId }), ...answer })}
+            ${tx.json({ speaker, ...(kind === "text" ? {} : { kind }), characters: text.length, ...(taskId === null ? {} : { task_id: taskId }), ...(stepId === null ? {} : { step_id: stepId }), ...(moveId === null ? {} : { move_id: moveId }), ...(document === null ? {} : { document_characters: document.body.length }), ...answer })}
           )
         `;
         return toMessage(row);
@@ -106,7 +110,7 @@ export function createStore(url: string): Store {
     async listConversation(accountId, limit) {
       const rows = await sql<ConversationRow[]>`
         select
-          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.kind, latest.text, latest.task_id, latest.step_id, latest.move_id, latest.created_at,
+          latest.id, latest.account_id, latest.device_id, latest.request_id, latest.speaker, latest.kind, latest.text, latest.task_id, latest.step_id, latest.move_id, latest.document, latest.created_at,
           latest.speaker = 'venom' or exists (
             select 1 from messages reply
             where reply.account_id = latest.account_id and reply.request_id = latest.request_id and reply.speaker = 'venom'
@@ -129,7 +133,17 @@ export function createStore(url: string): Store {
       const rows = await sql<EntryRow[]>`
         select speaker, text
         from (
-          select earlier.speaker, earlier.text, earlier.created_at, earlier.id
+          select
+            earlier.speaker,
+            left(
+              case
+                when earlier.document is null then earlier.text
+                else earlier.text || E'\n\n<document>\n# ' || (earlier.document ->> 'title') || E'\n' || (earlier.document ->> 'body') || E'\n</document>'
+              end,
+              ${historyCharacters}
+            ) as text,
+            earlier.created_at,
+            earlier.id
           from messages pivot
           join messages earlier
             on earlier.account_id = pivot.account_id
@@ -152,7 +166,7 @@ export function createStore(url: string): Store {
     async findRequest(accountId, requestId) {
       const [row] = await sql<RequestRow[]>`
         select
-          question.id, question.account_id, question.device_id, question.speaker, question.kind, question.text, question.task_id, question.step_id, question.move_id, question.created_at,
+          question.id, question.account_id, question.device_id, question.speaker, question.kind, question.text, question.task_id, question.step_id, question.move_id, question.document, question.created_at,
           exists (
             select 1 from messages reply
             where reply.request_id = question.request_id and reply.speaker = 'venom'

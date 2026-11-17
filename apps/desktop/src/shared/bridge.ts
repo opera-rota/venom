@@ -1,6 +1,7 @@
 import type {
   Account,
   ApiErrorCode,
+  ChatDocument,
   ConfirmationAnswered,
   ConfirmDecision,
   DrillKind,
@@ -59,6 +60,8 @@ export type AnswerResult = { readonly ok: true; readonly answered: ConfirmationA
 
 export type SafetyResult = { readonly ok: true; readonly settings: SafetySettings } | Failure;
 
+export type SaveResult = { readonly ok: true; readonly saved: string | null } | Failure;
+
 export type HaltView =
   | { readonly kind: "idle" }
   | { readonly kind: "stopping" }
@@ -116,6 +119,7 @@ export interface VenomBridge {
   setSafety(settings: SafetySettings): Promise<SafetyResult>;
   developer(): Promise<boolean>;
   openLink(url: string): Promise<void>;
+  saveDocument(document: ChatDocument): Promise<SaveResult>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
   onConnection(listener: (state: ConnectionState) => void): () => void;
@@ -157,6 +161,7 @@ export const channels = {
   setSafety: "venom:set-safety",
   developer: "venom:developer",
   openLink: "venom:open-link",
+  saveDocument: "venom:save-document",
   connection: "venom:connection",
   event: "venom:event",
   connectionChanged: "venom:connection-changed",

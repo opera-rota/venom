@@ -1,0 +1,16 @@
+{
+  "type": "done",
+  "intent": "question",
+  "text": "Here is your shopping list, buddy.",
+  "document": {
+    "title": "Shopping list",
+    "body": "- Milk\n- Bread\n- Eggs"
+  },
+  "plan": null,
+  "model": "anthropic/claude-haiku-5.5",
+  "usage": {
+    "input_tokens": 1210,
+    "output_tokens": 48,
+    "cost_micro_usd": 1150
+  }
+}

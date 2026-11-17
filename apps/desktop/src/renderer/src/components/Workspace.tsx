@@ -1,4 +1,4 @@
-import type { Account, Device, SkippableEffect, Task } from "@venom/contracts";
+import type { Account, ChatDocument, Device, SkippableEffect, Task } from "@venom/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 import type { VenomBridge } from "../../../shared/bridge.ts";
@@ -59,6 +59,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const tasks = useTasks(bridge, connection);
   const [place, setPlace] = useState<PlaceName>("chat");
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
+  const saveDocument = useCallback((document: ChatDocument) => bridge.saveDocument(document), [bridge]);
   const { control, controlling, state, sending, answer, answerMove, loadMoves, stopTask, settings, save } = tasks;
   const messages = useStore(store, (current) => current.messages);
   const plans = useMemo<Plans>(
@@ -122,7 +123,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       <div className="flex min-h-0 flex-1 flex-col min-[960px]:flex-row">
         <Sidebar current={place} signals={signals} onChoose={setPlace} />
         <main className={`min-h-0 min-w-0 flex-1 flex-col ${place === "chat" ? "flex" : "hidden"}`}>
-          <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} />
+          <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} onSaveDocument={saveDocument} />
           <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
         </main>
         {place !== "chat" && (

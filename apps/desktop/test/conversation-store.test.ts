@@ -15,6 +15,7 @@ const question: Message = {
   task_id: null,
   step_id: null,
   move_id: null,
+  document: null,
   created_at: at,
 };
 const asked = { request_id: requestId, message_id: question.id };

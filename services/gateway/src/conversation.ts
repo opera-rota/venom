@@ -1,4 +1,4 @@
-import { TurnRequest, type Device, type EngineId, type MemoryContext, type MemoryItem, type Message, type MessageKind, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
+import { TurnRequest, type ChatDocument, type Device, type EngineId, type MemoryContext, type MemoryItem, type Message, type MessageKind, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
 import type { DeviceRef, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import { addUsage, detect, MemoryError, nothingUsed, type Memory } from "@venom/memory";
@@ -33,6 +33,7 @@ export interface Exchange {
 
 interface Reply {
   readonly text: string;
+  readonly document?: ChatDocument;
   readonly taskId: string | null;
   readonly kind: MessageKind;
   readonly started?: { readonly task: Task; readonly target: Device };
@@ -117,11 +118,11 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
         trace.answer(event.text);
         break;
       case "done": {
-        const { text, taskId, kind, started } = event.plan !== null
+        const { text, document, taskId, kind, started }: Reply = event.plan !== null
           ? await planned(exchange, asked, event.plan)
           : event.intent === "task" && target !== null
             ? await goal(exchange, asked, target)
-            : { text: event.text, taskId: null, kind: "text" as const };
+            : { text: event.text, taskId: null, kind: "text", ...(event.document === null ? {} : { document: event.document }) };
         const reply = await store.recordMessage({
           device,
           requestId: question.requestId,
@@ -129,6 +130,7 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
           kind,
           text,
           ...(taskId === null ? {} : { taskId }),
+          ...(document === undefined ? {} : { document }),
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);

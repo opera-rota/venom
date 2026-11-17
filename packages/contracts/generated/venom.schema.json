@@ -49,6 +49,9 @@
       "$ref": "#/$defs/CapabilityReport"
     },
     {
+      "$ref": "#/$defs/ChatDocument"
+    },
+    {
       "$ref": "#/$defs/ChooseEngine"
     },
     {
@@ -823,6 +826,28 @@
       "required": [
         "device_id",
         "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "ChatDocument": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "title",
+        "body"
       ],
       "additionalProperties": false
     },
@@ -2368,6 +2393,16 @@
             }
           ]
         },
+        "document": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatDocument"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "created_at": {
           "type": "string",
           "format": "date-time"
@@ -2383,6 +2418,7 @@
         "task_id",
         "step_id",
         "move_id",
+        "document",
         "created_at"
       ],
       "additionalProperties": false
@@ -5193,6 +5229,16 @@
           "minLength": 1,
           "maxLength": 16000
         },
+        "document": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatDocument"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "plan": {
           "anyOf": [
             {
@@ -5221,6 +5267,7 @@
         "type",
         "intent",
         "text",
+        "document",
         "plan",
         "model",
         "usage"

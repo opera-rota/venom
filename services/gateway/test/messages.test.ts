@@ -1,7 +1,7 @@
 import { ApiError, MessageHistory, SendMessageAccepted, type DeviceSession, type GatewayEvent } from "@venom/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeCodes } from "../src/app.ts";
-import { answerWith, scriptedBrain } from "../src/testing.ts";
+import { answerWith, scriptedBrain, scriptedUsage } from "../src/testing.ts";
 import { call, createEnvironment, destroyEnvironment, openLive, signUpOverHttp, startGateway, type Environment } from "./harness.ts";
 
 let environment: Environment;
@@ -226,6 +226,42 @@ describe("conversation through the gateway", () => {
     const missing = await fetch(`${gateway.base}/v1/nothing-here`);
     expect(missing.status).toBe(404);
     expect(ApiError.parse(await missing.json()).error).toBe("not_found");
+    await gateway.stop();
+  });
+});
+
+describe("a document in the chat", () => {
+  it("hands over a document with the answer, keeps it, and shows it to the brain next time", async () => {
+    const shoppingList = { title: "Shopping list", body: "- Milk\n- Bread" };
+    const brain = scriptedBrain((request) =>
+      request.text.startsWith("Write")
+        ? [
+            { type: "delta", text: "Here it is, buddy." },
+            { type: "done", intent: "question", text: "Here it is, buddy.", document: shoppingList, plan: null, model: "scripted-model", usage: scriptedUsage },
+          ]
+        : [{ type: "done", intent: "question", text: "Added.", document: null, plan: null, model: "scripted-model", usage: scriptedUsage }],
+    );
+    const gateway = await startGateway(environment, { brain });
+    const writer = await signUpOverHttp(gateway.base, environment.mailer, "documents@venom.test", "documents secret word");
+    const live = openLive(gateway.base, writer.device_token);
+    await live.opened;
+    const ask = async (text: string) => {
+      const response = await call(gateway.base, "POST", "/v1/messages", { token: writer.device_token, body: { text } });
+      return live.settled(SendMessageAccepted.parse(await response.json()).request_id);
+    };
+
+    const events = await ask("Write me a shopping list as a document");
+    const answered = events.flatMap((event) => (event.type === "message" && event.message.speaker === "venom" ? [event.message] : []));
+    expect(answered.map((message) => [message.kind, message.text, message.document])).toEqual([["text", "Here it is, buddy.", shoppingList]]);
+    const listed = MessageHistory.parse(await (await call(gateway.base, "GET", "/v1/messages", { token: writer.device_token })).json()).messages;
+    expect(listed.at(-1)?.document).toEqual(shoppingList);
+
+    await ask("Add eggs");
+    expect(gateway.brain.requests.at(-1)?.history).toEqual([
+      { speaker: "user", text: "Write me a shopping list as a document" },
+      { speaker: "venom", text: "Here it is, buddy.\n\n<document>\n# Shopping list\n- Milk\n- Bread\n</document>" },
+    ]);
+    live.socket.close();
     await gateway.stop();
   });
 });

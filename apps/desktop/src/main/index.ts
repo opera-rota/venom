@@ -1,12 +1,14 @@
-import { ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
-import { app, BrowserWindow, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
+import { ChatDocument, ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { channels, type AuthView } from "../shared/bridge.ts";
+import { channels, type AuthView, type SaveResult } from "../shared/bridge.ts";
 import { Api } from "./api.ts";
 import { loadConfig } from "./config.ts";
 import { describeThisComputer } from "./device-info.ts";
+import { documentFileName, documentText } from "./documents.ts";
 import { GatewayClient } from "./gateway-client.ts";
 import { HaltController } from "./halt.ts";
 import { HandHelper } from "./hand-helper.ts";
@@ -65,6 +67,29 @@ async function openLink(url: unknown): Promise<void> {
   const target = new URL(url);
   if (target.protocol === "https:" || target.protocol === "http:") {
     await shell.openExternal(target.href);
+  }
+}
+
+async function saveDocument(document: unknown): Promise<SaveResult> {
+  const parsed = ChatDocument.safeParse(document);
+  if (!parsed.success) {
+    return unreadable;
+  }
+  const options = {
+    title: "Save the document",
+    defaultPath: join(app.getPath("documents"), documentFileName(parsed.data.title)),
+    filters: [{ name: "Markdown", extensions: ["md"] }],
+  };
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  const choice = window === undefined ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(window, options);
+  if (choice.canceled || choice.filePath === undefined || choice.filePath === "") {
+    return { ok: true, saved: null };
+  }
+  try {
+    await writeFile(choice.filePath, documentText(parsed.data), "utf8");
+    return { ok: true, saved: basename(choice.filePath) };
+  } catch {
+    return { ok: false, code: "internal", reason: "VENOM could not save the document there. Choose another folder." };
   }
 }
 
@@ -229,6 +254,7 @@ function wire(): void {
   });
   handle(channels.developer, () => process.env["VENOM_DEVELOPER"] === "1");
   handle(channels.openLink, (url) => openLink(url));
+  handle(channels.saveDocument, (document) => saveDocument(document));
 
   if (!globalShortcut.register(haltShortcut, () => {
     if (sessions.view.kind === "signed_in") {

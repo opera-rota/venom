@@ -5,7 +5,7 @@ import { EngineId, ModelName } from "./power.ts";
 import { Id } from "./primitives.ts";
 import { PromptRole } from "./prompts.ts";
 import { PlanDraft } from "./plan.ts";
-import { ConnectorService, Speaker } from "./records.ts";
+import { ChatDocument, ConnectorService, Speaker } from "./records.ts";
 import { contracts } from "./registry.ts";
 import { NextMove, Observation, PastMove, screenLimits } from "./screen.ts";
 
@@ -144,6 +144,7 @@ export const TurnDone = z
     type: z.literal("done"),
     intent: IntentKind,
     text: z.string().min(1).max(16_000),
+    document: ChatDocument.nullable(),
     plan: PlanDraft.nullable(),
     model: ModelName.nullable(),
     usage: TokenUsage,

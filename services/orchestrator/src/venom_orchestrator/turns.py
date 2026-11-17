@@ -27,6 +27,7 @@ from venom_contracts.models import (
     TurnRequest,
 )
 from venom_contracts.prompts import get_prompt
+from venom_orchestrator.documents import DocumentStream, split
 from venom_orchestrator.engines import EngineCatalogue
 from venom_reasoning.reasoner import Reasoner
 
@@ -80,7 +81,7 @@ class Orchestrator:
 
         if intent == "task" and turn.task_mode == "loop":
             log.info("handing the task to the look, think, act loop", extra=context)
-            yield TurnDone(type="done", intent="task", text=fit(turn.text), plan=None, model=None, usage=understood)
+            yield TurnDone(type="done", intent="task", text=fit(turn.text), document=None, plan=None, model=None, usage=understood)
             return
 
         if intent == "task":
@@ -97,11 +98,14 @@ class Orchestrator:
             memories=turn.memories,
             remembered=turn.remembered,
         )
+        stream = DocumentStream()
         async with aclosing(self._reasoner.reason(request, models)) as events:
             async for event in events:
                 match event:
                     case ReasoningDelta(text=text):
-                        yield TurnDelta(type="delta", text=text)
+                        shown = stream.feed(text)
+                        if shown:
+                            yield TurnDelta(type="delta", text=shown)
                     case ReasoningDone(text=text, model=model, usage=usage):
                         total = combined(understood, usage)
                         log.info(
@@ -114,7 +118,10 @@ class Orchestrator:
                             total.cost_micro_usd,
                             extra=context,
                         )
-                        yield TurnDone(type="done", intent="question", text=fit(text), plan=None, model=model, usage=total)
+                        words, document = split(text)
+                        if document is not None:
+                            log.info("handed over a document of %d characters", len(document.body), extra=context)
+                        yield TurnDone(type="done", intent="question", text=fit(words), document=document, plan=None, model=model, usage=total)
                     case ReasoningFailed(reason=reason, detail=detail):
                         log.warning("could not answer: %s", reason, extra=context)
                         yield TurnFailed(type="failed", reason=reason, detail=detail)
@@ -142,10 +149,10 @@ class Orchestrator:
                     case ReasoningDone(text=text, model=model, usage=usage):
                         plan = PlanDraft.model_validate_json(text)
                         log.info("planned %d steps with %s", len(plan.steps), model, extra=context)
-                        yield TurnDone(type="done", intent="task", text=plan.cannot or plan.title, plan=plan, model=model, usage=combined(understood, usage))
+                        yield TurnDone(type="done", intent="task", text=plan.cannot or plan.title, document=None, plan=plan, model=model, usage=combined(understood, usage))
                     case ReasoningFailed(reason="invalid_output"):
                         log.warning("the plan came back broken and was thrown away", extra=context)
-                        yield TurnDone(type="done", intent="task", text=BROKEN_PLAN, plan=None, model=None, usage=understood)
+                        yield TurnDone(type="done", intent="task", text=BROKEN_PLAN, document=None, plan=None, model=None, usage=understood)
                     case ReasoningFailed(reason=reason, detail=detail):
                         log.warning("could not plan: %s", reason, extra=context)
                         yield TurnFailed(type="failed", reason=reason, detail=detail)

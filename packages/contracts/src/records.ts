@@ -72,6 +72,18 @@ export const MessageKind = z
   .enum(["text", "plan", "question", "report"])
   .register(contracts, { id: "MessageKind" });
 
+export const documentLimits = {
+  title: 120,
+  body: 32_000,
+} as const;
+
+export const ChatDocument = z
+  .strictObject({
+    title: z.string().min(1).max(documentLimits.title).regex(/\S/),
+    body: z.string().min(1).max(documentLimits.body).regex(/\S/),
+  })
+  .register(contracts, { id: "ChatDocument" });
+
 export const Message = z
   .strictObject({
     id: Id,
@@ -83,6 +95,7 @@ export const Message = z
     task_id: Id.nullable(),
     step_id: Id.nullable(),
     move_id: Id.nullable(),
+    document: ChatDocument.nullable(),
     created_at: Timestamp,
   })
   .superRefine((message, context) => {
@@ -94,6 +107,9 @@ export const Message = z
     }
     if (message.kind !== "text" && message.speaker !== "venom") {
       context.addIssue({ code: "custom", path: ["speaker"], message: "Only VENOM writes plans, questions and reports." });
+    }
+    if (message.document !== null && (message.speaker !== "venom" || message.kind !== "text")) {
+      context.addIssue({ code: "custom", path: ["document"], message: "Only a plain VENOM answer carries a document." });
     }
   })
   .register(contracts, { id: "Message" });
@@ -374,6 +390,7 @@ export type Capabilities = z.infer<typeof Capabilities>;
 export type Device = z.infer<typeof Device>;
 export type Speaker = z.infer<typeof Speaker>;
 export type MessageKind = z.infer<typeof MessageKind>;
+export type ChatDocument = z.infer<typeof ChatDocument>;
 export type Message = z.infer<typeof Message>;
 export type StepAction = z.infer<typeof StepAction>;
 export type ScriptLanguage = z.infer<typeof ScriptLanguage>;

@@ -1,11 +1,13 @@
-import type { ConfirmDecision, ConfirmRequest, Device, Message, Task, TaskMove, Thumbnail } from "@venom/contracts";
+import type { ChatDocument, ConfirmDecision, ConfirmRequest, Device, Message, Task, TaskMove, Thumbnail } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
+import type { SaveResult } from "../../../shared/bridge.ts";
 import type { ConversationStore } from "../conversation-store.ts";
 import { arrange, sentFrom, type Answer } from "../conversation.ts";
 import { moveAnswerWords } from "../move-words.ts";
 import { button, mark, surface, text } from "../ui.ts";
+import { DocumentCard } from "./DocumentCard.tsx";
 import { LogoMark } from "./Header.tsx";
 import { Icon } from "./Icon.tsx";
 import { JobCard } from "./JobCard.tsx";
@@ -65,6 +67,7 @@ interface MessageItemProps {
   readonly task: Task | undefined;
   readonly job: boolean;
   readonly onOpenLink: (url: string) => void;
+  readonly onSaveDocument: (document: ChatDocument) => Promise<SaveResult>;
 }
 
 const reportEdge: Partial<Record<Task["status"], string>> = {
@@ -134,7 +137,7 @@ function Question({ message, plans, task }: { readonly message: Message; readonl
   return <AnswerButtons busy={plans.sending.has(request.step_id)} onAnswer={(decision) => plans.answer(request, decision)} />;
 }
 
-const MessageItem = memo(function MessageItem({ message, from, plans, task, job, onOpenLink }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({ message, from, plans, task, job, onOpenLink, onSaveDocument }: MessageItemProps) {
   const mine = message.speaker === "user";
   const edge = message.kind === "question" ? "border-l-4 border-l-status-wait" : message.kind === "report" ? (reportEdge[task?.status ?? "completed"] ?? "") : "";
   return (
@@ -145,6 +148,7 @@ const MessageItem = memo(function MessageItem({ message, from, plans, task, job,
       ) : (
         <div className={`max-w-[92%] px-4 py-3 ${surface.card} ${edge}`}>
           <Markdown source={message.text} onOpenLink={onOpenLink} />
+          {message.document !== null && <DocumentCard document={message.document} onOpenLink={onOpenLink} onSave={onSaveDocument} />}
           {message.kind === "plan" && (
             <PlanCard
               task={task}
@@ -245,9 +249,10 @@ export interface MessageListProps {
   readonly deviceId: string;
   readonly plans: Plans;
   readonly onOpenLink: (url: string) => void;
+  readonly onSaveDocument: (document: ChatDocument) => Promise<SaveResult>;
 }
 
-export function MessageList({ store, devices, deviceId, plans, onOpenLink }: MessageListProps) {
+export function MessageList({ store, devices, deviceId, plans, onOpenLink, onSaveDocument }: MessageListProps) {
   const messages = useStore(store, (state) => state.messages);
   const answers = useStore(store, (state) => state.answers);
   const retry = useStore(store, (state) => state.retry);
@@ -335,6 +340,7 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink }: Mes
                 task={message.task_id === null ? undefined : plans.tasks.get(message.task_id)}
                 job={jobs.has(message.id)}
                 onOpenLink={onOpenLink}
+                onSaveDocument={onSaveDocument}
               />
               {pending.map((answer) => (
                 <AnswerItem key={answer.requestId} answer={answer} onRetry={retry} onOpenLink={onOpenLink} />

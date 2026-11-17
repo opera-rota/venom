@@ -1,0 +1,22 @@
+{
+  "type": "message",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e20",
+  "sequence": 3,
+  "emitted_at": "2026-11-17T09:31:04.200Z",
+  "message": {
+    "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e21",
+    "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+    "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+    "speaker": "venom",
+    "kind": "text",
+    "text": "Here is your shopping list, buddy.",
+    "task_id": null,
+    "step_id": null,
+    "move_id": null,
+    "document": {
+      "title": "Shopping list",
+      "body": "- Milk\n- Bread\n- Eggs"
+    },
+    "created_at": "2026-11-17T09:31:04.100Z"
+  }
+}
