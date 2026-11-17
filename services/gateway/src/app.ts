@@ -1,6 +1,6 @@
 import websocket from "@fastify/websocket";
 import { EngineId, type Task } from "@venom/contracts";
-import type { Store } from "@venom/db";
+import type { Kept, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import type { Memory } from "@venom/memory";
 import type { Availability, Power } from "@venom/power";
@@ -13,12 +13,14 @@ import { identify } from "./auth.ts";
 import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
-import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
+import { asksForLater, keptWords, laterTitle } from "./later.ts";
+import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, laterEvent, laterRemovedEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
 import { GoalLoop, type LoopLimits } from "./loop.ts";
 import { LiveRequests } from "./requests.ts";
 import { TaskRunner, type SaidKind } from "./runner.ts";
 import { deviceRoutes } from "./routes/devices.ts";
 import { identityRoutes } from "./routes/identity.ts";
+import { laterRoutes } from "./routes/later.ts";
 import { liveRoute } from "./routes/live.ts";
 import { memoryRoutes } from "./routes/memory.ts";
 import { messageRoutes } from "./routes/messages.ts";
@@ -82,6 +84,26 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     }
   };
   const say = (task: Task, kind: SaidKind, text: string, stepId: string | null) => tell(task, kind, text, stepId === null ? {} : { stepId });
+  const publishKept = (accountId: string, requestId: string, { item, dropped }: Kept) => {
+    hub.publishToAccount(accountId, laterEvent(requestId, item));
+    for (const itemId of dropped) {
+      hub.publishToAccount(accountId, laterRemovedEvent(uuidv7(), itemId));
+    }
+  };
+  const finished = async (task: Task) => {
+    if (task.result === null || !asksForLater(task.request_text)) {
+      return;
+    }
+    const device = { id: task.origin_device_id, account_id: task.account_id };
+    try {
+      const kept = await store.keepForLater({ device, requestId: uuidv7(), title: laterTitle(task.request_text), body: task.result, taskId: task.id });
+      publishKept(task.account_id, uuidv7(), kept);
+      const message = await store.recordMessage({ device, requestId: uuidv7(), speaker: "venom", text: keptWords });
+      hub.publishToAccount(task.account_id, messageEvent(uuidv7(), message));
+    } catch (error) {
+      app.log.error({ err: error, task_id: task.id }, "could not keep the goal's result for later");
+    }
+  };
   const runner = new TaskRunner({
     tasks,
     signer,
@@ -125,6 +147,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     publishMove: (accountId, requestId, move, picture) => hub.publishToAccount(accountId, moveEvent(requestId, move, picture)),
     publishPower: (accountId, requestId, status) => hub.publishToAccount(accountId, powerEvent(requestId, status)),
     tell: (task, kind, text, moveId) => tell(task, kind, text, moveId === null ? {} : { moveId }),
+    finished,
   });
 
   const shared: Omit<GatewayContext, "acting"> = {
@@ -167,6 +190,13 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     broadcastHalt(accountId, requestId, receipt) {
       hub.publishToAccount(accountId, haltEvent(requestId, receipt));
     },
+    broadcastKept: publishKept,
+    broadcastLaterSeen(accountId, requestId, item) {
+      hub.publishToAccount(accountId, laterEvent(requestId, item));
+    },
+    broadcastLaterRemoved(accountId, requestId, itemId) {
+      hub.publishToAccount(accountId, laterRemovedEvent(requestId, itemId));
+    },
     say,
     availableEngines,
   };
@@ -197,6 +227,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
   messageRoutes(app, context);
   powerRoutes(app, context);
   memoryRoutes(app, context);
+  laterRoutes(app, context);
   safetyRoutes(app, context);
   taskRoutes(app, context);
   liveRoute(app, context);

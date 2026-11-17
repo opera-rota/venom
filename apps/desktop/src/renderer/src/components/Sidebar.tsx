@@ -16,6 +16,7 @@ const placeView: Record<PlaceName, { readonly label: string; readonly icon: Icon
 export interface SidebarSignals {
   readonly waiting: boolean;
   readonly working: boolean;
+  readonly later: number;
 }
 
 export interface SidebarProps {
@@ -29,10 +30,14 @@ function spoken(place: PlaceName, signals: SidebarSignals): string {
   if (place === "chat" && signals.waiting) {
     return `${label}, a question waits for you`;
   }
+  const parts = [label];
   if (place === "screen" && signals.working) {
-    return `${label}, VENOM is working`;
+    parts.push("VENOM is working");
   }
-  return label;
+  if (place === "screen" && signals.later > 0) {
+    parts.push(`${signals.later} new for later`);
+  }
+  return parts.join(", ");
 }
 
 function Signal({ place, signals }: { readonly place: PlaceName; readonly signals: SidebarSignals }) {
@@ -76,6 +81,11 @@ export function Sidebar({ current, signals, onChoose }: SidebarProps) {
             <span className="hidden xl:inline-flex">
               <Signal place={place} signals={signals} />
             </span>
+            {place === "screen" && signals.later > 0 && (
+              <span className={`${mark.badge} absolute top-1 right-1 bg-(--tint-accent) text-green-300 xl:static`} aria-hidden="true">
+                {signals.later}
+              </span>
+            )}
             {chosen && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-green-400 min-[960px]:hidden" aria-hidden="true" />}
           </button>
         );

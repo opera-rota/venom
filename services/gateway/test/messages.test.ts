@@ -37,6 +37,8 @@ function label(event: GatewayEvent): string {
     case "halt":
     case "step_output":
     case "move":
+    case "later":
+    case "later_removed":
       return event.type;
   }
 }

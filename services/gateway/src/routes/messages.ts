@@ -1,5 +1,5 @@
 import { MessageHistory, RetryAnswer, SendMessage, SendMessageAccepted, type EngineId, type MemoryItem, type Message, type PowerStatus, type Task } from "@venom/contracts";
-import type { DeviceRef } from "@venom/db";
+import type { DeviceRef, Kept } from "@venom/db";
 import { SafetyError } from "@venom/safety";
 import { TaskError } from "@venom/tasks";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
@@ -18,7 +18,7 @@ const HistoryQuery = z.strictObject({
 });
 
 export function messageRoutes(app: FastifyInstance, context: GatewayContext): void {
-  const { store, hub, requests, brain, power, memory, tasks, goals, loop, identity, stopping, track, availableEngines, broadcastPower, broadcastMemory, broadcastTask } = context;
+  const { store, hub, requests, brain, power, memory, tasks, goals, loop, identity, stopping, track, availableEngines, broadcastPower, broadcastMemory, broadcastTask, broadcastKept } = context;
   const answering = new Set<string>();
 
   async function save(device: DeviceRef, requestId: string, text: string, log: FastifyBaseLogger): Promise<Message> {
@@ -42,8 +42,9 @@ export function messageRoutes(app: FastifyInstance, context: GatewayContext): vo
     const onPower = (status: PowerStatus, eventId: string) => broadcastPower(device.account_id, eventId, status);
     const onMemory = (item: MemoryItem, eventId: string) => broadcastMemory(device.account_id, eventId, item);
     const onTask = (task: Task, eventId: string) => broadcastTask(device.account_id, eventId, task);
+    const onKept = (kept: Kept, eventId: string) => broadcastKept(device.account_id, eventId, kept);
     track(
-      converse({ store, brain, power, memory, tasks, identity, loop, engine, trace, device, signal: stopping, log, onPower, onMemory, onTask }, question).finally(() => {
+      converse({ store, brain, power, memory, tasks, identity, loop, engine, trace, device, signal: stopping, log, onPower, onMemory, onTask, onKept }, question).finally(() => {
         answering.delete(question.requestId);
       }),
     );

@@ -6,6 +6,8 @@ import {
   EngineList,
   GatewayEvent,
   Id,
+  LaterItem,
+  LaterList,
   LiveChallenge,
   MemoryDraft,
   MemoryForgotten,
@@ -37,6 +39,8 @@ import type {
   ConnectionState,
   DevicesResult,
   EnginesResult,
+  LaterItemResult,
+  LaterResult,
   MemoryItemResult,
   MemoryResult,
   MoveAnswerResult,
@@ -69,6 +73,8 @@ const closeReasons: ReadonlyMap<number, Revocation> = new Map([
 ]);
 
 const unreadableDraft = "Write what VENOM should remember, in 500 characters or fewer.";
+
+const laterGone = "That item is no longer kept for later.";
 
 type Frame = { readonly kind: "event"; readonly event: GatewayEvent } | { readonly kind: "command"; readonly frame: CommandFrame };
 
@@ -284,6 +290,41 @@ export class GatewayClient {
       return { ok: false, code: "invalid_request", reason: unreadableDraft };
     }
     return this.#memoryItem("PUT", `/v1/memory/${id.data}`, parsed.data);
+  }
+
+  async later(): Promise<LaterResult> {
+    const result = await this.#api.request("GET", "/v1/later", { schema: LaterList, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, list: result.value };
+  }
+
+  async laterSeen(itemId: unknown): Promise<LaterItemResult> {
+    const id = Id.safeParse(itemId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: laterGone };
+    }
+    const result = await this.#api.request("POST", `/v1/later/${id.data}/seen`, { schema: LaterItem, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, item: result.value };
+  }
+
+  async laterRemove(itemId: unknown): Promise<StepResult> {
+    const id = Id.safeParse(itemId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: laterGone };
+    }
+    const result = await this.#api.request("DELETE", `/v1/later/${id.data}`, { token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true };
   }
 
   async forgetMemory(memoryId: unknown): Promise<StepResult> {

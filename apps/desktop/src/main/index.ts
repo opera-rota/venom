@@ -215,6 +215,9 @@ function wire(): void {
   handle(channels.saveMemory, (draft) => gateway.saveMemory(draft));
   handle(channels.editMemory, (memoryId, draft) => gateway.editMemory(memoryId, draft));
   handle(channels.forgetMemory, (memoryId) => gateway.forgetMemory(memoryId));
+  handle(channels.later, () => gateway.later());
+  handle(channels.laterSeen, (itemId) => gateway.laterSeen(itemId));
+  handle(channels.laterRemove, (itemId) => gateway.laterRemove(itemId));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
   handle(channels.retry, (requestId) => gateway.retry(requestId));

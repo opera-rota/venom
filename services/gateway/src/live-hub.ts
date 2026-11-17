@@ -4,6 +4,7 @@ import {
   type ConfirmationAnswered,
   type ConfirmRequest,
   type Device,
+  type LaterItem,
   type MemoryForgotten,
   type MemoryItem,
   type Message,
@@ -121,6 +122,14 @@ export function powerEvent(requestId: string, power: PowerStatus): GatewayEvent 
 
 export function memoryEvent(requestId: string, item: MemoryItem): GatewayEvent {
   return GatewayEvent.parse({ type: "memory", ...stamp(requestId, 0), item });
+}
+
+export function laterEvent(requestId: string, item: LaterItem): GatewayEvent {
+  return GatewayEvent.parse({ type: "later", ...stamp(requestId, 0), item });
+}
+
+export function laterRemovedEvent(requestId: string, itemId: string): GatewayEvent {
+  return GatewayEvent.parse({ type: "later_removed", ...stamp(requestId, 0), item_id: itemId });
 }
 
 export function forgottenEvent(requestId: string, forgotten: MemoryForgotten): GatewayEvent {

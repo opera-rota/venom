@@ -1,5 +1,5 @@
 import { TurnRequest, type ChatDocument, type Device, type EngineId, type MemoryContext, type MemoryItem, type Message, type MessageKind, type PlanDraft, type PowerStatus, type Task, type TokenUsage, type TurnDone } from "@venom/contracts";
-import type { DeviceRef, Store } from "@venom/db";
+import type { DeviceRef, Kept, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import { addUsage, detect, MemoryError, nothingUsed, type Memory } from "@venom/memory";
 import type { Power } from "@venom/power";
@@ -9,6 +9,7 @@ import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { RequestTrace } from "./live-hub.ts";
 import type { GoalLoop } from "./loop.ts";
+import { asksForLater, keptWords, laterTitle } from "./later.ts";
 import { goalStartWords, planWaiting } from "./words.ts";
 
 export const historyLimit = 20;
@@ -29,6 +30,7 @@ export interface Exchange {
   onPower(status: PowerStatus, requestId: string): void;
   onMemory(item: MemoryItem, requestId: string): void;
   onTask(task: Task, requestId: string): void;
+  onKept(kept: Kept, requestId: string): void;
 }
 
 interface Reply {
@@ -134,6 +136,9 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
           answer: { model: event.model, intent: event.intent },
         });
         trace.message(reply);
+        if (event.intent === "question" && asksForLater(asked.text)) {
+          await keep(exchange, question.requestId, asked.text, text, document);
+        }
         if (started !== undefined) {
           loop.run(started.task, started.target, trace.requestId);
         }
@@ -147,6 +152,12 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
     }
   }
   throw new BrainError("malformed", { cause: new Error("the brain stream ended without a result") });
+}
+
+async function keep({ store, device, trace, onKept }: Exchange, requestId: string, asked: string, text: string, document: ChatDocument | undefined): Promise<void> {
+  const kept = await store.keepForLater({ device, requestId: trace.requestId, title: document?.title ?? laterTitle(asked), body: document?.body ?? text });
+  onKept(kept, uuidv7());
+  trace.message(await store.recordMessage({ device, requestId, speaker: "venom", text: keptWords }));
 }
 
 function asks(asking: number, total: number): string {

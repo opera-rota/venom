@@ -157,6 +157,18 @@
       "$ref": "#/$defs/Intent"
     },
     {
+      "$ref": "#/$defs/LaterEvent"
+    },
+    {
+      "$ref": "#/$defs/LaterItem"
+    },
+    {
+      "$ref": "#/$defs/LaterList"
+    },
+    {
+      "$ref": "#/$defs/LaterRemovedEvent"
+    },
+    {
       "$ref": "#/$defs/LiveChallenge"
     },
     {
@@ -1892,6 +1904,12 @@
         },
         {
           "$ref": "#/$defs/HaltEvent"
+        },
+        {
+          "$ref": "#/$defs/LaterEvent"
+        },
+        {
+          "$ref": "#/$defs/LaterRemovedEvent"
         }
       ],
       "discriminator": {
@@ -2024,6 +2042,150 @@
         "question",
         "task"
       ]
+    },
+    "LaterEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "later"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "item": {
+          "$ref": "#/$defs/LaterItem"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "item"
+      ],
+      "additionalProperties": false
+    },
+    "LaterItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32000,
+          "pattern": "\\S"
+        },
+        "seen_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "task_id",
+        "title",
+        "body",
+        "seen_at",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "LaterList": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LaterItem"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "LaterRemovedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "later_removed"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "item_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "item_id"
+      ],
+      "additionalProperties": false
     },
     "ListeningMode": {
       "type": "string",

@@ -5,7 +5,9 @@ import type { VenomBridge } from "../../../shared/bridge.ts";
 import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from "../tasks-state.ts";
+import { unseenCount } from "../later-state.ts";
 import { useDevices } from "../use-devices.ts";
+import { useLater } from "../use-later.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
@@ -57,6 +59,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const power = usePower(bridge, connection);
   const memory = useMemory(bridge, connection);
   const tasks = useTasks(bridge, connection);
+  const later = useLater(bridge, connection);
   const [place, setPlace] = useState<PlaceName>("chat");
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
   const saveDocument = useCallback((document: ChatDocument) => bridge.saveDocument(document), [bridge]);
@@ -90,7 +93,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);
   const gateClosed = useMemo(() => state.closed.filter((entry) => !inChat.has(entry.request.task_id)), [state.closed, inChat]);
   const job = useMemo(() => screenJob(state), [state]);
-  const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen) }), [state]);
+  const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen), later: unseenCount(later.items) }), [state, later.items]);
   const askAgain = useCallback(
     (effect: SkippableEffect) => {
       if (settings !== null) {
@@ -137,8 +140,10 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
                 deviceId={device.id}
                 devices={devices.devices}
                 stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
+                later={later}
                 onLoad={loadMoves}
                 onStop={(taskId) => void stopTask(taskId)}
+                onOpenLink={openLink}
               />
             )}
             {place === "devices" && <DevicesPlace state={devices} />}

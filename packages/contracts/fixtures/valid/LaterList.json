@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e82",
+      "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+      "task_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e60",
+      "title": "Random Wikipedia article",
+      "body": "The article was about the Nyungwe forest.",
+      "seen_at": "2026-11-17T10:05:00.000Z",
+      "created_at": "2026-11-17T10:01:00.000Z"
+    }
+  ]
+}

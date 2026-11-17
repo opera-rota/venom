@@ -74,6 +74,7 @@ export interface LoopOptions {
   publishMove(accountId: string, requestId: string, move: TaskMove, picture: Thumbnail | null): void;
   publishPower(accountId: string, requestId: string, status: PowerStatus): void;
   tell(task: Task, kind: SaidKind, text: string, moveId: string | null): Promise<void>;
+  finished(task: Task): Promise<void>;
 }
 
 export type Word = "yes" | "no" | null;
@@ -559,6 +560,9 @@ export class GoalLoop {
     this.#options.publishTask(driving.accountId, uuidv7(), ended);
     if (words !== null) {
       await this.#tell(ended, "report", words, null);
+    }
+    if (status === "completed") {
+      await this.#options.finished(ended);
     }
   }
 

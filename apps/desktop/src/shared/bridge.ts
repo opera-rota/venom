@@ -2,6 +2,8 @@ import type {
   Account,
   ApiErrorCode,
   ChatDocument,
+  LaterItem,
+  LaterList,
   ConfirmationAnswered,
   ConfirmDecision,
   DrillKind,
@@ -45,6 +47,10 @@ export type PowerResult = { readonly ok: true; readonly power: PowerStatus } | F
 export type MemoryResult = { readonly ok: true; readonly list: MemoryList } | Failure;
 
 export type MemoryItemResult = { readonly ok: true; readonly item: MemoryItem } | Failure;
+
+export type LaterResult = { readonly ok: true; readonly list: LaterList } | Failure;
+
+export type LaterItemResult = { readonly ok: true; readonly item: LaterItem } | Failure;
 
 export type TasksResult = { readonly ok: true; readonly list: TaskList } | Failure;
 
@@ -102,6 +108,9 @@ export interface VenomBridge {
   saveMemory(draft: MemoryDraft): Promise<MemoryItemResult>;
   editMemory(memoryId: string, draft: MemoryDraft): Promise<MemoryItemResult>;
   forgetMemory(memoryId: string): Promise<StepResult>;
+  later(): Promise<LaterResult>;
+  laterSeen(itemId: string): Promise<LaterItemResult>;
+  laterRemove(itemId: string): Promise<StepResult>;
   history(): Promise<MessageHistory>;
   send(text: string): Promise<SendResult>;
   retry(requestId: string): Promise<SendResult>;
@@ -144,6 +153,9 @@ export const channels = {
   saveMemory: "venom:save-memory",
   editMemory: "venom:edit-memory",
   forgetMemory: "venom:forget-memory",
+  later: "venom:later",
+  laterSeen: "venom:later-seen",
+  laterRemove: "venom:later-remove",
   history: "venom:history",
   send: "venom:send",
   retry: "venom:retry",

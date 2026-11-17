@@ -205,6 +205,37 @@ class GoalDone(BaseModel):
 type IntentKind = Literal["question", "task"]
 
 
+class LaterItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    account_id: UUID
+    task_id: UUID | None
+    title: Annotated[str, Field(max_length=120, min_length=1, pattern="\\S")]
+    body: Annotated[str, Field(max_length=32000, min_length=1, pattern="\\S")]
+    seen_at: AwareDatetime | None
+    created_at: AwareDatetime
+
+
+class LaterList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: Annotated[list[LaterItem], Field(max_length=100)]
+
+
+class LaterRemovedEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["later_removed"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    item_id: UUID
+
+
 type ListeningMode = Literal["wake_word", "press_to_talk"]
 
 
@@ -960,6 +991,17 @@ class Intent(BaseModel):
     kind: IntentKind
 
 
+class LaterEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["later"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    item: LaterItem
+
+
 class LiveChallenge(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1694,12 +1736,12 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | IgnoreStep | Intent | LiveChallenge | LiveEvent | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | ScreenBox | ScreenClick | ScreenKeyPress | ScreenMark | ScreenOpen | ScreenPause | ScreenPoint | ScreenScroll | ScreenSpot | ScreenType | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | ScreenBox | ScreenClick | ScreenKeyPress | ScreenMark | ScreenOpen | ScreenPause | ScreenPoint | ScreenScroll | ScreenSpot | ScreenType | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 
 
 type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent,
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent | LaterEvent | LaterRemovedEvent,
     Field(discriminator="type"),
 ]

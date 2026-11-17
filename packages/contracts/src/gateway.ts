@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LaterItem } from "./later.ts";
 import { ConfirmRequest } from "./messages.ts";
 import { PowerStatus } from "./power.ts";
 import { Id, Timestamp } from "./primitives.ts";
@@ -172,6 +173,22 @@ export const HaltEvent = z
   })
   .register(contracts, { id: "HaltEvent" });
 
+export const LaterEvent = z
+  .strictObject({
+    type: z.literal("later"),
+    ...eventFields,
+    item: LaterItem,
+  })
+  .register(contracts, { id: "LaterEvent" });
+
+export const LaterRemovedEvent = z
+  .strictObject({
+    type: z.literal("later_removed"),
+    ...eventFields,
+    item_id: Id,
+  })
+  .register(contracts, { id: "LaterRemovedEvent" });
+
 export const GatewayEvent = z
   .discriminatedUnion("type", [
     MessageEvent,
@@ -186,6 +203,8 @@ export const GatewayEvent = z
     StepOutputEvent,
     MoveEvent,
     HaltEvent,
+    LaterEvent,
+    LaterRemovedEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
 
@@ -209,4 +228,6 @@ export type ConfirmationEvent = z.infer<typeof ConfirmationEvent>;
 export type StepOutputEvent = z.infer<typeof StepOutputEvent>;
 export type MoveEvent = z.infer<typeof MoveEvent>;
 export type HaltEvent = z.infer<typeof HaltEvent>;
+export type LaterEvent = z.infer<typeof LaterEvent>;
+export type LaterRemovedEvent = z.infer<typeof LaterRemovedEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

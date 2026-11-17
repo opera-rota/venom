@@ -1,4 +1,4 @@
-import { Observation, Task, TaskMove, TaskMoves, type DeviceSession, type GatewayEvent, type MessageEvent, type MoveEvent, type NextMove, type ScreenMark, type TaskEvent } from "@venom/contracts";
+import { LaterList, Observation, Task, TaskMove, TaskMoves, type DeviceSession, type GatewayEvent, type MessageEvent, type MoveEvent, type NextMove, type ScreenMark, type TaskEvent } from "@venom/contracts";
 import { encode } from "jpeg-js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { thumbnailOf } from "../src/thumbnail.ts";
@@ -156,6 +156,25 @@ describe("Definition of done 1: a goal is reached one move at a time", () => {
     ]);
     const pictures = near.events.filter((event): event is MoveEvent => event.type === "move" && event.picture !== null);
     expect(pictures.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("for later: a goal's result is kept when she asked", () => {
+  it("keeps the result in Screen, says so in the chat, and keeps nothing for an ordinary goal", async () => {
+    gateway.brain.mover = movesWith([finished]);
+    const { here, near } = await account();
+    await say(here, "Write a shopping list in Notepad and keep it for later");
+
+    const kept = (await near.until((event) => event.type === "later")) as Extract<GatewayEvent, { type: "later" }>;
+    const completed = (await near.until(goal("completed"))) as TaskEvent;
+    expect(kept.item).toMatchObject({ title: "Write a shopping list in Notepad", body: "Done. Your shopping list is in Notepad.", task_id: completed.task.id, seen_at: null });
+    await near.until(venom("text", "I kept this for later."));
+
+    gateway.brain.mover = movesWith([finished]);
+    await say(here, "press 7 on the calculator");
+    await near.until((event) => event.type === "task" && event.task.status === "completed" && event.task.request_text === "press 7 on the calculator");
+    const listed = LaterList.parse(await (await call(gateway.base, "GET", "/v1/later", { token: here.device_token })).json());
+    expect(listed.items.map((item) => item.id)).toEqual([kept.item.id]);
   });
 });
 

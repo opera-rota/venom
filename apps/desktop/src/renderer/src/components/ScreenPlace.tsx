@@ -2,7 +2,9 @@ import type { Device, Task, TaskMove, Thumbnail } from "@venom/contracts";
 import { useEffect, useState } from "react";
 import { moveLook, movesSoFar } from "../move-words.ts";
 import { isOpen } from "../tasks-state.ts";
+import type { LaterState } from "../use-later.ts";
 import { button, surface, text } from "../ui.ts";
+import { ForLater } from "./ForLater.tsx";
 import { Icon } from "./Icon.tsx";
 import { MoveList } from "./MoveList.tsx";
 import { Place } from "./Place.tsx";
@@ -16,8 +18,10 @@ export interface ScreenPlaceProps {
   readonly deviceId: string;
   readonly devices: readonly Device[];
   readonly stopping: boolean;
+  readonly later: LaterState;
   readonly onLoad: (taskId: string) => void;
   readonly onStop: (taskId: string) => void;
+  readonly onOpenLink: (url: string) => void;
 }
 
 function useNow(running: boolean): number {
@@ -50,7 +54,7 @@ function deviceName(task: Task, devices: readonly Device[]): string {
   return devices.find((device) => device.id === task.target_device_id)?.name ?? "the computer";
 }
 
-export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, stopping, onLoad, onStop }: ScreenPlaceProps) {
+export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, stopping, later, onLoad, onStop, onOpenLink }: ScreenPlaceProps) {
   const taskId = task?.id ?? null;
   const open = task !== null && isOpen(task);
   const now = useNow(open);
@@ -63,12 +67,13 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, s
 
   if (task === null) {
     return (
-      <Place title="Screen" icon="screen">
-        <div className={`flex flex-col items-center gap-2 px-6 py-14 text-center ${surface.card}`}>
+      <Place title="Screen" icon="screen" width="wide">
+        <div className={`flex flex-col items-center gap-2 px-6 py-10 text-center ${surface.card}`}>
           <Icon name="screen" className="h-8 w-8 text-ink-faint" />
           <p className="font-medium text-ink">Nothing is running</p>
           <p className={text.support}>When VENOM works, you will see the screen here.</p>
         </div>
+        <ForLater state={later} onOpenLink={onOpenLink} />
       </Place>
     );
   }
@@ -128,6 +133,9 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, s
           )}
           {!open && task.result !== null && <p className={`break-words ${text.support}`}>{task.result}</p>}
         </section>
+      </div>
+      <div className="mt-2 border-t border-line-subtle pt-5">
+        <ForLater state={later} onOpenLink={onOpenLink} />
       </div>
     </Place>
   );
