@@ -1,24 +1,23 @@
-import type { Account, Device } from "@venom/contracts";
+import type { Account, Device, SkippableEffect, Task } from "@venom/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 import type { VenomBridge } from "../../../shared/bridge.ts";
 import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
+import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from "../tasks-state.ts";
 import { useDevices } from "../use-devices.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
-import { liveOutput, moveOf, movesOf, taskCount, taskInView } from "../tasks-state.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
 import { Composer } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
-import { DevicesPanel } from "./DevicesPanel.tsx";
-import { Header, type SidePanel } from "./Header.tsx";
-import { MemoryPanel } from "./MemoryPanel.tsx";
+import { DevicesPlace } from "./DevicesPlace.tsx";
+import { Header } from "./Header.tsx";
+import { MemoryPlace } from "./MemoryPlace.tsx";
 import { MessageList, type Plans } from "./MessageList.tsx";
-import { engineName, PowerPanel } from "./PowerPanel.tsx";
-import { SafetyPanel } from "./SafetyPanel.tsx";
-import { TasksPanel } from "./TasksPanel.tsx";
-import { TaskStrip } from "./TaskStrip.tsx";
+import { ModelsPlace } from "./ModelsPlace.tsx";
+import { ScreenPlace } from "./ScreenPlace.tsx";
+import { Sidebar, type PlaceName } from "./Sidebar.tsx";
 
 const screenScheduler: Scheduler = {
   frame: (run) => {
@@ -29,6 +28,16 @@ const screenScheduler: Scheduler = {
     return () => window.clearTimeout(timer);
   },
 };
+
+function goalsOf(state: TasksState): readonly Task[] {
+  return [...state.tasks.values()].filter((task) => task.kind === "goal");
+}
+
+function screenJob(state: TasksState): Task | null {
+  const goals = goalsOf(state);
+  const open = goals.filter(isOpen).sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return open[0] ?? [...goals].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0] ?? null;
+}
 
 export interface WorkspaceProps {
   readonly bridge: VenomBridge;
@@ -48,10 +57,9 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const power = usePower(bridge, connection);
   const memory = useMemory(bridge, connection);
   const tasks = useTasks(bridge, connection);
-  const inView = taskInView(tasks.state);
-  const [panel, setPanel] = useState<SidePanel | null>(null);
+  const [place, setPlace] = useState<PlaceName>("chat");
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
-  const { control, controlling, state, sending, answer, answerMove, loadMoves, stopTask } = tasks;
+  const { control, controlling, state, sending, answer, answerMove, loadMoves, stopTask, settings, save } = tasks;
   const messages = useStore(store, (current) => current.messages);
   const plans = useMemo<Plans>(
     () => ({
@@ -80,41 +88,64 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const inChat = useMemo(() => new Set(messages.filter((message) => message.kind === "plan" && message.task_id !== null).map((message) => message.task_id)), [messages]);
   const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);
   const gateClosed = useMemo(() => state.closed.filter((entry) => !inChat.has(entry.request.task_id)), [state.closed, inChat]);
+  const job = useMemo(() => screenJob(state), [state]);
+  const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen) }), [state]);
+  const askAgain = useCallback(
+    (effect: SkippableEffect) => {
+      if (settings !== null) {
+        void save({ ...settings, skip_asking: settings.skip_asking.filter((listed) => listed !== effect) });
+      }
+    },
+    [settings, save],
+  );
 
   useEffect(() => conversation.connect(), [conversation]);
 
   return (
-    <div className="flex h-full">
-      <main className="flex min-w-0 flex-1 flex-col">
-        <Header
-          connection={connection}
-          accountName={account.name}
-          power={power.power}
-          engineName={power.power === null ? null : engineName(power.engines, power.power)}
-          panel={panel}
-          onTogglePanel={(next) => setPanel((open) => (open === next ? null : next))}
-          halt={tasks.halt}
-          onStop={tasks.stop}
-          taskCount={taskCount(tasks.state)}
-        />
-        {inView !== null && panel !== "tasks" && (
-          <TaskStrip
-            task={inView}
-            deviceId={device.id}
-            devices={devices.devices}
-            latest={movesOf(state, inView.id).at(-1) ?? null}
-            onDismiss={tasks.dismiss}
-            onOpenTasks={() => setPanel("tasks")}
-          />
+    <div className="flex h-full flex-col">
+      <Header
+        connection={connection}
+        deviceCount={devices.devices.length}
+        menu={{
+          account,
+          skipped: settings?.skip_asking ?? [],
+          saving: tasks.saving,
+          failure: tasks.failure,
+          developer: tasks.developer,
+          onAskAgain: askAgain,
+          onDrill: tasks.drill,
+          onSignOut: () => devices.remove(device.id),
+        }}
+        halt={tasks.halt}
+        onStop={tasks.stop}
+      />
+      <div className="flex min-h-0 flex-1 flex-col min-[960px]:flex-row">
+        <Sidebar current={place} signals={signals} onChoose={setPlace} />
+        <main className={`min-h-0 min-w-0 flex-1 flex-col ${place === "chat" ? "flex" : "hidden"}`}>
+          <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} />
+          <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
+        </main>
+        {place !== "chat" && (
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {place === "screen" && (
+              <ScreenPlace
+                task={job}
+                moves={job === null ? [] : movesOf(state, job.id)}
+                loaded={job !== null && state.loaded.has(job.id)}
+                picture={job === null ? null : (state.pictures.get(job.id) ?? null)}
+                deviceId={device.id}
+                devices={devices.devices}
+                stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
+                onLoad={loadMoves}
+                onStop={(taskId) => void stopTask(taskId)}
+              />
+            )}
+            {place === "devices" && <DevicesPlace state={devices} />}
+            {place === "memory" && <MemoryPlace state={memory} />}
+            {place === "models" && <ModelsPlace state={power} />}
+          </main>
         )}
-        <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} />
-        <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
-      </main>
-      {panel === "tasks" && <TasksPanel handle={tasks} deviceId={device.id} devices={devices.devices} onClose={() => setPanel(null)} />}
-      {panel === "devices" && <DevicesPanel state={devices} onClose={() => setPanel(null)} />}
-      {panel === "power" && <PowerPanel state={power} onClose={() => setPanel(null)} />}
-      {panel === "memory" && <MemoryPanel state={memory} onClose={() => setPanel(null)} />}
-      {panel === "safety" && <SafetyPanel handle={tasks} onClose={() => setPanel(null)} />}
+      </div>
       <ConfirmationGate
         queue={gateQueue}
         closed={gateClosed}

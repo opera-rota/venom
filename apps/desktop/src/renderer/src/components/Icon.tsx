@@ -23,6 +23,9 @@ const paths = {
   skip: "M3.5 3.5l6 4.5-6 4.5zM12.5 3.5v9",
   chevron: "M4.5 6.5L8 10l3.5-3.5",
   undo: "M3.5 6.5h6.5a3 3 0 0 1 0 6H6.5M6 3.5l-2.5 3 2.5 3",
+  chat: "M2.5 3h11v7.5H7.5l-3 2.5v-2.5h-2z",
+  screen: "M1.5 2.5h13v8.5h-13zM5.5 14h5M8 11v3",
+  user: "M8 7.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5zM2.5 14c.6-2.6 2.9-4.5 5.5-4.5s4.9 1.9 5.5 4.5",
 } as const;
 
 export type IconName = keyof typeof paths;

@@ -2,6 +2,7 @@ import type { Engine, EngineClass, PowerStatus, Proficiency } from "@venom/contr
 import type { PowerState } from "../use-power.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
+import { Place } from "./Place.tsx";
 
 const classView: Record<EngineClass, { readonly title: string; readonly blurb: string }> = {
   free: { title: "Free engines", blurb: "No power needed. A set number of answers every day." },
@@ -130,54 +131,44 @@ function EngineCard({
   );
 }
 
-export function PowerPanel({ state, onClose }: { readonly state: PowerState; readonly onClose: () => void }) {
+export function ModelsPlace({ state }: { readonly state: PowerState }) {
   const { power, engines, choosing, failure, choose } = state;
 
   return (
-    <aside aria-label="Power" className={`flex w-[360px] max-w-full shrink-0 flex-col ${surface.panel}`}>
-      <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-5 py-3.5">
-        <h2 className={`flex items-center gap-2 ${text.section}`}>
-          <Icon name="bolt" className="h-4 w-4 text-green-400" />
-          Power
-        </h2>
-        <button type="button" onClick={onClose} className={button.ghost} aria-label="Close power">
-          <Icon name="cross" />
-        </button>
-      </div>
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-        {power !== null && <Meter power={power} name={engineName(engines, power)} />}
-        {failure !== null && (
-          <p role="alert" className={field.error}>
-            <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{failure}</span>
-          </p>
-        )}
-        {classOrder.map((engineClass) => {
-          const group = engines.filter((engine) => engine.class === engineClass);
-          if (group.length === 0) {
-            return null;
-          }
-          return (
-            <section key={engineClass} aria-label={classView[engineClass].title} className="flex flex-col gap-2">
-              <div className="flex flex-col gap-0.5 px-1">
-                <h3 className="text-sm font-semibold text-ink">{classView[engineClass].title}</h3>
-                <p className={text.support}>{classView[engineClass].blurb}</p>
-              </div>
-              <ul className="flex flex-col gap-2">
-                {group.map((engine) => (
-                  <EngineCard
-                    key={engine.id}
-                    engine={engine}
-                    current={power?.engine === engine.id}
-                    busy={choosing !== null}
-                    onChoose={() => void choose(engine.id)}
-                  />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
-    </aside>
+    <Place title="Models" icon="bolt">
+      <p className={text.support}>The engine VENOM thinks with, and the power you have left.</p>
+      {power !== null && <Meter power={power} name={engineName(engines, power)} />}
+      {failure !== null && (
+        <p role="alert" className={field.error}>
+          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{failure}</span>
+        </p>
+      )}
+      {classOrder.map((engineClass) => {
+        const group = engines.filter((engine) => engine.class === engineClass);
+        if (group.length === 0) {
+          return null;
+        }
+        return (
+          <section key={engineClass} aria-label={classView[engineClass].title} className="flex flex-col gap-2">
+            <div className="flex flex-col gap-0.5 px-1">
+              <h3 className="text-sm font-semibold text-ink">{classView[engineClass].title}</h3>
+              <p className={text.support}>{classView[engineClass].blurb}</p>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {group.map((engine) => (
+                <EngineCard
+                  key={engine.id}
+                  engine={engine}
+                  current={power?.engine === engine.id}
+                  busy={choosing !== null}
+                  onChoose={() => void choose(engine.id)}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </Place>
   );
 }

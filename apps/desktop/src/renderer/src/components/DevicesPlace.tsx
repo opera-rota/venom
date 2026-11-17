@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DevicesState } from "../use-devices.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
+import { Place } from "./Place.tsx";
 
 const statusView: Record<Exclude<DeviceStatus, "revoked">, { readonly label: string; readonly icon: IconName; readonly dot: string; readonly tone: string }> = {
   active: { label: "Online", icon: "check", dot: "bg-status-ok", tone: "text-status-ok" },
@@ -95,33 +96,21 @@ function DeviceRow({ device, current, onRemove }: { readonly device: Device; rea
   );
 }
 
-export function DevicesPanel({ state, onClose }: { readonly state: DevicesState; readonly onClose: () => void }) {
-  const count = state.devices.length;
-
+export function DevicesPlace({ state }: { readonly state: DevicesState }) {
   return (
-    <aside aria-label="Devices" className={`flex w-[340px] max-w-full shrink-0 flex-col ${surface.panel}`}>
-      <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-5 py-3.5">
-        <h2 className={text.section}>
-          Devices <span className="tabular text-green-400">{count}</span>
-        </h2>
-        <button type="button" onClick={onClose} className={button.ghost} aria-label="Close devices">
-          <Icon name="cross" />
-        </button>
-      </div>
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-        <p className={text.support}>Every device here is a body of the same VENOM. Add another by choosing "Attach this device" on it.</p>
-        {state.failure !== null && (
-          <p role="alert" className={field.error}>
-            <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{state.failure}</span>
-          </p>
-        )}
-        <ul className="flex flex-col gap-3">
-          {state.devices.map((device) => (
-            <DeviceRow key={device.id} device={device} current={device.id === state.currentId} onRemove={() => state.remove(device.id)} />
-          ))}
-        </ul>
-      </div>
-    </aside>
+    <Place title="Devices" icon="devices" count={state.devices.length}>
+      <p className={text.support}>Every device here is a body of the same VENOM. Add another by choosing "Attach this device" on it.</p>
+      {state.failure !== null && (
+        <p role="alert" className={field.error}>
+          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{state.failure}</span>
+        </p>
+      )}
+      <ul className="flex flex-col gap-3">
+        {state.devices.map((device) => (
+          <DeviceRow key={device.id} device={device} current={device.id === state.currentId} onRemove={() => state.remove(device.id)} />
+        ))}
+      </ul>
+    </Place>
   );
 }
