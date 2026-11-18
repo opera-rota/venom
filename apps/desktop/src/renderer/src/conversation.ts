@@ -15,6 +15,7 @@ export interface Answer {
 interface Ordering {
   readonly next: number;
   readonly held: readonly LiveEvent[];
+  readonly open: boolean;
 }
 
 export interface ConversationState {
@@ -43,6 +44,8 @@ export const initialConversation: ConversationState = {
 const rememberedRequests = 200;
 
 const unfinished = "VENOM could not finish this request.";
+
+const closed: Ordering = { next: 0, held: [], open: false };
 
 const conversationEvents: ReadonlySet<GatewayEvent["type"]> = new Set(["message", "answer", "request", "forgotten"]);
 
@@ -95,6 +98,10 @@ function accept(state: ConversationState, requestId: string, question: QuestionR
   return { ...cleared, answers: withAnswer(cleared.answers, { ...answer, origin: question.request_id, askedId: question.message_id }) };
 }
 
+function opens(open: boolean, event: LiveEvent): boolean {
+  return event.type === "request" ? event.state === "accepted" : open;
+}
+
 function apply(state: ConversationState, event: LiveEvent): ConversationState {
   const requestId = event.request_id;
   switch (event.type) {
@@ -130,7 +137,7 @@ function apply(state: ConversationState, event: LiveEvent): ConversationState {
 }
 
 function settle(state: ConversationState, requestId: string, ordering: Ordering): ConversationState {
-  if (state.answers.has(requestId) || ordering.held.length > 0) {
+  if (ordering.open || state.answers.has(requestId) || ordering.held.length > 0) {
     return { ...state, ordering: new Map(state.ordering).set(requestId, ordering) };
   }
   const next = new Map(state.ordering);
@@ -143,7 +150,7 @@ function receive(state: ConversationState, event: LiveEvent): ConversationState 
   if (state.finished.has(requestId)) {
     return state;
   }
-  const ordering = state.ordering.get(requestId) ?? { next: 0, held: [] };
+  const ordering = state.ordering.get(requestId) ?? closed;
   if (event.sequence < ordering.next || ordering.held.some((held) => held.sequence === event.sequence)) {
     return state;
   }
@@ -153,14 +160,16 @@ function receive(state: ConversationState, event: LiveEvent): ConversationState 
   }
 
   let current = apply(state, event);
+  let open = opens(ordering.open, event);
   let next = ordering.next + 1;
   let held = ordering.held;
   while (held[0]?.sequence === next) {
     current = apply(current, held[0]);
+    open = opens(open, held[0]);
     held = held.slice(1);
     next += 1;
   }
-  return settle(current, requestId, { next, held });
+  return settle(current, requestId, { next, held, open });
 }
 
 function forget(state: ConversationState, messageIds: readonly string[]): ConversationState {
@@ -182,8 +191,9 @@ function closeGap(state: ConversationState, requestId: string): ConversationStat
     return state;
   }
   const current = ordering.held.reduce(apply, state);
+  const open = ordering.held.reduce(opens, ordering.open);
   const last = ordering.held.at(-1)?.sequence ?? ordering.next;
-  return settle(current, requestId, { next: last + 1, held: [] });
+  return settle(current, requestId, { next: last + 1, held: [], open });
 }
 
 function pendingAnswer({ request_id, question, text, failure }: PendingAnswer): Answer {
@@ -196,7 +206,7 @@ function fromHistory(state: ConversationState, history: MessageHistory, replay: 
     ...state,
     messages: [...history.messages].sort(byTime),
     answers: new Map(pending.map((entry) => [entry.request_id, pendingAnswer(entry)])),
-    ordering: new Map(pending.map((entry) => [entry.request_id, { next: entry.sequence + 1, held: [] }])),
+    ordering: new Map(pending.map((entry) => [entry.request_id, { next: entry.sequence + 1, held: [], open: true }])),
   };
   return replay.reduce(step, replaced);
 }

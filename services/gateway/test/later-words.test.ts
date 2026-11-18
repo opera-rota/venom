@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asksForLater, laterTitle } from "../src/later.ts";
+import { asksForLater, keptWords, laterTitle, withoutKeptWords, withoutLaterAsk } from "../src/later.ts";
 
 describe("fixed code hears when she wants something kept for later", () => {
   it.each([
@@ -31,6 +31,25 @@ describe("fixed code hears when she wants something kept for later", () => {
     ["Save this for later: the opening hours of the Kigali library", "The opening hours of the Kigali library"],
   ])("names %j as %j", (text, title) => {
     expect(laterTitle(text)).toBe(title);
+  });
+
+  it.each([
+    [`Kigali is the capital of Rwanda.\n\n${keptWords}`, "Kigali is the capital of Rwanda."],
+    [`Kigali. ${keptWords} It sits on many hills.`, "Kigali.\n\nIt sits on many hills."],
+    ["Kigali is the capital of Rwanda.", "Kigali is the capital of Rwanda."],
+    [keptWords, keptWords],
+  ])("takes VENOM's own kept line out of the model's answer %#", (text, cleaned) => {
+    expect(withoutKeptWords(text)).toBe(cleaned);
+  });
+
+  it.each([
+    ["What is the capital of Burundi? Keep it for later", "What is the capital of Burundi?"],
+    ["open Notepad, write hello buddy, and keep the result for later", "open Notepad, write hello buddy"],
+    ["Write a packing list\nwith socks, and save it for later please.", "Write a packing list\nwith socks"],
+    ["keep it for later", "keep it for later"],
+    ["What is the weather in Kigali?", "What is the weather in Kigali?"],
+  ])("gives the model %j without the keep words, as %j", (text, cleaned) => {
+    expect(withoutLaterAsk(text)).toBe(cleaned);
   });
 
   it("keeps a long title within 120 characters", () => {

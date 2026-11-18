@@ -9,7 +9,7 @@ import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { RequestTrace } from "./live-hub.ts";
 import type { GoalLoop } from "./loop.ts";
-import { asksForLater, keptWords, laterTitle } from "./later.ts";
+import { asksForLater, isKeptWords, keptWords, laterTitle, withoutKeptWords, withoutLaterAsk } from "./later.ts";
 import { goalStartWords, planWaiting } from "./words.ts";
 
 export const historyLimit = 20;
@@ -105,12 +105,12 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
     account_id: device.account_id,
     device_id: device.id,
     engine,
-    history,
+    history: history.filter((entry) => !(entry.speaker === "venom" && isKeptWords(entry.text))),
     memories: recall.memories.filter((item) => item.content !== remembered?.context.content),
     remembered: remembered?.context ?? null,
     connectors: [],
     task_mode: target === null ? "plan" : "loop",
-    text: asked.text,
+    text: withoutLaterAsk(asked.text),
   });
   const spentBeforeAnswer = addUsage(recall.usage, remembered?.usage ?? nothingUsed);
 
@@ -124,7 +124,7 @@ async function answer(exchange: Exchange, question: Question): Promise<void> {
           ? await planned(exchange, asked, event.plan)
           : event.intent === "task" && target !== null
             ? await goal(exchange, asked, target)
-            : { text: event.text, taskId: null, kind: "text", ...(event.document === null ? {} : { document: event.document }) };
+            : { text: withoutKeptWords(event.text), taskId: null, kind: "text", ...(event.document === null ? {} : { document: event.document }) };
         const reply = await store.recordMessage({
           device,
           requestId: question.requestId,

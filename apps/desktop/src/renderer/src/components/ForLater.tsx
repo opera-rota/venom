@@ -1,6 +1,6 @@
 import type { LaterItem } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
-import { unseenCount } from "../later-state.ts";
+import { laterPreview, unseenCount } from "../later-state.ts";
 import type { LaterState } from "../use-later.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
@@ -87,7 +87,7 @@ function LaterRow({ item, state, onOpenLink }: { readonly item: LaterItem; reado
           <Markdown source={item.body} onOpenLink={onOpenLink} />
         </div>
       ) : (
-        <p className={`line-clamp-2 break-words ${text.support}`}>{item.body}</p>
+        <p className={`line-clamp-2 break-words ${text.support}`}>{laterPreview(item.body)}</p>
       )}
       {removing ? (
         <RemoveGate item={item} onCancel={() => setRemoving(false)} onConfirm={() => void remove()} />

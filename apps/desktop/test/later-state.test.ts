@@ -1,6 +1,6 @@
 import type { GatewayEvent, LaterItem } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
-import { applyLaterEvent, unseenCount, withLater } from "../src/renderer/src/later-state.ts";
+import { applyLaterEvent, laterPreview, unseenCount, withLater } from "../src/renderer/src/later-state.ts";
 
 const account = "01a12a2d-0000-7000-8000-000000000001";
 
@@ -21,6 +21,15 @@ describe("for later items in the window", () => {
     const seen = withLater(items, { ...weather, seen_at: "2026-11-17T10:00:00.000Z" });
     expect(seen.map((entry) => entry.title)).toEqual(["Bus times", "Weather in Kigali"]);
     expect(unseenCount(seen)).toBe(1);
+  });
+
+  it.each([
+    ["The capital of Kenya is **Nairobi**.", "The capital of Kenya is Nairobi."],
+    ["## Produce\n- Bananas, 2 lb\n- *Fresh* spinach\n\n1. Rice\n- [x] Milk", "Produce · Bananas, 2 lb · Fresh spinach · Rice · Milk"],
+    ["See [the map](https://example.com) and `code`, snake_case_name stays.\n\n---", "See the map and code, snake_case_name stays."],
+    ["Done. Typed \"hello buddy\" (11 characters).", "Done. Typed \"hello buddy\" (11 characters)."],
+  ])("shows a plain preview of %j", (body, preview) => {
+    expect(laterPreview(body)).toBe(preview);
   });
 
   it("follows later and later_removed events from any device and ignores the rest", () => {

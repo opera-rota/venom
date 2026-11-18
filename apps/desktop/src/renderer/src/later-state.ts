@@ -23,6 +23,22 @@ export function applyLaterEvent(items: readonly LaterItem[], event: GatewayEvent
   }
 }
 
+export function laterPreview(body: string): string {
+  return body
+    .replace(/```[^\n]*\n?/gu, "")
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/u, "")
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/gu, "$1")
+        .replace(/(\*\*|__|~~|`)(.+?)\1/gu, "$2")
+        .replace(/(^|[^\w*])[*_](?=\S)(.+?)(?<=\S)[*_](?![\w*])/gu, "$1$2")
+        .trim(),
+    )
+    .filter((line) => line !== "" && !/^(?:[-*_]\s*){3,}$/u.test(line))
+    .join(" · ");
+}
+
 export function unseenCount(items: readonly LaterItem[]): number {
   return items.filter((item) => item.seen_at === null).length;
 }

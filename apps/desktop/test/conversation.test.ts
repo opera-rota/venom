@@ -104,6 +104,25 @@ describe("conversation state", () => {
     expect(isAnswering(done)).toBe(false);
   });
 
+  it("shows every VENOM line of one request, such as the For later line after the answer", () => {
+    const kept = message("01a12c54-0000-7000-8000-000000000004", "venom", "I kept this for later. You will find it in Screen, under For later.", "2026-10-25T10:00:03.000Z");
+    const events = stream(requestId);
+    const answered = play(events.slice(0, 5));
+    expect(answered.ordering.has(requestId)).toBe(true);
+    const both = play([{ type: "message", request_id: requestId, sequence: 5, emitted_at: at, message: kept }, completed(requestId, 6)], answered);
+    expect(both.messages.map((item) => item.text)).toEqual(["Explain what a mutex is", "A mutex is a lock.", kept.text]);
+    expect(both.answers.size).toBe(0);
+    expect(both.ordering.size).toBe(0);
+    expect(play([{ type: "message", request_id: requestId, sequence: 7, emitted_at: at, message: kept }], both)).toBe(both);
+  });
+
+  it("finishes a lone VENOM line that was never part of a question", () => {
+    const said = play([{ type: "message", request_id: otherId, sequence: 0, emitted_at: at, message: reply }]);
+    expect(said.messages).toEqual([reply]);
+    expect(said.ordering.size).toBe(0);
+    expect(said.finished.has(otherId)).toBe(true);
+  });
+
   it("puts events that arrive out of order back in order", () => {
     const events = stream(requestId);
     const shuffled = play(pick(events, 3, 0, 2));

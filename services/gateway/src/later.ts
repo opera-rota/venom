@@ -10,8 +10,25 @@ const fallbackTitle = "Kept for later";
 
 export const keptWords = "I kept this for later. You will find it in Screen, under For later.";
 
+export function withoutKeptWords(text: string): string {
+  if (!text.includes(keptWords)) {
+    return text;
+  }
+  const cleaned = text.split(keptWords).map((part) => part.trim()).filter((part) => part !== "").join("\n\n");
+  return cleaned === "" ? text : cleaned;
+}
+
+export function isKeptWords(text: string): boolean {
+  return text.trim() === keptWords;
+}
+
 export function asksForLater(text: string): boolean {
   return keepPhrase.test(text) || showPhrase.test(text);
+}
+
+export function withoutLaterAsk(text: string): string {
+  const cleaned = text.replace(keepTail, " ").replace(showTail, " ").replace(/[^\S\n]{2,}/gu, " ").replace(/^[\s,;:.!?-]+|[\s,;:-]+$/gu, "").trim();
+  return cleaned === "" ? text : cleaned;
 }
 
 export function laterTitle(text: string): string {

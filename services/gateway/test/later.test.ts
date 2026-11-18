@@ -1,16 +1,19 @@
 import { LaterItem, LaterList, SendMessageAccepted, type DeviceSession, type GatewayEvent } from "@venom/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { answerWith, scriptedBrain } from "../src/testing.ts";
+import { keptWords } from "../src/later.ts";
+import { answerWith, scriptedBrain, type ScriptedBrain } from "../src/testing.ts";
 import { call, createEnvironment, destroyEnvironment, openLive, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
 
 let environment: Environment;
 let gateway: RunningGateway;
 let session: DeviceSession;
 let stranger: DeviceSession;
+let brain: ScriptedBrain;
 
 beforeAll(async () => {
   environment = await createEnvironment();
-  gateway = await startGateway(environment, { brain: scriptedBrain(answerWith(() => "Kigali is the capital of Rwanda.")) });
+  brain = scriptedBrain(answerWith((text) => (text.includes("Burundi") ? `Gitega is the capital of Burundi.\n\n${keptWords}` : "Kigali is the capital of Rwanda.")));
+  gateway = await startGateway(environment, { brain });
   session = await signUpOverHttp(gateway.base, environment.mailer, "later@venom.test", "later secret word");
   stranger = await signUpOverHttp(gateway.base, environment.mailer, "stranger@venom.test", "stranger secret word");
 });
@@ -65,5 +68,16 @@ describe("for later: an answer is kept only when she asks", () => {
     expect((await listed(session.device_token)).items).toEqual([]);
     expect((await call(gateway.base, "DELETE", `/v1/later/${id}`, { token: session.device_token })).status).toBe(404);
     live.socket.close();
+  });
+
+  it("says where it kept the answer only once, even when the model copies the line, and never shows the model that line", async () => {
+    const events = await ask("What is the capital of Burundi? Keep it for later");
+    const said = events.flatMap((event) => (event.type === "message" && event.message.speaker === "venom" ? [event.message.text] : []));
+    expect(said).toEqual(["Gitega is the capital of Burundi.", keptWords]);
+    expect((await listed(session.device_token)).items.map((item) => item.body)).toEqual(["Gitega is the capital of Burundi."]);
+    expect(brain.requests.at(-1)?.text).toBe("What is the capital of Burundi?");
+    const history = brain.requests.at(-1)?.history ?? [];
+    expect(history.some((entry) => entry.text === "Kigali is the capital of Rwanda.")).toBe(true);
+    expect(history.some((entry) => entry.text.includes(keptWords))).toBe(false);
   });
 });
