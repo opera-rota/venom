@@ -411,6 +411,14 @@ class RunPlan(BaseModel):
     kind: Literal["run"]
 
 
+class ScreenAnswer(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["answer"]
+    sdp: Annotated[str, Field(max_length=16384, min_length=1)]
+
+
 class ScreenBox(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -419,6 +427,22 @@ class ScreenBox(BaseModel):
     y: Annotated[int, Field(ge=0, le=4096)]
     width: Annotated[int, Field(ge=1, le=4096)]
     height: Annotated[int, Field(ge=1, le=4096)]
+
+
+type SdpMid = Annotated[str, Field(max_length=64)]
+
+
+type SdpMLineIndex = Annotated[int, Field(ge=0, le=16)]
+
+
+class ScreenCandidate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["candidate"]
+    candidate: Annotated[str, Field(max_length=1024)]
+    sdp_mid: SdpMid | None
+    sdp_m_line_index: SdpMLineIndex | None
 
 
 type Mark = Annotated[int, Field(ge=1, le=60)]
@@ -435,7 +459,22 @@ class ScreenKeyPress(BaseModel):
     key: ScreenKey
 
 
+class ScreenLeave(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["leave"]
+
+
 type ScreenMarkKind = Literal["button", "link", "box", "check", "list", "item", "tab", "menu", "text", "other"]
+
+
+class ScreenOffer(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["offer"]
+    sdp: Annotated[str, Field(max_length=16384, min_length=1)]
 
 
 class ScreenOpen(BaseModel):
@@ -461,6 +500,13 @@ class ScreenPoint(BaseModel):
     )
     x: Annotated[int, Field(ge=0, le=4096)]
     y: Annotated[int, Field(ge=0, le=4096)]
+
+
+class ScreenRefused(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["refused"]
 
 
 class ScreenScroll(BaseModel):
@@ -490,6 +536,13 @@ class ScreenType(BaseModel):
     text: Annotated[str, Field(max_length=2000, min_length=1)]
     mark: Mark | None
     enter: bool
+
+
+class ScreenWatch(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["watch"]
 
 
 type ScriptLanguage = Literal["powershell", "python"]
@@ -1252,6 +1305,34 @@ type ScreenMove = Annotated[
 ]
 
 
+type ScreenSignal = Annotated[
+    ScreenWatch | ScreenLeave | ScreenRefused | ScreenOffer | ScreenAnswer | ScreenCandidate,
+    Field(discriminator="kind"),
+]
+
+
+class ScreenSignalEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["screen_signal"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    from_device_id: UUID
+    session_id: UUID
+    signal: ScreenSignal
+
+
+class SendScreenSignal(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    to_device_id: UUID
+    session_id: UUID
+    signal: ScreenSignal
+
+
 class SignupFinish(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1736,12 +1817,12 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | ScreenBox | ScreenClick | ScreenKeyPress | ScreenMark | ScreenOpen | ScreenPause | ScreenPoint | ScreenScroll | ScreenSpot | ScreenType | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | ScreenAnswer | ScreenBox | ScreenCandidate | ScreenClick | ScreenKeyPress | ScreenLeave | ScreenMark | ScreenOffer | ScreenOpen | ScreenPause | ScreenPoint | ScreenRefused | ScreenScroll | ScreenSignalEvent | ScreenSpot | ScreenType | ScreenWatch | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | SendScreenSignal | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 
 
 type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent | LaterEvent | LaterRemovedEvent,
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent | LaterEvent | LaterRemovedEvent | ScreenSignalEvent,
     Field(discriminator="type"),
 ]
