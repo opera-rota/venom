@@ -1,4 +1,5 @@
 import { ChatDocument, ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
+import { newKeyPair } from "@venom/safety/device";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
@@ -13,6 +14,7 @@ import { GatewayClient } from "./gateway-client.ts";
 import { HaltController } from "./halt.ts";
 import { HandHelper } from "./hand-helper.ts";
 import { Hands } from "./hands.ts";
+import { computerLink } from "./live-link.ts";
 import { Onboarding } from "./onboarding.ts";
 import { expiredNotice, removedNotice, SessionManager } from "./session-manager.ts";
 import { CredentialVault } from "./vault.ts";
@@ -132,9 +134,10 @@ function wire(): void {
     encrypt: (plain) => safeStorage.encryptString(plain),
     decrypt: (sealed) => safeStorage.decryptString(sealed),
   });
-  const sessions = new SessionManager({ api, vault });
+  const sessions = new SessionManager({ api, vault, newKeys: newKeyPair });
   const gateway = new GatewayClient({
     api,
+    link: computerLink,
     trust: async () => {
       await sessions.ensureKeys();
       return sessions.trust;

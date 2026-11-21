@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { setTimeout as sleep } from "node:timers/promises";
 import type { HaltView } from "../shared/bridge.ts";
 import type { HaltResult } from "./gateway-client.ts";
 
@@ -33,7 +31,7 @@ export class HaltController {
 
   press(): string {
     this.#options.haltLocally();
-    const stopId = randomUUID();
+    const stopId = crypto.randomUUID();
     this.#clearTimers();
     this.#attempt = stopId;
     this.#set({ kind: "stopping" });
@@ -78,7 +76,7 @@ export class HaltController {
       if (result.code === "network" && this.#view.kind !== "local") {
         this.#set({ kind: "local" });
       }
-      await sleep(retryMs);
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
     }
   }
 

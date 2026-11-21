@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "install-electron && electron-vite dev",
     "dev:second": "install-electron && electron-vite dev -- --profile=second",
+    "dev:phone-test": "install-electron && electron-vite dev -- --profile=phone-test",
     "build": "electron-vite build",
     "preview": "install-electron && electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",

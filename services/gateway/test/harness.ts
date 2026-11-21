@@ -12,6 +12,7 @@ import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
 import { brainEmbedder, buildGateway } from "../src/app.ts";
 import type { LoopLimits } from "../src/loop.ts";
+import type { PhoneApp } from "../src/phone.ts";
 import { scriptedBrain, type ScriptedBrain } from "../src/testing.ts";
 
 export interface Environment {
@@ -57,11 +58,12 @@ export interface GatewayStart {
   readonly freeDailyAnswers?: number;
   readonly commandGraceMs?: number;
   readonly loopLimits?: Partial<LoopLimits>;
+  readonly phone?: PhoneApp;
 }
 
 export async function startGateway(
   environment: Environment,
-  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100, commandGraceMs, loopLimits }: GatewayStart = {},
+  { heartbeatMs, brain = scriptedBrain(), freeDailyAnswers = 100, commandGraceMs, loopLimits, phone }: GatewayStart = {},
 ): Promise<RunningGateway> {
   const store: Store = createStore(environment.database.appUrl);
   const sql = connect(environment.database.appUrl);
@@ -86,6 +88,7 @@ export async function startGateway(
     ...(heartbeatMs === undefined ? {} : { heartbeatMs }),
     ...(commandGraceMs === undefined ? {} : { commandGraceMs }),
     ...(loopLimits === undefined ? {} : { loopLimits }),
+    ...(phone === undefined ? {} : { phone }),
   });
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
 

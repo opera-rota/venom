@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["vite/client", "node"],
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+    "paths": {
+      "@desktop/*": ["../desktop/src/*"]
+    }
+  },
+  "include": ["src", "test", "vite.config.ts", "../desktop/src/renderer/src/env.d.ts"]
+}

@@ -3,6 +3,7 @@ import type { DeviceSession, GatewayEvent } from "@venom/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Api } from "../src/main/api.ts";
 import { GatewayClient, type Revocation } from "../src/main/gateway-client.ts";
+import { computerLink } from "../src/main/live-link.ts";
 import type { ConnectionState } from "../src/shared/bridge.ts";
 import { createAccount, createBackend, expectOk, onboardingFor, type Backend } from "./support.ts";
 
@@ -12,7 +13,7 @@ let session: DeviceSession;
 const clients: GatewayClient[] = [];
 
 function startClient(token: string, url = backend.url()): GatewayClient {
-  const client = new GatewayClient({ api: new Api(url), retryBaseMs: 50, retryMaxMs: 200 });
+  const client = new GatewayClient({ api: new Api(url), link: computerLink, retryBaseMs: 50, retryMaxMs: 200 });
   clients.push(client);
   client.start(token);
   return client;

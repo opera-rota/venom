@@ -1,12 +1,13 @@
 import { DeviceKeyEnrolled, Session, type DeviceSession } from "@venom/contracts";
-import { newKeyPair, type KeyPair } from "@venom/safety/device";
+import type { KeyPair } from "@venom/safety/device";
 import type { AuthView, StepResult } from "../shared/bridge.ts";
 import type { Api } from "./api.ts";
-import type { CredentialVault, StoredCredential } from "./vault.ts";
+import type { CredentialStore, StoredCredential } from "./credential.ts";
 
 export interface SessionManagerOptions {
   readonly api: Api;
-  readonly vault: CredentialVault;
+  readonly vault: CredentialStore;
+  readonly newKeys: () => KeyPair;
 }
 
 export const removedNotice = "This device was removed from your VENOM. Attach it again with your email and secret word.";
@@ -21,14 +22,16 @@ export interface DeviceTrust {
 
 export class SessionManager {
   readonly #api: Api;
-  readonly #vault: CredentialVault;
+  readonly #vault: CredentialStore;
+  readonly #newKeys: () => KeyPair;
   readonly #listeners = new Set<(view: AuthView) => void>();
   #view: AuthView = { kind: "loading" };
   #credential: StoredCredential | null = null;
 
-  constructor({ api, vault }: SessionManagerOptions) {
+  constructor({ api, vault, newKeys }: SessionManagerOptions) {
     this.#api = api;
     this.#vault = vault;
+    this.#newKeys = newKeys;
   }
 
   get view(): AuthView {
@@ -54,7 +57,7 @@ export class SessionManager {
       return false;
     }
     if (credential.keys === undefined) {
-      const pair = newKeyPair();
+      const pair = this.#newKeys();
       credential = { ...credential, keys: { private_key: pair.privateKey, public_key: pair.publicKey, server_key: null } };
       this.#credential = credential;
       this.#vault.write(credential);

@@ -16,6 +16,8 @@
     "brain": "uv run --package venom-orchestrator venom-brain",
     "desktop": "pnpm --filter @venom/desktop run dev",
     "desktop:second": "pnpm --filter @venom/desktop run dev:second",
+    "desktop:phone-test": "pnpm --filter @venom/desktop run dev:phone-test",
+    "phone:build": "pnpm --filter @venom/phone run build",
     "generate": "pnpm --filter @venom/contracts generate",
     "typecheck": "pnpm -r typecheck && pyright",
     "test": "pnpm -r test && uv run pytest",

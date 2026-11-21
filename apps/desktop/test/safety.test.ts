@@ -8,6 +8,7 @@ import { Api } from "../src/main/api.ts";
 import { GatewayClient } from "../src/main/gateway-client.ts";
 import { HaltController } from "../src/main/halt.ts";
 import { Hands } from "../src/main/hands.ts";
+import { computerLink } from "../src/main/live-link.ts";
 import { SessionManager } from "../src/main/session-manager.ts";
 import { CredentialVault } from "../src/main/vault.ts";
 import type { HaltView } from "../src/shared/bridge.ts";
@@ -50,10 +51,11 @@ async function symbiote(session?: DeviceSession): Promise<Symbiote> {
   const signedUp = session ?? (await createAccount(backend, `symbiote-${accounts}@venom.test`, "symbiote secret word"));
   const api = new Api(backend.url());
   const vault = new CredentialVault(join(mkdtempSync(join(tmpdir(), "venom-vault-")), "device-credential.bin"), testEncryptor);
-  const sessions = new SessionManager({ api, vault });
+  const sessions = new SessionManager({ api, vault, newKeys: newKeyPair });
   await sessions.signIn(signedUp);
   const gateway = new GatewayClient({
     api,
+    link: computerLink,
     retryBaseMs: 50,
     retryMaxMs: 200,
     trust: async () => {
@@ -224,6 +226,7 @@ describe("refusals", () => {
     const trust = device.sessions.trust;
     const impostor = new GatewayClient({
       api: new Api(backend.url()),
+      link: computerLink,
       retryBaseMs: 50,
       retryMaxMs: 100,
       trust: async () => (trust === null ? null : { ...trust, pair: newKeyPair() }),

@@ -8,6 +8,13 @@ import { ConfirmationAnswered } from "./safety.ts";
 import { contracts } from "./registry.ts";
 import { TaskMove, Thumbnail } from "./screen.ts";
 
+export const liveProtocols = {
+  link: "venom-live",
+  bearer: "venom-bearer",
+  challenge: "venom-challenge",
+  signature: "venom-signature",
+} as const;
+
 export const MessageText = z
   .string()
   .min(1)

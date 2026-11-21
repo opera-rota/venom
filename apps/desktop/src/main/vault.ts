@@ -1,6 +1,5 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
-import { DeviceToken, PublicKey, Session } from "@venom/contracts";
-import { z } from "zod";
+import { StoredCredential, type CredentialStore } from "./credential.ts";
 
 export interface Encryptor {
   available(): boolean;
@@ -8,23 +7,7 @@ export interface Encryptor {
   decrypt(sealed: Buffer): string;
 }
 
-export const StoredKeys = z.strictObject({
-  private_key: PublicKey,
-  public_key: PublicKey,
-  server_key: PublicKey.nullable(),
-});
-
-export const StoredCredential = z.strictObject({
-  device_token: DeviceToken,
-  session: Session,
-  keys: StoredKeys.optional(),
-});
-
-export type StoredKeys = z.infer<typeof StoredKeys>;
-
-export type StoredCredential = z.infer<typeof StoredCredential>;
-
-export class CredentialVault {
+export class CredentialVault implements CredentialStore {
   readonly #file: string;
   readonly #encryptor: Encryptor;
 

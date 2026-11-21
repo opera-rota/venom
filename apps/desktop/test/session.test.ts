@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { newKeyPair } from "@venom/safety/device";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Api } from "../src/main/api.ts";
 import { expiredNotice, SessionManager } from "../src/main/session-manager.ts";
@@ -55,13 +56,13 @@ describe("session manager", () => {
     const api = new Api(backend.url());
     const session = await createAccount(backend, "restart@venom.test", "restart secret word");
 
-    const first = new SessionManager({ api, vault: vaultIn(folder) });
+    const first = new SessionManager({ api, vault: vaultIn(folder), newKeys: newKeyPair });
     await first.start();
     expect(first.view.kind).toBe("signed_out");
     await first.signIn(session);
     expect(first.view).toMatchObject({ kind: "signed_in", account: { email: "restart@venom.test" } });
 
-    const reopened = new SessionManager({ api, vault: vaultIn(folder) });
+    const reopened = new SessionManager({ api, vault: vaultIn(folder), newKeys: newKeyPair });
     const views: AuthView[] = [];
     reopened.onChange((view) => views.push(view));
     await reopened.start();
@@ -72,7 +73,7 @@ describe("session manager", () => {
     expect(reopened.view).toEqual({ kind: "signed_out", notice: null });
     expect(vaultIn(folder).read()).toBeNull();
 
-    const afterSignOut = new SessionManager({ api, vault: vaultIn(folder) });
+    const afterSignOut = new SessionManager({ api, vault: vaultIn(folder), newKeys: newKeyPair });
     await afterSignOut.start();
     expect(afterSignOut.view.kind).toBe("signed_out");
   });
@@ -85,7 +86,7 @@ describe("session manager", () => {
 
     await api.request("DELETE", `/v1/devices/${session.device.id}`, { token: session.device_token });
 
-    const manager = new SessionManager({ api, vault: vaultIn(folder) });
+    const manager = new SessionManager({ api, vault: vaultIn(folder), newKeys: newKeyPair });
     await manager.start();
     expect(manager.view).toEqual({ kind: "signed_out", notice: expiredNotice });
   });
@@ -95,7 +96,7 @@ describe("session manager", () => {
     const session = await createAccount(backend, "offline@venom.test", "offline secret word");
     vaultIn(folder).write({ device_token: session.device_token, session: { account: session.account, device: session.device } });
 
-    const manager = new SessionManager({ api: new Api("http://127.0.0.1:9"), vault: vaultIn(folder) });
+    const manager = new SessionManager({ api: new Api("http://127.0.0.1:9"), vault: vaultIn(folder), newKeys: newKeyPair });
     await manager.start();
     expect(manager.view.kind).toBe("signed_in");
   });

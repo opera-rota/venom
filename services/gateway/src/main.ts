@@ -7,6 +7,7 @@ import { createGoals, createTasks } from "@venom/tasks";
 import { v7 as uuidv7 } from "uuid";
 import { brainEmbedder, buildGateway, createBrainClient } from "./app.ts";
 import { loadConfig } from "./config.ts";
+import { loadPhoneApp } from "./phone.ts";
 
 const config = loadConfig();
 const store = createStore(config.databaseUrl);
@@ -28,6 +29,7 @@ const memory = createMemory({
   onEmbeddingProblem: (error) => app.log.warn({ err: error }, "could not embed memory; it is found by its words until the brain can embed again"),
 });
 const backfillEveryMs = 10 * 60_000;
+const phone = loadPhoneApp(config.phoneDir);
 
 const app = await buildGateway({
   store,
@@ -39,6 +41,7 @@ const app = await buildGateway({
   goals,
   trust,
   signer,
+  phone,
   logger: {
     level: config.logLevel,
     ...(process.stdout.isTTY && {
@@ -60,6 +63,12 @@ async function backfill(): Promise<void> {
 
 const backfillTimer = setInterval(() => void backfill(), backfillEveryMs);
 backfillTimer.unref();
+
+if (phone === null) {
+  app.log.info({ folder: config.phoneDir }, "the phone app is not built yet; run pnpm phone:build to serve it at /phone/");
+} else {
+  app.log.info("the phone app is ready at /phone/");
+}
 
 if (commandKey.created) {
   app.log.warn({ file: config.commandKeyFile }, "created a new command key; back this file up, every device trusts it");

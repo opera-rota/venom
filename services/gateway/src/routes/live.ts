@@ -1,7 +1,8 @@
-import { ApiError, Id, Signature } from "@venom/contracts";
+import { ApiError, Id, liveProtocols, Signature } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
+import { offered } from "../auth.ts";
 import { closeCodes, type GatewayContext } from "../context.ts";
 
 export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
@@ -14,8 +15,8 @@ export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
     if (device === null || !(await trust.hasKey(device))) {
       return;
     }
-    const challengeId = Id.safeParse(request.headers["x-venom-challenge"]);
-    const signature = Signature.safeParse(request.headers["x-venom-signature"]);
+    const challengeId = Id.safeParse(request.headers["x-venom-challenge"] ?? offered(request, liveProtocols.challenge));
+    const signature = Signature.safeParse(request.headers["x-venom-signature"] ?? offered(request, liveProtocols.signature));
     if (challengeId.success && signature.success && (await trust.prove(device, challengeId.data, signature.data))) {
       proven.add(request);
       return;

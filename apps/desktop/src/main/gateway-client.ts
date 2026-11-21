@@ -33,7 +33,7 @@ import {
   type ConfirmationStrictness,
   type DrillKind,
 } from "@venom/contracts";
-import { liveChallengeText, signText } from "@venom/safety/device";
+import { liveChallengeText } from "@venom/safety/texts";
 import type {
   AnswerResult,
   ConnectionState,
@@ -56,8 +56,19 @@ import type {
 import type { Api, Result } from "./api.ts";
 import type { DeviceTrust } from "./session-manager.ts";
 
+export interface LiveProof {
+  readonly challengeId: string;
+  readonly signature: string;
+}
+
+export interface LiveLink {
+  sign(trust: DeviceTrust, text: string): string;
+  open(url: URL, token: string, proof: LiveProof | null): WebSocket;
+}
+
 export interface GatewayClientOptions {
   readonly api: Api;
+  readonly link: LiveLink;
   readonly trust?: () => Promise<DeviceTrust | null>;
   readonly retryBaseMs?: number;
   readonly retryMaxMs?: number;
@@ -94,6 +105,7 @@ function decodeFrame(data: unknown): Frame | null {
 
 export class GatewayClient {
   readonly #api: Api;
+  readonly #link: LiveLink;
   readonly #trust: () => Promise<DeviceTrust | null>;
   readonly #retryBaseMs: number;
   readonly #retryMaxMs: number;
@@ -108,8 +120,9 @@ export class GatewayClient {
   #attempt = 0;
   #generation = 0;
 
-  constructor({ api, trust = async () => null, retryBaseMs = 500, retryMaxMs = 10_000 }: GatewayClientOptions) {
+  constructor({ api, link, trust = async () => null, retryBaseMs = 500, retryMaxMs = 10_000 }: GatewayClientOptions) {
     this.#api = api;
+    this.#link = link;
     this.#trust = trust;
     this.#retryBaseMs = retryBaseMs;
     this.#retryMaxMs = retryMaxMs;
@@ -492,10 +505,10 @@ export class GatewayClient {
     }
   }
 
-  async #proof(token: string): Promise<Record<string, string> | null> {
+  async #proof(token: string): Promise<{ readonly proof: LiveProof | null } | null> {
     const trust = await this.#trust().catch(() => null);
     if (trust?.serverKey == null) {
-      return {};
+      return { proof: null };
     }
     const challenge = await this.#api.request("POST", "/v1/live/challenge", { schema: LiveChallenge, token });
     if (!challenge.ok) {
@@ -503,10 +516,7 @@ export class GatewayClient {
       return null;
     }
     const { challenge_id, nonce } = challenge.value;
-    return {
-      "x-venom-challenge": challenge_id,
-      "x-venom-signature": signText(trust.pair, liveChallengeText(trust.deviceId, challenge_id, nonce)),
-    };
+    return { proof: { challengeId: challenge_id, signature: this.#link.sign(trust, liveChallengeText(trust.deviceId, challenge_id, nonce)) } };
   }
 
   #connect(): void {
@@ -516,24 +526,24 @@ export class GatewayClient {
     }
     this.#generation += 1;
     const generation = this.#generation;
-    void this.#proof(token).then((proof) => {
+    void this.#proof(token).then((proven) => {
       if (this.#token !== token || this.#generation !== generation) {
         return;
       }
-      if (proof === null) {
+      if (proven === null) {
         this.#setState("offline");
         this.#scheduleReconnect();
         return;
       }
-      this.#open(token, proof);
+      this.#open(token, proven.proof);
     });
   }
 
-  #open(token: string, proof: Record<string, string>): void {
+  #open(token: string, proof: LiveProof | null): void {
     const url = this.#api.url("/v1/live");
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
-    const socket = new WebSocket(url, { headers: { authorization: `Bearer ${token}`, ...proof } });
+    const socket = this.#link.open(url, token, proof);
     this.#socket = socket;
 
     socket.addEventListener("open", () => {

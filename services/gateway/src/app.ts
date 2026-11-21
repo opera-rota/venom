@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { EngineId, type Task } from "@venom/contracts";
+import { EngineId, liveProtocols, type Task } from "@venom/contracts";
 import type { Kept, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import type { Memory } from "@venom/memory";
@@ -16,6 +16,7 @@ import { installErrorHandling } from "./errors.ts";
 import { asksForLater, keptWords, laterTitle } from "./later.ts";
 import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, laterEvent, laterRemovedEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
 import { GoalLoop, type LoopLimits } from "./loop.ts";
+import { phoneRoutes, type PhoneApp } from "./phone.ts";
 import { LiveRequests } from "./requests.ts";
 import { TaskRunner, type SaidKind } from "./runner.ts";
 import { deviceRoutes } from "./routes/devices.ts";
@@ -45,12 +46,13 @@ export interface GatewayOptions {
   readonly loopLimits?: Partial<LoopLimits>;
   readonly logger: NonNullable<FastifyServerOptions<RawServerDefault>["logger"]>;
   readonly heartbeatMs?: number;
+  readonly phone?: PhoneApp | null;
 }
 
 const availabilityMs = 30_000;
 const everyEngine: Availability = new Set(EngineId.options);
 
-export async function buildGateway({ store, identity, brain, power, memory, tasks, goals, trust, signer, commandGraceMs, loopLimits, logger, heartbeatMs = 30_000 }: GatewayOptions): Promise<FastifyInstance> {
+export async function buildGateway({ store, identity, brain, power, memory, tasks, goals, trust, signer, commandGraceMs, loopLimits, logger, heartbeatMs = 30_000, phone = null }: GatewayOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     bodyLimit: 64 * 1024,
@@ -215,7 +217,12 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     await Promise.allSettled(inflight);
   });
 
-  await app.register(websocket, { options: { maxPayload: 16 * 1024 } });
+  await app.register(websocket, {
+    options: {
+      maxPayload: 16 * 1024,
+      handleProtocols: (protocols: ReadonlySet<string>) => (protocols.has(liveProtocols.link) ? liveProtocols.link : false),
+    },
+  });
 
   app.get("/healthz", async () => {
     await store.ping();
@@ -231,6 +238,9 @@ export async function buildGateway({ store, identity, brain, power, memory, task
   safetyRoutes(app, context);
   taskRoutes(app, context);
   liveRoute(app, context);
+  if (phone !== null) {
+    phoneRoutes(app, phone);
+  }
 
   return app;
 }

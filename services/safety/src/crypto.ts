@@ -1,5 +1,8 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
 import { CommandPayload, PublicKey, safetyLimits, SignedCommand } from "@venom/contracts";
+import { commandText } from "./texts.ts";
+
+export { commandText, liveChallengeText } from "./texts.ts";
 
 export interface KeyPair {
   readonly privateKey: string;
@@ -56,14 +59,6 @@ export function verifyText(publicKey: string, text: string, signature: string): 
   } catch {
     return false;
   }
-}
-
-export function liveChallengeText(deviceId: string, challengeId: string, nonce: string): string {
-  return `venom-live-v1\n${deviceId}\n${challengeId}\n${nonce}`;
-}
-
-export function commandText(payload: string): string {
-  return `venom-command-v1\n${payload}`;
 }
 
 function readPayload(text: string): CommandPayload | null {

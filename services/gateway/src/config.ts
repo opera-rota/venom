@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { databaseUrls } from "@venom/db";
 import { z } from "zod";
 
@@ -13,6 +14,7 @@ const Environment = z.object({
   VENOM_FREE_DAILY_ANSWERS: z.coerce.number().int().min(0).max(10_000).default(30),
   VENOM_IDENTITY_KEY_FILE: z.string().min(1).default(join(homedir(), ".venom", "identity-server-setup")),
   VENOM_COMMAND_KEY_FILE: z.string().min(1).default(join(homedir(), ".venom", "command-key")),
+  VENOM_PHONE_DIR: z.string().min(1).default(fileURLToPath(new URL("../../../apps/phone/dist", import.meta.url))),
 });
 
 export interface GatewayConfig {
@@ -26,6 +28,7 @@ export interface GatewayConfig {
   readonly commandKeyFile: string;
   readonly brainUrl: string;
   readonly freeDailyAnswers: number;
+  readonly phoneDir: string;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): GatewayConfig {
@@ -41,5 +44,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Gatewa
     commandKeyFile: parsed.VENOM_COMMAND_KEY_FILE,
     brainUrl: parsed.VENOM_BRAIN_URL,
     freeDailyAnswers: parsed.VENOM_FREE_DAILY_ANSWERS,
+    phoneDir: parsed.VENOM_PHONE_DIR,
   };
 }
