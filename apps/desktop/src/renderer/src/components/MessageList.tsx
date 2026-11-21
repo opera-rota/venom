@@ -8,7 +8,7 @@ import { arrange, sentFrom, type Answer } from "../conversation.ts";
 import { moveAnswerWords } from "../move-words.ts";
 import { button, mark, surface, text } from "../ui.ts";
 import { DocumentCard } from "./DocumentCard.tsx";
-import { LogoMark } from "./Header.tsx";
+import { Emblem } from "./Emblem.tsx";
 import { Icon } from "./Icon.tsx";
 import { JobCard } from "./JobCard.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -26,15 +26,32 @@ interface BylineProps {
 
 function Byline({ mine, time, from = null }: BylineProps) {
   return (
-    <div className={`flex items-baseline gap-2 ${text.detail}`}>
-      {from !== null && <span className={mark.tag}>{from}</span>}
-      <span className="text-ink-muted">{mine ? "You" : "VENOM"}</span>
+    <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${mine ? "justify-end" : ""} ${text.detail}`}>
+      {from !== null && <span className={`${mark.tag} max-w-full truncate`}>{from}</span>}
+      <span className={mine ? "text-ink-muted" : "hud text-[9.5px] text-green-300/80"}>{mine ? "You" : "VENOM"}</span>
       {time !== null && (
-        <time className="tabular text-ink-faint" dateTime={time}>
+        <time className="tabular whitespace-nowrap text-ink-faint" dateTime={time}>
           {timeFormat.format(new Date(time))}
         </time>
       )}
+      {mine && <Icon name="check" className="h-3 w-3 text-green-400" />}
     </div>
+  );
+}
+
+function YouMark() {
+  return (
+    <span className="mt-6 hidden h-9 w-9 shrink-0 place-items-center rounded-full border border-line-strong bg-linear-to-br from-surface-3 to-surface-1 text-ink-muted sm:grid" aria-hidden="true">
+      <Icon name="user" className="h-4 w-4" />
+    </span>
+  );
+}
+
+function VenomMark() {
+  return (
+    <span className="mt-6 hidden shrink-0 sm:block">
+      <Emblem size={38} alive={false} />
+    </span>
   );
 }
 
@@ -142,43 +159,47 @@ const MessageItem = memo(function MessageItem({ message, from, plans, task, job,
   const mine = message.speaker === "user";
   const edge = message.kind === "question" ? "border-l-4 border-l-status-wait" : message.kind === "report" ? (reportEdge[task?.status ?? "completed"] ?? "") : "";
   return (
-    <article className={`flex flex-col gap-1.5 ${mine ? "items-end" : "items-start"}`}>
-      <Byline mine={mine} time={message.created_at} from={from} />
-      {mine ? (
-        <p className={`max-w-[85%] px-3.5 py-2.5 whitespace-pre-wrap break-words text-ink ${surface.bubble}`}>{message.text}</p>
-      ) : (
-        <div className={`max-w-[92%] px-4 py-3 ${surface.card} ${edge}`}>
-          <Markdown source={message.text} onOpenLink={onOpenLink} />
-          {message.document !== null && <DocumentCard document={message.document} onOpenLink={onOpenLink} onSave={onSaveDocument} />}
-          {message.kind === "plan" && (
-            <PlanCard
-              task={task}
-              deviceId={plans.deviceId}
-              devices={plans.devices}
-              discarding={message.task_id !== null && plans.discarding(message.task_id)}
-              starting={message.task_id !== null && plans.starting(message.task_id)}
-              output={plans.output}
-              onDiscard={plans.discard}
-              onRun={plans.run}
-            />
-          )}
-          {message.kind === "question" && <Question message={message} plans={plans} task={task} />}
-          {job && message.task_id !== null && (
-            <JobCard
-              task={task}
-              moves={plans.moves(message.task_id)}
-              loaded={plans.loaded(message.task_id)}
-              picture={plans.picture(message.task_id)}
-              deviceId={plans.deviceId}
-              devices={plans.devices}
-              stopping={plans.stopping(message.task_id)}
-              onLoad={plans.loadMoves}
-              onStop={plans.stop}
-              onContinue={plans.carryOn}
-            />
-          )}
-        </div>
-      )}
+    <article className={`flex animate-rise gap-3 ${mine ? "justify-end" : "justify-start"}`}>
+      {!mine && <VenomMark />}
+      <div className={`flex min-w-0 flex-col gap-1.5 ${mine ? "max-w-[88%] items-end sm:max-w-[82%]" : "max-w-full flex-1 items-start sm:max-w-[88%]"}`}>
+        <Byline mine={mine} time={message.created_at} from={from} />
+        {mine ? (
+          <p className={`px-4 py-3 text-[14.5px] whitespace-pre-wrap break-words text-ink ${surface.bubble}`}>{message.text}</p>
+        ) : (
+          <div className={`w-fit max-w-full px-4 py-3.5 text-[14.5px] ${surface.venom} ${edge}`}>
+            <Markdown source={message.text} onOpenLink={onOpenLink} />
+            {message.document !== null && <DocumentCard document={message.document} onOpenLink={onOpenLink} onSave={onSaveDocument} />}
+            {message.kind === "plan" && (
+              <PlanCard
+                task={task}
+                deviceId={plans.deviceId}
+                devices={plans.devices}
+                discarding={message.task_id !== null && plans.discarding(message.task_id)}
+                starting={message.task_id !== null && plans.starting(message.task_id)}
+                output={plans.output}
+                onDiscard={plans.discard}
+                onRun={plans.run}
+              />
+            )}
+            {message.kind === "question" && <Question message={message} plans={plans} task={task} />}
+            {job && message.task_id !== null && (
+              <JobCard
+                task={task}
+                moves={plans.moves(message.task_id)}
+                loaded={plans.loaded(message.task_id)}
+                picture={plans.picture(message.task_id)}
+                deviceId={plans.deviceId}
+                devices={plans.devices}
+                stopping={plans.stopping(message.task_id)}
+                onLoad={plans.loadMoves}
+                onStop={plans.stop}
+                onContinue={plans.carryOn}
+              />
+            )}
+          </div>
+        )}
+      </div>
+      {mine && <YouMark />}
     </article>
   );
 });
@@ -201,51 +222,72 @@ const AnswerItem = memo(function AnswerItem({ answer, onRetry, onOpenLink }: Ans
 
   if (answer.failure !== null) {
     return (
-      <article className="flex flex-col items-start gap-1.5">
-        <Byline mine={false} time={null} />
-        <div role="alert" className={`flex max-w-[92%] flex-col gap-2.5 border-l-4 border-l-status-fail px-4 py-3 ${surface.card}`}>
-          <p className="flex items-start gap-2 text-ink">
-            <Icon name="warning" className="mt-1 h-3.5 w-3.5 shrink-0 text-status-fail" />
-            <span>{answer.failure}</span>
-          </p>
-          <p className={text.support}>Your message is saved. VENOM can try to answer it again.</p>
-          <button type="button" onClick={() => void retry()} disabled={retrying} className={`${button.secondary} self-start px-3.5 py-1.5 text-[13px]`}>
-            <Icon name={retrying ? "hourglass" : "retry"} />
-            <span>{retrying ? "Trying again" : "Try again"}</span>
-          </button>
+      <article className="flex gap-3">
+        <VenomMark />
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+          <Byline mine={false} time={null} />
+          <div role="alert" className={`flex max-w-[92%] flex-col gap-2.5 border-l-4 border-l-status-fail px-4 py-3 ${surface.venom}`}>
+            <p className="flex items-start gap-2 text-ink">
+              <Icon name="warning" className="mt-1 h-3.5 w-3.5 shrink-0 text-status-fail" />
+              <span>{answer.failure}</span>
+            </p>
+            <p className={text.support}>Your message is saved. VENOM can try to answer it again.</p>
+            <button type="button" onClick={() => void retry()} disabled={retrying} className={`${button.secondary} self-start px-3.5 py-1.5 text-[13px]`}>
+              <Icon name={retrying ? "hourglass" : "retry"} />
+              <span>{retrying ? "Trying again" : "Try again"}</span>
+            </button>
+          </div>
         </div>
       </article>
     );
   }
 
   return (
-    <article className="flex flex-col items-start gap-1.5" aria-busy="true">
-      <Byline mine={false} time={null} />
-      <div className={`max-w-[92%] px-4 py-3 ${surface.card}`}>
-        {answer.text.length === 0 ? (
-          <p className={`flex items-center gap-2 ${text.support}`}>
-            <Icon name="hourglass" className="h-3.5 w-3.5 text-status-wait" />
-            <span>Thinking</span>
-          </p>
-        ) : (
-          <Markdown source={answer.text + caret} onOpenLink={onOpenLink} />
-        )}
+    <article className="flex gap-3" aria-busy="true">
+      <span className="mt-6 hidden shrink-0 sm:block">
+        <Emblem size={38} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+        <Byline mine={false} time={null} />
+        <div className={`max-w-[92%] px-4 py-3.5 text-[14.5px] ${surface.venom}`}>
+          {answer.text.length === 0 ? (
+            <p className="flex items-center gap-2.5 text-[13px] text-green-300">
+              <span className="flex gap-1" aria-hidden="true">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-400 [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-400 [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-400" />
+              </span>
+              <span>Thinking</span>
+            </p>
+          ) : (
+            <Markdown source={answer.text + caret} onOpenLink={onOpenLink} />
+          )}
+        </div>
       </div>
     </article>
   );
 });
 
-function EmptyState() {
+function Greeting({ name }: { readonly name: string }) {
+  const first = name.trim().split(/\s+/)[0] ?? name;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
-      <LogoMark size={56} />
-      <h2 className={text.display}>Talk to VENOM</h2>
-      <p className={`${text.support} max-w-[46ch]`}>Ask VENOM anything, or tell it what to do.</p>
-    </div>
+    <section aria-label="Welcome" className="glass-glow relative flex animate-rise items-center gap-4 overflow-hidden rounded-panel px-5 py-5 sm:px-6">
+      <div className="absolute -top-20 -left-10 h-48 w-48 rounded-full bg-green-500/20 blur-3xl" aria-hidden="true" />
+      <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-green-400/35 bg-green-400/10 text-green-300 shadow-[0_0_26px_-6px_rgba(31,242,92,0.9)]">
+        <Icon name="sparkle" className="h-7 w-7" />
+      </span>
+      <div className="relative flex min-w-0 flex-col">
+        <h2 className="text-[24px] font-bold tracking-[-0.02em] text-ink sm:text-[28px]">
+          Hello {first} <span aria-hidden="true">👋</span>
+        </h2>
+        <p className="text-[15px] text-ink-muted">What would you like to do today?</p>
+      </div>
+    </section>
   );
 }
 
 export interface MessageListProps {
+  readonly name: string;
   readonly store: StoreApi<ConversationStore>;
   readonly devices: readonly Device[];
   readonly deviceId: string;
@@ -254,7 +296,7 @@ export interface MessageListProps {
   readonly onSaveDocument: (document: ChatDocument) => Promise<SaveResult>;
 }
 
-export function MessageList({ store, devices, deviceId, plans, onOpenLink, onSaveDocument }: MessageListProps) {
+export function MessageList({ name, store, devices, deviceId, plans, onOpenLink, onSaveDocument }: MessageListProps) {
   const messages = useStore(store, (state) => state.messages);
   const answers = useStore(store, (state) => state.answers);
   const retry = useStore(store, (state) => state.retry);
@@ -325,14 +367,14 @@ export function MessageList({ store, devices, deviceId, plans, onOpenLink, onSav
     setPinned(true);
   }
 
-  if (empty) {
-    return <EmptyState />;
-  }
-
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto">
-        <ol ref={content} className="mx-auto flex max-w-[72ch] flex-col gap-5 px-5 py-6" aria-label="Conversation">
+        <div className="mx-auto max-w-[860px] px-4 pt-5 sm:px-6">
+          <Greeting name={name} />
+        </div>
+        {empty && <p className={`mx-auto max-w-[860px] px-6 pt-6 text-center ${text.support}`}>Ask VENOM anything, or tell it what to do on any of your devices.</p>}
+        <ol ref={content} className="mx-auto flex max-w-[860px] flex-col gap-6 px-4 py-6 sm:px-6" aria-label="Conversation">
           {placed.map(({ message, answers: pending }) => (
             <li key={message.id} className="flex flex-col gap-5">
               <MessageItem

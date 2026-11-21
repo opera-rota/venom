@@ -98,7 +98,7 @@ function DeviceRow({ device, current, onRemove }: { readonly device: Device; rea
 
 export function DevicesPlace({ state }: { readonly state: DevicesState }) {
   return (
-    <Place title="Devices" icon="devices" count={state.devices.length}>
+    <Place title="Devices" eyebrow="Symbiote network" icon="devices" count={state.devices.length}>
       <p className={text.support}>Every device here is a body of the same VENOM. Add another by choosing "Attach this device" on it.</p>
       {state.failure !== null && (
         <p role="alert" className={field.error}>

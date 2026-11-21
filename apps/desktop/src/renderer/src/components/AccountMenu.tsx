@@ -76,15 +76,16 @@ export function AccountMenu({ account, skipped, saving, failure, developer, onAs
         onClick={() => setOpen((shown) => !shown)}
         aria-expanded={open}
         aria-haspopup="true"
-        className={`${button.ghost} min-w-0 px-2`}
+        aria-label="Settings"
+        title="Settings"
+        className={`${button.icon} ${open ? "border-green-400/60 text-green-300" : ""}`}
       >
-        <Icon name="user" className="h-4 w-4 shrink-0" />
-        <span className="truncate">{account.name}</span>
-        <Icon name="chevron" className="h-3 w-3 shrink-0" />
+        <Icon name="gear" className={`h-[18px] w-[18px] transition-transform duration-500 ease-ui ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
-        <div role="dialog" aria-label="Your account" className={`absolute top-full left-0 z-20 mt-2 flex w-[320px] max-w-[calc(100vw-2.5rem)] flex-col gap-4 p-4 ${surface.overlay}`}>
+        <div role="dialog" aria-label="Your account" className={`absolute top-full right-0 z-30 mt-3 flex w-[340px] max-w-[calc(100vw-2rem)] animate-rise flex-col gap-4 p-5 ${surface.overlay}`}>
           <div className="flex min-w-0 flex-col gap-0.5">
+            <span className={text.eyebrow}>Settings</span>
             <span className="truncate font-medium text-ink">{account.name}</span>
             <span className={`truncate ${text.support}`}>{account.email}</span>
           </div>

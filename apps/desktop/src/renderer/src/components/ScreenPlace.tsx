@@ -67,7 +67,7 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, s
 
   if (task === null) {
     return (
-      <Place title="Screen" icon="screen" width="wide">
+      <Place title="Screen" eyebrow="Live view" icon="screen" width="wide">
         <div className={`flex flex-col items-center gap-2 px-6 py-10 text-center ${surface.card}`}>
           <Icon name="screen" className="h-8 w-8 text-ink-faint" />
           <p className="font-medium text-ink">Nothing is running</p>
@@ -83,7 +83,7 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, s
   const updated = updatedWords(latest, now);
 
   return (
-    <Place title="Screen" icon="screen" width="wide">
+    <Place title="Screen" eyebrow="Live view" icon="screen" width="wide">
       <div className="flex flex-col gap-1">
         <p className="break-words text-sm font-medium text-ink">{task.request_text}</p>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">

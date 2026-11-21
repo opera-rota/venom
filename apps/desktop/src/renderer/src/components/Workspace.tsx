@@ -11,13 +11,15 @@ import { useLater } from "../use-later.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
-import { Composer } from "./Composer.tsx";
+import { Backdrop } from "./Backdrop.tsx";
+import { Composer, type Seed } from "./Composer.tsx";
 import { ConfirmationGate } from "./ConfirmationGate.tsx";
 import { DevicesPlace } from "./DevicesPlace.tsx";
 import { Header } from "./Header.tsx";
 import { MemoryPlace } from "./MemoryPlace.tsx";
 import { MessageList, type Plans } from "./MessageList.tsx";
-import { ModelsPlace } from "./ModelsPlace.tsx";
+import { engineName, ModelsPlace } from "./ModelsPlace.tsx";
+import { Rail } from "./Rail.tsx";
 import { ScreenPlace } from "./ScreenPlace.tsx";
 import { Sidebar, type PlaceName } from "./Sidebar.tsx";
 
@@ -61,6 +63,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const tasks = useTasks(bridge, connection);
   const later = useLater(bridge, connection);
   const [place, setPlace] = useState<PlaceName>("chat");
+  const [seed, setSeed] = useState<Seed | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
   const saveDocument = useCallback((document: ChatDocument) => bridge.saveDocument(document), [bridge]);
   const { control, controlling, state, sending, answer, answerMove, loadMoves, stopTask, settings, save } = tasks;
@@ -95,6 +98,20 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const gateClosed = useMemo(() => state.closed.filter((entry) => !inChat.has(entry.request.task_id)), [state.closed, inChat]);
   const job = useMemo(() => screenJob(state), [state]);
   const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen), later: unseenCount(later.items) }), [state, later.items]);
+  const engine = power.power === null ? null : engineName(power.engines, power.power);
+  const online = devices.devices.filter((candidate) => candidate.status === "active").length;
+  const waiting = (signals.waiting ? 1 : 0) + signals.later;
+  const ask = useCallback(
+    async (text: string) => {
+      setPlace("chat");
+      return send(text);
+    },
+    [send],
+  );
+  const quick = useCallback((text: string) => {
+    setPlace("chat");
+    setSeed({ text, at: Date.now() });
+  }, []);
   const askAgain = useCallback(
     (effect: SkippableEffect) => {
       if (settings !== null) {
@@ -107,10 +124,14 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   useEffect(() => conversation.connect(), [conversation]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
+      <Backdrop />
       <Header
         connection={connection}
         deviceCount={devices.devices.length}
+        waiting={waiting}
+        onAsk={ask}
+        onWaiting={() => setPlace(signals.waiting || signals.later === 0 ? "chat" : "screen")}
         menu={{
           account,
           skipped: settings?.skip_asking ?? [],
@@ -124,14 +145,17 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
         halt={tasks.halt}
         onStop={tasks.stop}
       />
-      <div className="flex min-h-0 flex-1 flex-col min-[960px]:flex-row">
-        <Sidebar current={place} signals={signals} onChoose={setPlace} />
-        <main className={`min-h-0 min-w-0 flex-1 flex-col ${place === "chat" ? "flex" : "hidden"}`}>
-          <MessageList store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} onSaveDocument={saveDocument} />
-          <Composer connection={connection} answering={answering} notice={notice} onSend={send} onDismiss={dismiss} />
+      <div className="flex min-h-0 flex-1 gap-4 px-3 pt-2 pb-[92px] sm:px-5 min-[960px]:pb-5">
+        <Sidebar current={place} signals={signals} engine={engine} onChoose={setPlace} />
+        <main className={`glass min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-panel ${place === "chat" ? "flex" : "hidden"}`}>
+          <MessageList name={account.name} store={store} devices={devices.devices} deviceId={device.id} plans={plans} onOpenLink={openLink} onSaveDocument={saveDocument} />
+          <Composer connection={connection} answering={answering} notice={notice} seed={seed} onSend={send} onDismiss={dismiss} />
         </main>
+        {place === "chat" && (
+          <Rail devicesOnline={online} engine={engine} answersLeft={power.power?.answers_left ?? null} memories={memory.items.length} working={signals.working} onQuick={quick} />
+        )}
         {place !== "chat" && (
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="glass flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-panel">
             {place === "screen" && (
               <ScreenPlace
                 task={job}

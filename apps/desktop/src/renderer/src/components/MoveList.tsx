@@ -9,10 +9,10 @@ const shownAtFirst = 5;
 function MoveRow({ move }: { readonly move: TaskMove }) {
   const look = moveLook[move.status];
   return (
-    <li className="flex items-start gap-2.5">
-      <span className={`tabular w-5 shrink-0 pt-px text-right ${text.detail} text-ink-faint`}>{move.number}</span>
+    <li className="flex items-start gap-3">
+      <span className={`tabular grid h-6 w-6 shrink-0 place-items-center rounded-lg text-[12px] font-bold ${move.status === "running" ? "bg-green-400 text-on-accent shadow-mark" : "bg-green-400/10 text-green-300"}`}>{move.number}</span>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="break-words text-[13px] leading-normal text-ink">{move.intent}</span>
+        <span className="break-words text-[13.5px] leading-normal text-ink">{move.intent}</span>
         <span className={`flex flex-wrap items-center gap-x-1.5 ${text.detail}`}>
           <span className={`flex items-center gap-1 ${look.tone}`}>
             <Icon name={look.icon} className="h-3 w-3" />
@@ -36,7 +36,7 @@ export function MoveList({ moves }: { readonly moves: readonly TaskMove[] }) {
           Show {hidden} earlier {hidden === 1 ? "move" : "moves"}
         </button>
       )}
-      <ol className="flex flex-col gap-2.5" aria-label="VENOM's moves">
+      <ol className="flex flex-col gap-3" aria-label="VENOM's moves">
         {moves.slice(hidden).map((move) => (
           <MoveRow key={move.id} move={move} />
         ))}

@@ -193,7 +193,7 @@ export function MemoryPlace({ state }: { readonly state: MemoryState }) {
   const full = state.items.length >= state.limit;
 
   return (
-    <Place title="Memory" icon="memory">
+    <Place title="Memory" eyebrow="What I keep" icon="memory">
       <p className={text.support}>
         I only keep what you ask me to. Start a message with "Remember that…", or add it here.{" "}
         <span className="tabular text-green-400">

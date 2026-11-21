@@ -96,6 +96,10 @@ async function saveDocument(document: unknown): Promise<SaveResult> {
   }
 }
 
+const zoomSteps: Readonly<Record<string, number>> = { "=": 0.5, "+": 0.5, "-": -0.5, "_": -0.5, "0": 0 };
+
+const zoomRange = 3;
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: config.profile === null ? "VENOM" : `VENOM (${config.profile})`,
@@ -104,7 +108,7 @@ function createWindow(): BrowserWindow {
     minWidth: 420,
     minHeight: 560,
     show: false,
-    backgroundColor: "#050806",
+    backgroundColor: "#020503",
     icon: appIcon,
     autoHideMenuBar: true,
     webPreferences: {
@@ -117,6 +121,18 @@ function createWindow(): BrowserWindow {
   });
 
   window.once("ready-to-show", () => window.show());
+  window.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !(input.control || input.meta) || input.alt) {
+      return;
+    }
+    const step = zoomSteps[input.key];
+    if (step === undefined) {
+      return;
+    }
+    event.preventDefault();
+    const level = step === 0 ? 0 : Math.min(zoomRange, Math.max(-zoomRange, window.webContents.getZoomLevel() + step));
+    window.webContents.setZoomLevel(level);
+  });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(trustedOrigin)) {
