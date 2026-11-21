@@ -12,9 +12,9 @@ const stopping = phrase(["stop", "stop it", "stop now", "stop everything", "stop
 
 const running = phrase(["run it", "run the plan", "run this plan", "run that plan", "start it", "start the plan", "do it", "yes do it", "go ahead", "yes go ahead", "ok do it", "okay do it", "do it now", "run it now"]);
 
-const agreeing = phrase(["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "yes please", "please do", "approve", "go for it", "sounds good"]);
+const agreeing = phrase(["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "yes please", "please do", "approve", "go for it", "sounds good", "continue", "carry on", "keep going", "go on"]);
 
-const refusing = phrase(["no", "nope", "nah", "no thanks", "no thank you", "don't", "do not", "don't do it", "do not do it", "cancel", "cancel it", "decline", "not now"]);
+const refusing = phrase(["no", "nope", "nah", "no thanks", "no thank you", "don't", "do not", "don't do it", "do not do it", "cancel", "cancel it", "decline", "not now", "leave it", "leave it there", "forget it", "never mind"]);
 
 const skipping = /^(?:please )?(?:don't|do not|stop|no need to|you don't need to|you do not need to) ask(?:ing)?(?: me)?(?: again| any more| anymore)? before (.+)$/;
 

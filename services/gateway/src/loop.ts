@@ -55,6 +55,7 @@ import {
   refusedMoveWords,
   stopHereWords,
   timeUpWords,
+  youFirstWords,
 } from "./words.ts";
 
 export interface LoopLimits {
@@ -113,6 +114,7 @@ interface Driving {
   readonly abort: AbortController;
   readonly guidance: string[];
   listening: boolean;
+  interrupted: boolean;
   heard: Heard | null;
   wake: (() => void) | null;
 }
@@ -207,7 +209,7 @@ export class GoalLoop {
     if (this.#driving.has(task.id)) {
       return;
     }
-    const driving: Driving = { accountId: task.account_id, taskId: task.id, targetId: target.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, heard: null, wake: null };
+    const driving: Driving = { accountId: task.account_id, taskId: task.id, targetId: target.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, interrupted: false, heard: null, wake: null };
     this.#driving.set(task.id, driving);
     const work = this.#drive(driving, task, target, requestId)
       .catch((error: unknown) => this.#crashed(driving, error, requestId))
@@ -227,6 +229,17 @@ export class GoalLoop {
     }
     this.#guide(driving, text);
     return guidedWords;
+  }
+
+  interrupted(deviceId: string, taskId: string): boolean {
+    const driving = this.#driving.get(taskId);
+    if (driving === undefined || driving.targetId !== deviceId) {
+      return false;
+    }
+    if (!driving.listening) {
+      driving.interrupted = true;
+    }
+    return true;
   }
 
   answered(taskId: string): void {
@@ -312,6 +325,9 @@ export class GoalLoop {
 
   async #step(driving: Driving, turn: Turn): Promise<boolean> {
     const { brain, goals, log } = this.#options;
+    if (driving.interrupted) {
+      return this.#youFirst(driving, turn);
+    }
     const looked = await this.#look(driving, turn);
     if (looked.kind === "unseen") {
       if (looked.outcome === "stopped") {
@@ -366,6 +382,9 @@ export class GoalLoop {
     }
     if (turn.held === "thinking" && !(await this.#resume(driving, turn, backThinkingWords))) {
       return false;
+    }
+    if (driving.interrupted) {
+      return this.#youFirst(driving, turn);
     }
     const { seen, next } = reply.next;
     switch (next.kind) {
@@ -454,6 +473,11 @@ export class GoalLoop {
         return false;
       }
     }
+  }
+
+  #youFirst(driving: Driving, turn: Turn): Promise<boolean> {
+    driving.interrupted = false;
+    return this.#listen(driving, turn, youFirstWords);
   }
 
   async #listen(driving: Driving, turn: Turn, words: string): Promise<boolean> {

@@ -12,6 +12,14 @@ describe("chat sentences VENOM acts on by itself", () => {
     expect(understand("Ask me again before opening websites")).toEqual({ kind: "asking", ask: true, effect: "reaches_outside" });
   });
 
+  it("knows continue and leave it, for when VENOM waited for her", () => {
+    expect(understand("Continue")).toEqual({ kind: "yes", runs: false });
+    expect(understand("carry on, venom")).toEqual({ kind: "yes", runs: false });
+    expect(understand("Leave it.")).toEqual({ kind: "no" });
+    expect(understand("never mind")).toEqual({ kind: "no" });
+    expect(understand("continue with the second file")).toBeNull();
+  });
+
   it("leaves a message with more in it to the brain, so nothing typed is dropped", () => {
     expect(understand("Don't ask me before reaching outside\nOpen Chrome on wikipedia.org")).toBeNull();
     expect(understand("Don't ask me before reaching outside and open Chrome on wikipedia.org")).toBeNull();

@@ -23,6 +23,11 @@ export interface HandWorker {
   send(request: HandRequest, options?: SendOptions): Promise<HandResult>;
 }
 
+export interface HandsWatch {
+  started(taskId: string, moving: boolean): void;
+  finished(taskId: string, moving: boolean): void;
+}
+
 export interface HandsOptions {
   readonly trust: () => DeviceTrust | null;
   readonly report: (report: CommandReport) => Promise<unknown>;
@@ -33,6 +38,7 @@ export interface HandsOptions {
   readonly refused?: (reason: string) => void;
   readonly worker?: HandWorker | null;
   readonly flushMs?: number;
+  readonly watch?: HandsWatch;
 }
 
 interface Running {
@@ -272,8 +278,11 @@ export class Hands {
   #loop(commandId: string, command: LoopCommand): void {
     const abort = new AbortController();
     this.#running.set(commandId, { commandId, taskId: command.task_id, abort });
+    const moving = command.kind === "move";
+    this.#options.watch?.started(command.task_id, moving);
     const deliver = (sent: Sent) => {
       this.#running.delete(commandId);
+      this.#options.watch?.finished(command.task_id, moving);
       this.#deliver(commandId, sent);
     };
     void this.#loopWork(command, abort.signal).then(deliver, (error: unknown) =>

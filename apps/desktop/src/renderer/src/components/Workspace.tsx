@@ -86,8 +86,9 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       stop: (taskId) => void stopTask(taskId),
       loadMoves,
       answerMove: (taskId, moveId, decision) => void answerMove(taskId, moveId, decision),
+      carryOn: () => void send("continue"),
     }),
-    [state, device.id, devices.devices, controlling, control, sending, answer, answerMove, loadMoves, stopTask],
+    [state, device.id, devices.devices, controlling, control, sending, answer, answerMove, loadMoves, stopTask, send],
   );
   const inChat = useMemo(() => new Set(messages.filter((message) => message.kind === "plan" && message.task_id !== null).map((message) => message.task_id)), [messages]);
   const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);

@@ -65,6 +65,15 @@ export function taskRoutes(app: FastifyInstance, context: GatewayContext): void 
     return task;
   });
 
+  app.post("/v1/tasks/:task_id/interrupted", async (request, reply) => {
+    const device = requireSignedIn(request);
+    const { task_id } = TaskParams.parse(request.params);
+    if (!loop.interrupted(device.id, task_id)) {
+      throw notFound("VENOM is not working on that job on this device.");
+    }
+    return reply.code(204).send();
+  });
+
   app.post("/v1/tasks/:task_id/steps/:step_id/confirmation", async (request) => {
     const device = requireSignedIn(request);
     const { task_id, step_id } = StepParams.parse(request.params);

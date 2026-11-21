@@ -454,6 +454,11 @@ export class GatewayClient {
     return result.ok ? { ok: true } : result;
   }
 
+  async interrupted(taskId: string): Promise<StepResult> {
+    const result = await this.#api.request("POST", `/v1/tasks/${encodeURIComponent(taskId)}/interrupted`, { token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
   async spotted(report: SpotReport): Promise<StepResult> {
     const result = await this.#api.request("POST", "/v1/commands/spot", { body: report, token: this.#token });
     return result.ok ? { ok: true } : result;

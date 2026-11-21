@@ -3,7 +3,7 @@ import type { CommandBody, CommandFrame, CommandReport, DeviceAction, Observatio
 import { commandText, newKeyPair, signText, unconfirmedMoveWords, unconfirmedScriptWords } from "@venom/safety/device";
 import { describe, expect, it } from "vitest";
 import type { HandRequest, HandResult, SendOptions } from "../src/main/hand-helper.ts";
-import { Hands, type HandWorker } from "../src/main/hands.ts";
+import { Hands, type HandsWatch, type HandWorker } from "../src/main/hands.ts";
 
 const server = newKeyPair();
 const deviceId = randomUUID();
@@ -29,7 +29,7 @@ type Answer = (request: HandRequest, options: SendOptions) => Promise<HandResult
 
 const ok = (detail: string, data: Record<string, unknown> = {}): HandResult => ({ ok: true, stopped: false, detail, data });
 
-function bench(answer: Answer | null, own: readonly number[] = []): Bench {
+function bench(answer: Answer | null, own: readonly number[] = [], watch?: HandsWatch): Bench {
   const calls: Call[] = [];
   const reports: CommandReport[] = [];
   const sights: (ObservationReport | SpotReport)[] = [];
@@ -70,6 +70,7 @@ function bench(answer: Answer | null, own: readonly number[] = []): Bench {
     refused: (reason) => refusals.push(reason),
     worker,
     flushMs: 5,
+    ...(watch === undefined ? {} : { watch }),
   });
   const until = <T>(list: T[], count: number) =>
     new Promise<T[]>((resolve) => {
@@ -255,6 +256,21 @@ describe("the hands in VENOM's look, think, act loop", () => {
       { op: "move", move: { kind: "key", key: "enter" } },
       { op: "observe", window: 4242, behind: [77] },
     ]);
+  });
+
+  it("tells the watcher when it works for a job and when it moves, so it can tell her hand from its own", async () => {
+    const seen: string[] = [];
+    const watch: HandsWatch = {
+      started: (taskId, moving) => seen.push(`${taskId === task ? "job" : "other"} started ${moving ? "moving" : "looking"}`),
+      finished: (taskId, moving) => seen.push(`${taskId === task ? "job" : "other"} finished ${moving ? "moving" : "looking"}`),
+    };
+    const task = randomUUID();
+    const { hands, answered } = bench(async (request) => (request.op === "front" ? ok("The window in front.", { window: 77 }) : request.op === "observe" ? looked(4242) : ok("Pressed enter.", { window: 4242 })), [77], watch);
+    hands.receive(signed({ kind: "observe", task_id: task }).frame);
+    await answered(1);
+    hands.receive(signed({ kind: "move", task_id: task, move_id: randomUUID(), move: { name: "key", key: "enter" }, confirmed: false }).frame);
+    await answered(2);
+    expect(seen).toEqual(["job started looking", "job finished looking", "job started moving", "job finished moving"]);
   });
 
   it("looks only at the desktop when nothing is behind VENOM's own window", async () => {

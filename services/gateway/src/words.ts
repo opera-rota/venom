@@ -111,6 +111,8 @@ export function goneDeviceWords(task: Task, device: string): string {
   return `${device} did not come back in time, so I stopped ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when it is back, and I will pick it up from the screen.`;
 }
 
+export const youFirstWords = "Ooh, you go first, buddy. I will wait. Press Continue when you are done, or Leave it if you want me to stop here.";
+
 export const lostThinkingWords = "Ooh, I cannot reach my thinking right now, buddy; the network may have dropped. I am holding the job and will keep trying by myself.";
 
 export const backThinkingWords = "I can think again. I am looking at the screen again and carrying on.";

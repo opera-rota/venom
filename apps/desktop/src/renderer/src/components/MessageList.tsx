@@ -58,6 +58,7 @@ export interface Plans {
   stop(taskId: string): void;
   loadMoves(taskId: string): void;
   answerMove(taskId: string, moveId: string, decision: ConfirmDecision): void;
+  carryOn(taskId: string): void;
 }
 
 interface MessageItemProps {
@@ -173,6 +174,7 @@ const MessageItem = memo(function MessageItem({ message, from, plans, task, job,
               stopping={plans.stopping(message.task_id)}
               onLoad={plans.loadMoves}
               onStop={plans.stop}
+              onContinue={plans.carryOn}
             />
           )}
         </div>

@@ -1,12 +1,13 @@
 import { ChatDocument, ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
 import { newKeyPair } from "@venom/safety/device";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, powerMonitor, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channels, type AuthView, type SaveResult } from "../shared/bridge.ts";
 import { Api } from "./api.ts";
+import { Attention } from "./attention.ts";
 import { loadConfig } from "./config.ts";
 import { describeThisComputer } from "./device-info.ts";
 import { documentFileName, documentText } from "./documents.ts";
@@ -145,6 +146,11 @@ function wire(): void {
   });
   const helper = process.platform === "win32" ? new HandHelper({ script: handsScript, log: (line) => console.warn(`[venom hands] ${line}`) }) : null;
   let screen = false;
+  const attention = new Attention({
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    ownFocused: () => BrowserWindow.getFocusedWindow() !== null,
+    interrupted: (taskId) => void gateway.interrupted(taskId),
+  });
   const hands = new Hands({
     trust: () => sessions.trust,
     report: (report) => gateway.report(report),
@@ -154,6 +160,7 @@ function wire(): void {
     ownWindows: () => BrowserWindow.getAllWindows().map(nativeHandle),
     refused: (reason) => console.warn(`[venom] ${reason}`),
     worker: helper,
+    watch: attention,
   });
   const halt = new HaltController({ send: (stopId) => gateway.halt(stopId), haltLocally: () => hands.haltAll() });
   const device = () => describeThisComputer(config.profile, screen);
@@ -272,6 +279,7 @@ function wire(): void {
   handle(channels.connection, () => gateway.state);
 
   app.on("before-quit", () => {
+    attention.stop();
     halt.close();
     gateway.stop();
     helper?.stop();

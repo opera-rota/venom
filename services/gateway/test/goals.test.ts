@@ -246,6 +246,58 @@ describe("gentle when the connection drops", () => {
   });
 });
 
+describe("gentle when she takes the mouse or keyboard", () => {
+  async function interrupt(session: DeviceSession, taskId: string): Promise<number> {
+    return (await call(gateway.base, "POST", `/v1/tasks/${taskId}/interrupted`, { token: session.device_token })).status;
+  }
+
+  it("waits before its next move, asks kindly, and carries on after Continue", async () => {
+    gateway.brain.mover = movesWith([waiting, typing, finished]);
+    const { here, near } = await account();
+    await say(here, "Write a shopping list in Notepad");
+    const started = (await near.until(goal("running"))) as TaskEvent;
+    await near.until(() => near.moves.length === 1);
+    expect(await interrupt(here, started.task.id)).toBe(204);
+
+    const asked = (await near.until(venom("report", "Ooh, you go first, buddy."))) as MessageEvent;
+    expect(asked.message.text).toBe("Ooh, you go first, buddy. I will wait. Press Continue when you are done, or Leave it if you want me to stop here.");
+    expect(asked.message.task_id).toBe(started.task.id);
+    expect(asked.message.move_id).toBeNull();
+    await near.until(goal("awaiting_confirmation"));
+    expect(near.moves).toHaveLength(1);
+
+    const carry = await say(here, "continue");
+    expect(((await near.until(answered(carry))) as MessageEvent).message.text).toBe("Okay, carrying on.");
+    await near.until(goal("completed"));
+    expect(near.moves.map((command) => command.move.name)).toEqual(["pause", "type"]);
+  });
+
+  it("stops kindly after Leave it, and nothing more is done", async () => {
+    gateway.brain.mover = movesWith([waiting, typing, finished]);
+    const { here, near } = await account();
+    await say(here, "Write a shopping list in Notepad");
+    const started = (await near.until(goal("running"))) as TaskEvent;
+    await near.until(() => near.moves.length === 1);
+    await interrupt(here, started.task.id);
+    await near.until(venom("report", "Ooh, you go first, buddy."));
+
+    const leave = await say(here, "leave it");
+    expect(((await near.until(answered(leave))) as MessageEvent).message.text).toBe('Okay, I stopped working on "Write a shopping list in Notepad" there.');
+    await near.until(goal("cancelled"));
+    expect(near.moves).toHaveLength(1);
+  });
+
+  it("only listens to the device that is doing the job", async () => {
+    gateway.brain.mover = movesWith([longWait, finished]);
+    const { here, near } = await account();
+    const there = await attachOverHttp(gateway.base, environment.mailer, `goals-${accounts}@venom.test`, "goals secret word");
+    await say(here, "Wait for the slow page");
+    const started = (await near.until(goal("running"))) as TaskEvent;
+    expect(await interrupt(there, started.task.id)).toBe(404);
+    expect(await interrupt(here, "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e99")).toBe(404);
+  });
+});
+
 describe("for later: a goal's result is kept when she asked", () => {
   it("keeps the result in Screen, says so in the chat, and keeps nothing for an ordinary goal", async () => {
     gateway.brain.mover = movesWith([finished]);

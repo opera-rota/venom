@@ -17,13 +17,14 @@ export interface JobCardProps {
   readonly stopping: boolean;
   readonly onLoad: (taskId: string) => void;
   readonly onStop: (taskId: string) => void;
+  readonly onContinue: (taskId: string) => void;
 }
 
 function deviceName(task: Task, devices: readonly Device[]): string {
   return devices.find((device) => device.id === task.target_device_id)?.name ?? "the computer";
 }
 
-export function JobCard({ task, moves, loaded, picture, deviceId, devices, stopping, onLoad, onStop }: JobCardProps) {
+export function JobCard({ task, moves, loaded, picture, deviceId, devices, stopping, onLoad, onStop, onContinue }: JobCardProps) {
   const taskId = task?.id ?? null;
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function JobCard({ task, moves, loaded, picture, deviceId, devices, stopp
   const open = isOpen(task);
   const look = lookOfTask(task);
   const latest = moves.at(-1) ?? null;
+  const waiting = task.status === "awaiting_confirmation" && latest?.status !== "asking";
   return (
     <section aria-label="Job" className="mt-3 flex flex-col gap-3 border-t border-line-subtle pt-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -56,6 +58,19 @@ export function JobCard({ task, moves, loaded, picture, deviceId, devices, stopp
           </button>
         )}
       </div>
+      {waiting && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="VENOM is waiting for you">
+          <button type="button" className={button.gateApprove} disabled={stopping} onClick={() => onContinue(task.id)}>
+            <Icon name="check" className="h-3.5 w-3.5 text-status-ok" />
+            <span>Continue</span>
+          </button>
+          <button type="button" className={button.gateCancel} disabled={stopping} onClick={() => onStop(task.id)}>
+            <Icon name="cross" className="h-3.5 w-3.5" />
+            <span>{stopping ? "Leaving it…" : "Leave it"}</span>
+          </button>
+          <span className={`${text.detail} text-ink-faint`}>or type continue or leave it</span>
+        </div>
+      )}
       {open && latest !== null && (
         <p className="flex items-start gap-2 text-[13px] leading-normal text-ink" aria-live="polite">
           <Icon name={moveLook[latest.status].icon} className={`mt-1 h-3.5 w-3.5 shrink-0 ${moveLook[latest.status].tone}`} />
