@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { matching, memoryTypes } from "../memory-state.ts";
 import type { MemoryState } from "../use-memory.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
+import { Choice } from "./Choice.tsx";
 import { Icon } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
 
@@ -37,7 +38,6 @@ function Draft({
   const [type, setType] = useState<MemoryType>(initial.type);
   const [busy, setBusy] = useState(false);
   const contentId = useId();
-  const typeId = useId();
   const length = cleaned(content).length;
   const tooLong = length > memoryLimits.characters;
   const unchanged = cleaned(content) === initial.content && type === initial.type;
@@ -72,16 +72,12 @@ function Draft({
       />
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <label htmlFor={typeId} className="sr-only">
-            Kind of memory
-          </label>
-          <select id={typeId} value={type} onChange={(event) => setType(event.target.value as MemoryType)} className={`${field.text} w-auto py-2`}>
-            {memoryTypes.map((option) => (
-              <option key={option} value={option}>
-                {typeView[option].label}
-              </option>
-            ))}
-          </select>
+          <Choice
+            label="Kind of memory"
+            value={type}
+            options={memoryTypes.map((option) => ({ value: option, label: typeView[option].label, hint: typeView[option].blurb }))}
+            onChange={setType}
+          />
           <span className={`tabular ${text.detail} ${tooLong ? "text-red-400" : "text-ink-faint"}`}>
             {length}/{memoryLimits.characters}
           </span>

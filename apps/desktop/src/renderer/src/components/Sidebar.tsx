@@ -56,7 +56,7 @@ export function Sidebar({ current, signals, engine, onChoose }: SidebarProps) {
   return (
     <nav
       aria-label="Places"
-      className="glass fixed inset-x-3 bottom-3 z-30 flex shrink-0 justify-around rounded-[22px] p-1.5 min-[960px]:static min-[960px]:inset-auto min-[960px]:w-[76px] min-[960px]:flex-col min-[960px]:justify-start min-[960px]:gap-1.5 min-[960px]:rounded-panel min-[960px]:p-2.5 xl:w-[232px]"
+      className="glass min-[960px]:glass-thin fixed inset-x-3 bottom-3 z-30 flex shrink-0 justify-around rounded-[22px] p-1.5 min-[960px]:static min-[960px]:inset-auto min-[960px]:w-[76px] min-[960px]:flex-col min-[960px]:justify-start min-[960px]:gap-1.5 min-[960px]:rounded-panel min-[960px]:p-2.5 xl:w-[232px]"
     >
       {placeNames.map((place) => {
         const view = placeView[place];

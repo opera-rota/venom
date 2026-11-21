@@ -8,7 +8,7 @@ export const button = {
   destructive:
     "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-red-500/40 bg-red-500/[0.08] px-3.5 py-1.5 text-[13px] font-medium text-red-400 transition-colors duration-200 ease-ui hover:bg-red-500/[0.16] disabled:text-ink-faint",
   gateApprove:
-    "inline-flex items-center justify-center gap-2 rounded-full border border-green-400/45 bg-green-400/[0.1] px-4 py-2 text-[13px] font-semibold text-green-300 shadow-[0_0_18px_-6px_rgba(31,242,92,0.6)] transition-colors duration-200 ease-ui hover:bg-green-400/[0.18] disabled:text-ink-faint",
+    "inline-flex items-center justify-center gap-2 rounded-full border border-green-400/45 bg-green-400/[0.08] px-4 py-2 text-[13px] font-semibold text-green-300 transition-colors duration-200 ease-ui hover:bg-green-400/[0.18] disabled:text-ink-faint",
   compact:
     "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-line bg-white/[0.03] px-3.5 py-1.5 text-[13px] font-medium text-ink transition-colors duration-200 ease-ui hover:border-green-400/50 hover:text-green-300 disabled:text-ink-faint",
   halt:
@@ -24,7 +24,7 @@ export const button = {
 export const surface = {
   card: "glass rounded-control",
   cardActive: "glass-glow rounded-control",
-  bubble: "rounded-[18px] rounded-tr-md border border-green-400/25 bg-linear-to-br from-green-400/[0.16] to-green-700/[0.08] shadow-[0_10px_30px_-18px_rgba(31,242,92,0.7)] backdrop-blur",
+  bubble: "rounded-[18px] rounded-tr-md border border-line-strong bg-linear-to-br from-white/[0.07] to-white/[0.02] shadow-card backdrop-blur",
   panel: "glass rounded-panel",
   overlay: "glass-strong rounded-overlay",
   venom: "glass rounded-[18px] rounded-tl-md",
@@ -32,11 +32,11 @@ export const surface = {
 
 export const field = {
   input:
-    "w-full resize-none rounded-control border border-line bg-black/30 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui field-sizing-content focus:border-green-400/70",
+    "w-full resize-none rounded-control outline-none border border-line bg-black/30 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui field-sizing-content focus:border-green-400/70",
   text:
-    "w-full rounded-control border border-line bg-black/30 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui focus:border-green-400/70 aria-invalid:border-red-700",
+    "w-full rounded-control outline-none border border-line bg-black/30 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui focus:border-green-400/70 aria-invalid:border-red-700",
   code:
-    "tabular w-full rounded-control border border-line bg-black/30 px-3.5 py-3 text-center text-xl tracking-[0.5em] text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui focus:border-green-400/70 aria-invalid:border-red-700",
+    "tabular w-full rounded-control outline-none border border-line bg-black/30 px-3.5 py-3 text-center text-xl tracking-[0.5em] text-ink placeholder:text-ink-faint transition-colors duration-200 ease-ui focus:border-green-400/70 aria-invalid:border-red-700",
   label: "text-[13px] font-medium text-ink",
   hint: "text-[13px] text-ink-muted",
   error: "flex items-start gap-1.5 text-[13px] text-red-400",

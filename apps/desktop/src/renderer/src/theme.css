@@ -3,19 +3,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-base: #020503;
-  --color-sunken: #010302;
-  --color-surface-1: #08110b;
-  --color-surface-2: #0d1a11;
-  --color-surface-3: #132318;
+  --color-base: #030404;
+  --color-sunken: #010101;
+  --color-surface-1: #0a0c0b;
+  --color-surface-2: #0f1211;
+  --color-surface-3: #161a18;
 
-  --color-line-subtle: rgba(120, 255, 160, 0.07);
-  --color-line: rgba(120, 255, 160, 0.13);
-  --color-line-strong: rgba(120, 255, 160, 0.24);
+  --color-line-subtle: rgba(200, 255, 220, 0.05);
+  --color-line: rgba(200, 255, 220, 0.09);
+  --color-line-strong: rgba(200, 255, 220, 0.16);
 
   --color-ink: #effff3;
-  --color-ink-muted: #a3b8aa;
-  --color-ink-faint: #6b8072;
+  --color-ink-muted: #a7b0ab;
+  --color-ink-faint: #6b746f;
   --color-on-accent: #021204;
 
   --color-green-300: #8bffa8;
@@ -42,11 +42,11 @@
   --radius-overlay: 20px;
   --radius-panel: 24px;
 
-  --shadow-card: inset 0 1px 0 rgba(200, 255, 215, 0.05), 0 18px 50px -24px rgba(0, 0, 0, 0.9);
-  --shadow-overlay: inset 0 1px 0 rgba(200, 255, 215, 0.07), 0 30px 80px -20px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(77, 255, 124, 0.08);
-  --shadow-accent: 0 0 0 1px rgba(77, 255, 124, 0.55), 0 0 22px -2px rgba(31, 242, 92, 0.65), 0 10px 30px -10px rgba(31, 242, 92, 0.6);
-  --shadow-mark: 0 0 28px 4px rgba(31, 242, 92, 0.45);
-  --shadow-glow: 0 0 0 1px rgba(77, 255, 124, 0.32), 0 0 34px -6px rgba(31, 242, 92, 0.45), inset 0 1px 0 rgba(200, 255, 215, 0.08);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 50px -24px rgba(0, 0, 0, 0.95);
+  --shadow-overlay: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 30px 80px -20px rgba(0, 0, 0, 0.95);
+  --shadow-accent: 0 0 0 1px rgba(77, 255, 124, 0.45), 0 0 18px -4px rgba(31, 242, 92, 0.5);
+  --shadow-mark: 0 0 20px 0 rgba(31, 242, 92, 0.3);
+  --shadow-glow: 0 0 0 1px rgba(77, 255, 124, 0.16), 0 0 30px -12px rgba(31, 242, 92, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 
@@ -58,6 +58,10 @@
   --animate-rise: rise 0.5s var(--ease-ui) both;
   --animate-shimmer: shimmer 3.5s linear infinite;
   --animate-orbit: orbit 14s linear infinite;
+  --animate-smoke: smoke 34s ease-in-out infinite alternate;
+  --animate-writhe: writhe 18s ease-in-out infinite alternate;
+  --animate-glint: glint 5s ease-in-out infinite;
+  --animate-writhe-slow: writhe-slow 26s ease-in-out infinite alternate;
 
   @keyframes breathe {
     0%,
@@ -118,6 +122,52 @@
     }
   }
 
+  @keyframes smoke {
+    0% {
+      transform: scale(1.14) translate3d(-3%, -2%, 0);
+    }
+    100% {
+      transform: scale(1.2) translate3d(3%, 2.5%, 0);
+    }
+  }
+
+  @keyframes writhe {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    }
+    50% {
+      transform: translate3d(1.5%, -2%, 0) rotate(2.5deg) scale(1.03, 0.98);
+    }
+    100% {
+      transform: translate3d(-1%, 1%, 0) rotate(-1.5deg) scale(0.98, 1.03);
+    }
+  }
+
+  @keyframes writhe-slow {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    100% {
+      transform: translate3d(-2%, 3%, 0) rotate(-4deg);
+    }
+  }
+
+  @keyframes glint {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    45% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 0.15;
+    }
+    55% {
+      opacity: 0.9;
+    }
+  }
+
   @keyframes orbit {
     0% {
       transform: rotate(0deg);
@@ -129,21 +179,28 @@
 }
 
 @utility glass {
-  background: linear-gradient(160deg, rgba(18, 34, 23, 0.72), rgba(5, 12, 8, 0.66) 55%, rgba(4, 10, 6, 0.74));
-  backdrop-filter: blur(22px) saturate(150%);
+  background: linear-gradient(160deg, rgba(16, 20, 18, 0.42), rgba(6, 8, 7, 0.38) 55%, rgba(3, 4, 4, 0.48));
+  backdrop-filter: blur(9px) saturate(130%);
   border: 1px solid var(--color-line);
   box-shadow: var(--shadow-card);
 }
 
 @utility glass-glow {
-  background: linear-gradient(160deg, rgba(22, 46, 29, 0.78), rgba(6, 15, 9, 0.7) 55%, rgba(4, 11, 7, 0.78));
-  backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid rgba(77, 255, 124, 0.34);
+  background: linear-gradient(160deg, rgba(14, 24, 18, 0.56), rgba(6, 9, 8, 0.52) 55%, rgba(3, 5, 4, 0.62));
+  backdrop-filter: blur(9px) saturate(130%);
+  border: 1px solid rgba(77, 255, 124, 0.2);
   box-shadow: var(--shadow-glow);
 }
 
+@utility glass-thin {
+  background: linear-gradient(160deg, rgba(14, 18, 16, 0.3), rgba(4, 6, 5, 0.26) 55%, rgba(2, 3, 3, 0.34));
+  backdrop-filter: blur(3px) saturate(120%);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-card);
+}
+
 @utility glass-strong {
-  background: linear-gradient(160deg, rgba(20, 38, 26, 0.94), rgba(6, 14, 9, 0.94));
+  background: linear-gradient(160deg, rgba(18, 22, 20, 0.96), rgba(6, 8, 7, 0.96));
   backdrop-filter: blur(26px) saturate(150%);
   border: 1px solid var(--color-line-strong);
   box-shadow: var(--shadow-overlay);
@@ -151,7 +208,7 @@
 
 @utility neon-text {
   color: var(--color-green-400);
-  text-shadow: 0 0 18px rgba(31, 242, 92, 0.55);
+  text-shadow: 0 0 14px rgba(31, 242, 92, 0.35);
 }
 
 @utility hud {
@@ -176,7 +233,7 @@
     z-index: -1;
     border-radius: inherit;
     padding: 1px;
-    background: conic-gradient(from var(--ring-angle, 0deg), rgba(77, 255, 124, 0.05), rgba(77, 255, 124, 0.9), rgba(194, 255, 219, 0.6), rgba(77, 255, 124, 0.05) 40%);
+    background: conic-gradient(from var(--ring-angle, 0deg), rgba(77, 255, 124, 0), rgba(77, 255, 124, 0.7), rgba(194, 255, 219, 0.4), rgba(77, 255, 124, 0) 40%);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -241,16 +298,12 @@
   }
 
   :focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px var(--color-base),
-      0 0 0 4px var(--color-green-400),
-      0 0 18px 2px rgba(31, 242, 92, 0.45);
-    border-radius: var(--radius-control);
+    outline: 1.5px solid rgba(77, 255, 124, 0.7);
+    outline-offset: 2px;
   }
 
   ::selection {
-    background: rgba(31, 242, 92, 0.3);
+    background: rgba(31, 242, 92, 0.25);
     color: var(--color-ink);
   }
 
@@ -262,11 +315,11 @@
   ::-webkit-scrollbar-thumb {
     border: 3px solid transparent;
     border-radius: 999px;
-    background: rgba(120, 255, 160, 0.16) padding-box;
+    background: rgba(255, 255, 255, 0.1) padding-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(120, 255, 160, 0.3) padding-box;
+    background: rgba(255, 255, 255, 0.2) padding-box;
   }
 
   ::-webkit-scrollbar-track {
