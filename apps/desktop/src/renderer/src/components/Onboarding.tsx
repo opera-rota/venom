@@ -105,7 +105,7 @@ export function Onboarding({ bridge, notice }: { readonly bridge: VenomBridge; r
     const result = await work().catch((): StepResult => ({
       ok: false,
       code: "internal",
-      reason: "Something went wrong on this computer. Please try again.",
+      reason: "Something went wrong on this device. Please try again.",
     }));
     setBusy(false);
     if (!result.ok) {
@@ -130,7 +130,7 @@ export function Onboarding({ bridge, notice }: { readonly bridge: VenomBridge; r
           <LogoMark size={64} />
           <div className="flex flex-col gap-2">
             <h1 className={text.display}>VENOM</h1>
-            <p className={text.support}>One assistant, every device. Create your VENOM on this computer, or add this computer to the VENOM you already have.</p>
+            <p className={text.support}>One assistant, every device. Create your VENOM on this device, or add this device to the VENOM you already have.</p>
           </div>
           {notice !== null && (
             <p role="status" className={`flex w-full items-start gap-2 p-3 text-left ${surface.card} ${text.support}`}>
@@ -223,7 +223,7 @@ export function Onboarding({ bridge, notice }: { readonly bridge: VenomBridge; r
       <Centered>
         <StepFrame
           title="Choose your secret word"
-          intro="You will use it to add your other devices. It never leaves this computer: VENOM only receives a proof that you know it."
+          intro="You will use it to add your other devices. It never leaves this device: VENOM only receives a proof that you know it."
           error={error}
           busy={busy}
           action="Create my VENOM"

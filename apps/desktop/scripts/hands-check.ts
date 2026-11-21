@@ -15,6 +15,7 @@ interface Check {
 
 const task = "hands-check";
 const stopTask = "hands-check-stop";
+const closedWindow = 2_147_483_646;
 const helper = new HandHelper({
   script: fileURLToPath(new URL("../hands/venom-hands.ps1", import.meta.url)),
   log: (line) => console.log(`      helper said: ${line}`),
@@ -363,6 +364,16 @@ const checks: readonly Check[] = [
       const behind = Number(looked.data["window"]);
       console.log(`      in front: ${String(front.data["window"])}, looked behind it at: ${behind}`);
       return front.ok && looked.ok && behind > 0 && behind !== Number(front.data["window"]) ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Look at the screen again when the window VENOM was using has closed",
+    run: async () => {
+      const looked = await helper.send({ op: "observe", window: closedWindow, desktop: false });
+      say(looked);
+      const window = Number(looked.data["window"]);
+      console.log(`      asked for a closed window, looked at: ${window === 0 ? "the desktop" : `window ${window}`}`);
+      return looked.ok && Observed.safeParse(looked.data["observation"]).success && window !== closedWindow ? "passed" : "failed";
     },
   },
   {

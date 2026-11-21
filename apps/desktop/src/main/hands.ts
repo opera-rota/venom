@@ -298,7 +298,7 @@ export class Hands {
 
   async #observe(worker: HandWorker, { task_id: task }: ObserveCommand, signal: AbortSignal): Promise<Sent> {
     const window = this.#windows.get(task) ?? null;
-    const behind = window === null ? await this.#ownWindowsInFront(worker, signal) : [];
+    const behind = window === null ? await this.#ownWindowsInFront(worker, signal) : (this.#options.ownWindows?.() ?? []);
     const request: HandRequest = behind.length > 0 ? { op: "observe", window, behind } : { op: "observe", window, desktop: false };
     const result = await worker.send(request, { signal, timeoutMs: observeMs });
     if (result.stopped) {

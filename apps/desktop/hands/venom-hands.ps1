@@ -670,10 +670,12 @@ function Invoke-Observe($Request) {
     $handle = Get-Arg $Request 'window'
     $desktop = (Get-Arg $Request 'desktop') -eq $true
     $behind = [long[]]@(@(Get-Arg $Request 'behind') | Where-Object { $null -ne $_ } | ForEach-Object { [long]$_ })
+    $tops = @(Get-TopWindows)
+    if ($null -ne $handle -and @($tops | Where-Object { $_.Handle -eq [long]$handle }).Length -eq 0) { $handle = $null }
     $front = [Venom.Hands]::Foreground()
     $target = if ($desktop) { [long]0 } elseif ($null -ne $handle) { [long]$handle } elseif ($behind.Length -gt 0 -and $behind -contains $front) { [Venom.Hands]::Behind($behind) } else { $front }
     if ($target -eq 0) { $desktop = $true }
-    $window = @(if (-not $desktop) { Get-TopWindows | Where-Object { $_.Handle -eq $target } })
+    $window = @(if (-not $desktop) { $tops | Where-Object { $_.Handle -eq $target } })
     $screen = [Venom.Hands]::Screen()
     $scale = [Math]::Min(1.0, $PictureWidth / [double]$screen[0])
     $width = [Math]::Max(1, [int][Math]::Round($screen[0] * $scale))

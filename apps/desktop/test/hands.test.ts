@@ -241,7 +241,7 @@ describe("the hands in VENOM's look, think, act loop", () => {
     ]);
   });
 
-  it("looks at the window just behind VENOM's own window, and keeps working in it", async () => {
+  it("looks at the window just behind VENOM's own window, keeps working in it, and can look past its own window again if that one closes", async () => {
     const { hands, calls, answered } = bench(async (request) => (request.op === "front" ? ok("The window in front.", { window: 77 }) : request.op === "observe" ? looked(4242) : ok("Pressed enter.", { window: 4242 })), [77]);
     const task = randomUUID();
     hands.receive(signed({ kind: "observe", task_id: task }).frame);
@@ -253,7 +253,7 @@ describe("the hands in VENOM's look, think, act loop", () => {
       { op: "front" },
       { op: "observe", window: null, behind: [77] },
       { op: "move", move: { kind: "key", key: "enter" } },
-      { op: "observe", window: 4242, desktop: false },
+      { op: "observe", window: 4242, behind: [77] },
     ]);
   });
 
