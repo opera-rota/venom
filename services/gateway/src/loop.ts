@@ -6,6 +6,7 @@ import {
   type CommandReport,
   type Device,
   type EarlierGoal,
+  type Effect,
   type EngineId,
   type MakeMove,
   type MemoryContext,
@@ -37,9 +38,11 @@ import type { SaidKind } from "./runner.ts";
 import { thumbnailOf } from "./thumbnail.ts";
 import {
   carryOnWords,
+  doneAnswer,
   goalCannotWords,
   goalDoneWords,
   goalFailedWords,
+  goalPowerWords,
   guidedWords,
   keepGoingWords,
   moveQuestionWords,
@@ -115,6 +118,7 @@ interface Turn {
   spent: TokenUsage;
   budget: number;
   failures: number;
+  readonly allowed: Effect[];
 }
 
 type Looked = { readonly kind: "seen"; readonly observation: Observation } | { readonly kind: "unseen"; readonly outcome: CommandOutcome; readonly detail: string };
@@ -260,6 +264,7 @@ export class GoalLoop {
       spent: recalled.usage,
       budget: this.#limits.moves,
       failures: 0,
+      allowed: [],
     };
     while (await this.#open(driving, turn)) {
       if (Date.now() > turn.deadline) {
@@ -291,7 +296,6 @@ export class GoalLoop {
       return false;
     }
     const turnId = uuidv7();
-    const guidance = [...driving.guidance];
     let reply: MoveReply;
     try {
       reply = await brain.move(
@@ -302,7 +306,7 @@ export class GoalLoop {
           goal: turn.task.request_text,
           earlier: turn.earlier,
           moves: await goals.history(driving.accountId, driving.taskId),
-          guidance,
+          guidance: driving.guidance,
           memories: turn.memories,
           observation,
         }),
@@ -320,11 +324,10 @@ export class GoalLoop {
       log.warn({ task_id: driving.taskId, reason: reply.reason, detail: reply.detail }, "the brain did not choose a move");
       return this.#failed(driving, turn, reply.detail);
     }
-    driving.guidance.splice(0, guidance.length);
     const { seen, next } = reply.next;
     switch (next.kind) {
       case "done":
-        await this.#end(driving, turn, "completed", goalDoneWords(turn.task, next.answer), `Done. ${next.answer}`);
+        await this.#end(driving, turn, "completed", goalDoneWords(turn.task, next.answer), `Done. ${doneAnswer(turn.task, next.answer)}`);
         return false;
       case "cannot":
         await this.#end(driving, turn, "failed", goalCannotWords(turn.task, next.reason), next.reason);
@@ -341,7 +344,7 @@ export class GoalLoop {
     const point = choice.move.name === "click" ? choice.move.point : null;
     const spot = point === null ? null : await this.#spot(driving, turn, point);
     const { confirmation_strictness, skip_asking } = await tasks.settings(driving.accountId);
-    const judgement = judgeMove(choice, observation, confirmation_strictness, skip_asking, spot);
+    const judgement = judgeMove(choice, observation, confirmation_strictness, [...skip_asking, ...turn.allowed], spot);
     const proposed = await goals.propose(
       driving.accountId,
       driving.taskId,
@@ -366,6 +369,9 @@ export class GoalLoop {
       await this.#tell(proposed.task, "question", moveQuestionWords(proposed.move, judgement.because, turn.target.name), proposed.move.id);
       if (!(await this.#approved(driving, turn, proposed.move.id))) {
         return false;
+      }
+      if (judgement.effects.includes("reaches_outside") && !turn.allowed.includes("reaches_outside")) {
+        turn.allowed.push("reaches_outside");
       }
     }
     const answer = await this.#command(driving, turn, { kind: "move", task_id: driving.taskId, move_id: proposed.move.id, move: choice.move, confirmed: judgement.verdict === "ask" }, moveMs(choice.move));
@@ -510,7 +516,7 @@ export class GoalLoop {
       if (!(error instanceof PowerError)) {
         throw error;
       }
-      await this.#end(driving, turn, "failed", goalFailedWords(turn.task, error.message), error.message);
+      await this.#end(driving, turn, "failed", goalPowerWords(turn.task, error.message), error.message);
       return null;
     }
   }

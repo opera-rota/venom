@@ -2,7 +2,7 @@ import { TurnRequest, type ChatDocument, type Device, type EngineId, type Memory
 import type { DeviceRef, Kept, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import { addUsage, detect, MemoryError, nothingUsed, type Memory } from "@venom/memory";
-import type { Power } from "@venom/power";
+import { refusePower, spec, type Power } from "@venom/power";
 import { route, TaskError, type RoutedPlan, type Tasks } from "@venom/tasks";
 import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
@@ -199,7 +199,12 @@ async function planned({ tasks, identity, device, trace, onTask }: Exchange, ask
   return { text: planReply(routing.plan, task), taskId: task.id, kind: "plan" };
 }
 
-async function goal({ loop, device, trace, onTask }: Exchange, asked: Message, target: Device): Promise<Reply> {
+async function goal({ loop, power, device, trace, onTask }: Exchange, asked: Message, target: Device): Promise<Reply> {
+  const left = await power.status(device.account_id);
+  if (left.answers_left <= 1) {
+    const refused = left.engine_class === "free" ? refusePower.freeUsedUp(spec(left.engine), left.free_daily_answers) : refusePower.noPower(spec(left.engine));
+    return { text: refused.message, taskId: null, kind: "text" };
+  }
   try {
     const task = await loop.begin(device, asked.text, target, trace.requestId);
     onTask(task, uuidv7());

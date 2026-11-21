@@ -87,8 +87,16 @@ export function refusedMoveWords(detail: string): string {
   return `${sentence(detail)} Say no if you want me to stop here.`;
 }
 
+export function doneAnswer(task: Task, answer: string): string {
+  return clause(answer).split(" ").filter((word) => word.length > 0).length >= 3 ? sentence(answer) : `I finished ${quoted(task.request_text)}.`;
+}
+
 export function goalDoneWords(task: Task, answer: string): string {
-  return `Done. ${sentence(answer)} (${moves(task.moves)} on ${quoted(task.request_text)}.)`;
+  return `Done. ${doneAnswer(task, answer)} (${moves(task.moves)} on ${quoted(task.request_text)}.)`;
+}
+
+export function goalPowerWords(task: Task, detail: string): string {
+  return `${sentence(detail)} I paused ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when you are ready, and I will pick it up from the screen.`;
 }
 
 export function goalCannotWords(task: Task, reason: string): string {

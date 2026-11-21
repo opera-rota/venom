@@ -159,6 +159,42 @@ describe("Definition of done 1: a goal is reached one move at a time", () => {
   });
 });
 
+describe("Done always ends in a real sentence", () => {
+  it("says what it finished when the model's answer is too short", async () => {
+    gateway.brain.mover = movesWith([{ seen: "Bing shows the weather.", next: { kind: "done", answer: "I." } }]);
+    const { here, near } = await account();
+    await say(here, "use bing instead of google");
+    const done = (await near.until(venom("report", "Done."))) as MessageEvent;
+    expect(done.message.text).toBe('Done. I finished "use bing instead of google". (0 moves on "use bing instead of google".)');
+    expect(((await near.until(goal("completed"))) as TaskEvent).task.result).toBe('Done. I finished "use bing instead of google".');
+  });
+});
+
+describe("thinking power is checked kindly before VENOM says On it", () => {
+  it("explains the used up free answers and starts nothing", async () => {
+    const tight = await startGateway(environment, { commandGraceMs: 2000, freeDailyAnswers: 1, loopLimits: { retryMs: 10 } });
+    tight.brain.script = handToLoop;
+    accounts += 1;
+    const here = await signUpOverHttp(tight.base, environment.mailer, `goals-${accounts}@venom.test`, "goals secret word");
+    await call(tight.base, "PUT", "/v1/devices/current/capabilities", {
+      token: here.device_token,
+      body: { device_id: here.device.id, capabilities: { ...here.device.capabilities, screen_control: true } },
+    });
+    const near = await actingDevice(tight.base, here, { screen: notepad });
+    try {
+      await call(tight.base, "POST", "/v1/messages", { token: here.device_token, body: { text: "Open Notepad" } });
+      const told = (await near.until(venom("text", "Ooh, I have used all 1 of today's free answers with Dove, buddy."))) as MessageEvent;
+      expect(told.message.task_id).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(near.events.some((event) => event.type === "task")).toBe(false);
+      expect(near.looks).toHaveLength(0);
+    } finally {
+      near.close();
+      await tight.stop();
+    }
+  });
+});
+
 describe("for later: a goal's result is kept when she asked", () => {
   it("keeps the result in Screen, says so in the chat, and keeps nothing for an ordinary goal", async () => {
     gateway.brain.mover = movesWith([finished]);
@@ -211,6 +247,22 @@ describe("Definition of done 5 and 6: sensitive moves ask, password boxes are re
     expect(near.moves.map((command) => command.confirmed)).toEqual([true]);
   });
 
+  it("asks once per job before reaching outside, and still asks before a sign in", async () => {
+    const outside = (intent: string): NextMove => ({ seen: "Chrome is open.", next: { kind: "move", intent, effects: ["reaches_outside"], move: { name: "type", text: "bing.com", mark: 1, enter: true } } });
+    gateway.brain.mover = movesWith([outside("Go to Bing"), outside("Search Bing for the weather"), signingIn, finished]);
+    const { here, near } = await account();
+    await say(here, "Search Bing for the weather in Kigali");
+
+    const first = (await near.until(venom("question", "Quick check, buddy."))) as MessageEvent;
+    expect(first.message.text).toContain("Next I would go to Bing on ");
+    await say(here, "yes");
+    const second = (await near.until((event) => venom("question", "Quick check, buddy.")(event) && event.message.id !== first.message.id)) as MessageEvent;
+    expect(second.message.text).toContain("Next I would click Log in on ");
+    await say(here, "yes");
+    await near.until(goal("completed"));
+    expect(near.moves.map((command) => [command.move.name, command.confirmed])).toEqual([["type", true], ["type", false], ["click", true]]);
+  });
+
   it("a no cancels the goal and nothing is clicked", async () => {
     gateway.brain.mover = movesWith([signingIn, finished]);
     const { here, near } = await account();
@@ -248,10 +300,10 @@ describe("Definition of done 5 and 6: sensitive moves ask, password boxes are re
   });
 });
 
-describe("Definition of done 4: guidance while it works reaches the next move", () => {
-  it("takes what she types into the next turn", async () => {
+describe("Definition of done 4: guidance while it works reaches every move after it", () => {
+  it("keeps what she types for the rest of the job", async () => {
     let release = () => {};
-    gateway.brain.mover = once([waiting, finished], new Promise<void>((resolve) => (release = resolve)));
+    gateway.brain.mover = once([waiting, waiting, finished], new Promise<void>((resolve) => (release = resolve)));
     const { here, near } = await account();
     await say(here, "Find the search box");
     await near.until((event) => event.type === "task" && event.task.kind === "goal");
@@ -262,7 +314,7 @@ describe("Definition of done 4: guidance while it works reaches the next move", 
     expect(((await near.until(answered(guided))) as MessageEvent).message.text).toBe("Got it. I will use that in my next move.");
     release();
     await near.until(goal("completed"));
-    expect(gateway.brain.moves.at(-1)?.guidance).toEqual(["use the search box instead"]);
+    expect(gateway.brain.moves.slice(-3).map((request) => request.guidance)).toEqual([[], ["use the search box instead"], ["use the search box instead"]]);
   });
 
   it("passes on her answer when VENOM asks her something", async () => {

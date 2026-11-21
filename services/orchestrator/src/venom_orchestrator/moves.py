@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import aclosing
 from itertools import batched
 from time import perf_counter
@@ -19,6 +20,7 @@ from venom_contracts.models import (
     ReasoningFailed,
     ReasoningRequest,
     ScreenClick,
+    ScreenKeyPress,
     ScreenMark,
     ScreenMove,
     ScreenPoint,
@@ -35,6 +37,8 @@ log = logging.getLogger("venom.moves")
 
 MOVE_TOKENS = 1200
 MOVES_PER_ENTRY = 20
+TRAIL_TEXT = 40
+CLICKED_NAME = re.compile(r"mark \d+ '([^']*)'")
 NOTHING_USED = TokenUsage(input_tokens=0, output_tokens=0, cost_micro_usd=0)
 
 type MoveReply = MoveChosen | MoveFailed
@@ -110,10 +114,29 @@ def briefing(asked: MoveRequest) -> list[ConversationEntry]:
             entries.append(said("\n".join([heading, *numbered])))
     else:
         entries.append(said("Moves you made so far: none yet. This is your first look."))
+    if done := [step for move in asked.moves if move.outcome == "done" and (step := trail(move)) is not None]:
+        entries.append(said("VENOM's exact record of what you already did, in order:\n" + "; ".join(done)))
     if asked.guidance:
-        entries.append(said("\n".join(["What the user said while you worked, newest last:", *(f"- {line}" for line in asked.guidance)])))
+        lines = (f"- {line}" for line in asked.guidance)
+        entries.append(said("\n".join(["What the user said while you worked, oldest first. It stays true for the whole job; where it differs from the goal, the newest words win:", *lines])))
     entries.append(said(screen(asked.observation)))
     return entries
+
+
+def trail(move: PastMove) -> str | None:
+    match move.move:
+        case ScreenClick(double=double):
+            named = CLICKED_NAME.search(move.detail)
+            what = f"'{named.group(1)}'" if named else "a spot"
+            return f"{'double click' if double else 'click'} {what}"
+        case ScreenType(text=text, enter=enter):
+            shown = flat(text)
+            shown = shown if len(shown) <= TRAIL_TEXT else f"{shown[: TRAIL_TEXT - 3].rstrip()}..."
+            return f"type '{shown}'{' then Enter' if enter else ''}"
+        case ScreenKeyPress(key=key):
+            return f"press {key}"
+        case _:
+            return None
 
 
 def said(text: str) -> ConversationEntry:

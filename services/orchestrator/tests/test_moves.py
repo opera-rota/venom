@@ -7,10 +7,13 @@ from venom_contracts.models import (
     MakeMove,
     MoveChosen,
     MoveFailed,
+    MoveOutcome,
     MoveRequest,
     Observation,
     PastMove,
     ScreenBox,
+    ScreenClick,
+    ScreenKeyPress,
     ScreenMark,
     ScreenOpen,
     ScreenType,
@@ -146,11 +149,41 @@ def test_briefs_the_model_with_the_goal_moves_guidance_and_marks() -> None:
     assert texts[0] == "The user's goal:\nWrite hello in Notepad"
     assert texts[1].splitlines()[1] == "1. Open Notepad (open): done. Opened Notepad."
     assert texts[2].splitlines() == ["More moves, continued:", "21. Open Notepad (open): done. Opened Notepad."]
-    assert texts[3] == "What the user said while you worked, newest last:\n- Use capital letters"
+    assert texts[3] == (
+        "What the user said while you worked, oldest first. It stays true for the whole job; where it differs from the goal, the newest words win:\n"
+        "- Use capital letters"
+    )
     assert 'you are working in the window "Untitled - Notepad" of Notepad' in texts[4]
     assert "1. box \"Text editor\" [can type here, has the keyboard] at 0,80,1280,600" in texts[4]
     assert "2. button \"Save 'now'\" at 10,40,60,24" in texts[4]
     assert all(entry.speaker == "user" for entry in entries)
+
+
+def test_keeps_an_exact_record_of_what_was_already_clicked_typed_and_pressed() -> None:
+    def clicked(name: str, outcome: MoveOutcome = "done") -> PastMove:
+        return PastMove(
+            intent=f"Click {name}",
+            move=ScreenClick(name="click", mark=26, point=None, double=False),
+            outcome=outcome,
+            detail=f"Clicked mark 26 '{name}' in 'Calculator'.",
+        )
+
+    typed = PastMove(
+        intent="Type the sum",
+        move=ScreenType(name="type", text="1+2+3+4+5+6+7+8+9 and a long tail of text", mark=None, enter=True),
+        outcome="done",
+        detail="Typed 41 characters.",
+    )
+    pressed = PastMove(intent="Press Enter", move=ScreenKeyPress(name="key", key="enter"), outcome="done", detail="Pressed enter in 'Calculator'.")
+    opened = PastMove(intent="Open Calculator", move=ScreenOpen(name="open", app="Calculator", open=None), outcome="done", detail="Opened Calculator.")
+    entries = briefing(asked(moves=[opened, clicked("One"), clicked("Plus"), clicked("Two", "failed"), clicked("Two"), typed, pressed]))
+    texts = [entry.text for entry in entries]
+
+    assert texts[2] == (
+        "VENOM's exact record of what you already did, in order:\n"
+        "click 'One'; click 'Plus'; click 'Two'; type '1+2+3+4+5+6+7+8+9 and a long tail of...' then Enter; press enter"
+    )
+    assert all("exact record" not in text for text in [entry.text for entry in briefing(asked(moves=[opened]))])
 
 
 def test_tells_the_model_what_the_user_asked_just_before() -> None:

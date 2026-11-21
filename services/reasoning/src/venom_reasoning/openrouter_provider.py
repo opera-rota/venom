@@ -218,9 +218,9 @@ def translate(error: openai.APIError) -> ReasoningError:
         case openai.APIConnectionError():
             return ReasoningError("unavailable", "The model service could not be reached.")
         case openai.AuthenticationError():
-            return ReasoningError("refused", "The model service refused VENOM's key. The operator must check the OpenRouter key.")
+            return ReasoningError("refused", "Ooh, the model service did not accept VENOM's key, buddy, so I cannot think right now. The OpenRouter key needs checking.")
         case openai.APIStatusError(status_code=402):
-            return ReasoningError("refused", "VENOM's model account has run out of credit. The operator must add credit on OpenRouter.")
+            return ReasoningError("refused", "Ooh, I am out of thinking power for now, buddy: VENOM's model account has run out of credit and needs more before I can carry on.")
         case openai.RateLimitError():
             return ReasoningError("rate_limited", "The model service is busy right now.")
         case openai.NotFoundError():

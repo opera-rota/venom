@@ -17,15 +17,15 @@ export const refusePower = {
     new PowerError(
       402,
       "out_of_power",
-      `You have used today's ${allowance} free answers with ${engine.name}. They come back at midnight UTC, or choose a Swift or Titan engine if you have power.`,
+      `Ooh, I have used all ${allowance} of today's free answers with ${engine.name}, buddy. They come back at midnight UTC, or choose a Swift or Titan engine in Models and I will carry on with your power.`,
     ),
   noPower: (engine: EngineSpec) =>
     new PowerError(
       402,
       "out_of_power",
-      `You are out of power for ${engine.name}. Choose a free engine such as Dove, or add power to keep using ${engine.name}.`,
+      `Ooh, I am out of power for ${engine.name}, buddy. Choose a free engine such as Dove in Models, or add power to keep using ${engine.name}.`,
     ),
   engineResting: (engine: EngineSpec) =>
-    new PowerError(409, "conflict", `${engine.name} is not available right now. Choose another engine.`),
+    new PowerError(409, "conflict", `Ooh, ${engine.name} is not available right now, buddy. Choose another engine in Models.`),
   unknownEmail: () => new PowerError(404, "not_found", "There is no VENOM account with that email."),
 } as const;
