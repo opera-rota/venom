@@ -64,6 +64,7 @@ export function liveRoute(app: FastifyInstance, context: GatewayContext): void {
     if (attachment.first) {
       presence(device, true, request.log);
     }
+    loop.deviceBack(device.id);
 
     let alive = true;
     const heartbeat = setInterval(() => {

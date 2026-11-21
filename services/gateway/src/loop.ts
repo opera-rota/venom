@@ -44,6 +44,12 @@ import {
   goalFailedWords,
   goalPowerWords,
   guidedWords,
+  lostDeviceWords,
+  lostThinkingWords,
+  backDeviceWords,
+  backThinkingWords,
+  goneDeviceWords,
+  goneThinkingWords,
   keepGoingWords,
   moveQuestionWords,
   refusedMoveWords,
@@ -57,6 +63,7 @@ export interface LoopLimits {
   readonly failuresInARow: number;
   readonly retryMs: number;
   readonly graceMs: number;
+  readonly recheckMs: number;
 }
 
 export interface LoopOptions {
@@ -101,6 +108,7 @@ interface Heard {
 interface Driving {
   readonly accountId: string;
   readonly taskId: string;
+  readonly targetId: string;
   readonly goal: string;
   readonly abort: AbortController;
   readonly guidance: string[];
@@ -119,7 +127,11 @@ interface Turn {
   budget: number;
   failures: number;
   readonly allowed: Effect[];
+  held: Held | null;
+  hiccups: number;
 }
+
+type Held = "device" | "thinking";
 
 type Looked = { readonly kind: "seen"; readonly observation: Observation } | { readonly kind: "unseen"; readonly outcome: CommandOutcome; readonly detail: string };
 
@@ -129,7 +141,12 @@ const defaults: LoopLimits = {
   failuresInARow: 3,
   retryMs: 3000,
   graceMs: 15_000,
+  recheckMs: 5000,
 };
+
+const thinkingHiccups: ReadonlySet<string> = new Set(["unavailable", "timeout", "rate_limited"]);
+
+const longestThinkingWaitMs = 30_000;
 
 const finishedAs: Record<CommandOutcome, MoveOutcome> = {
   done: "done",
@@ -190,7 +207,7 @@ export class GoalLoop {
     if (this.#driving.has(task.id)) {
       return;
     }
-    const driving: Driving = { accountId: task.account_id, taskId: task.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, heard: null, wake: null };
+    const driving: Driving = { accountId: task.account_id, taskId: task.id, targetId: target.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, heard: null, wake: null };
     this.#driving.set(task.id, driving);
     const work = this.#drive(driving, task, target, requestId)
       .catch((error: unknown) => this.#crashed(driving, error, requestId))
@@ -241,6 +258,14 @@ export class GoalLoop {
     return this.#settle(device, report.command_id, { kind: "spot", spot: report.spot });
   }
 
+  deviceBack(deviceId: string): void {
+    for (const driving of this.#driving.values()) {
+      if (driving.targetId === deviceId) {
+        this.#wake(driving);
+      }
+    }
+  }
+
   deviceLost(deviceId: string): void {
     for (const awaiting of [...this.#awaiting.values()]) {
       if (awaiting.deviceId === deviceId) {
@@ -265,6 +290,8 @@ export class GoalLoop {
       budget: this.#limits.moves,
       failures: 0,
       allowed: [],
+      held: null,
+      hiccups: 0,
     };
     while (await this.#open(driving, turn)) {
       if (Date.now() > turn.deadline) {
@@ -287,7 +314,10 @@ export class GoalLoop {
     const { brain, goals, log } = this.#options;
     const looked = await this.#look(driving, turn);
     if (looked.kind === "unseen") {
-      return looked.outcome === "stopped" ? false : this.#failed(driving, turn, `I could not look at the screen: ${looked.detail}`);
+      if (looked.outcome === "stopped") {
+        return false;
+      }
+      return this.#offline(turn) ? this.#reconnect(driving, turn) : this.#failed(driving, turn, `I could not look at the screen: ${looked.detail}`);
     }
     const { observation } = looked;
     const picture = thumbnailOf(observation.picture);
@@ -317,12 +347,25 @@ export class GoalLoop {
         return false;
       }
       log.warn({ err: error, task_id: driving.taskId }, "the brain could not choose a move");
+      if (error instanceof BrainError && (error.problem === "unreachable" || error.problem === "timeout")) {
+        return this.#thinkAgain(driving, turn);
+      }
       return this.#failed(driving, turn, error instanceof BrainError ? error.message : "VENOM's brain could not choose the next move.");
     }
     await this.#charge(turn, turnId, engine, reply.type === "chosen" ? reply.model : null, reply.usage);
     if (reply.type === "failed") {
       log.warn({ task_id: driving.taskId, reason: reply.reason, detail: reply.detail }, "the brain did not choose a move");
+      if (thinkingHiccups.has(reply.reason)) {
+        return this.#thinkAgain(driving, turn);
+      }
+      if (reply.reason === "refused") {
+        await this.#end(driving, turn, "failed", goalPowerWords(turn.task, reply.detail), reply.detail);
+        return false;
+      }
       return this.#failed(driving, turn, reply.detail);
+    }
+    if (turn.held === "thinking" && !(await this.#resume(driving, turn, backThinkingWords))) {
+      return false;
     }
     const { seen, next } = reply.next;
     switch (next.kind) {
@@ -384,6 +427,9 @@ export class GoalLoop {
     this.#publish(turn, finished.task, finished.move, null);
     if (outcome === "stopped") {
       return false;
+    }
+    if (answer.kind === "lost" && this.#offline(turn)) {
+      return this.#reconnect(driving, turn);
     }
     turn.failures = outcome === "done" ? 0 : turn.failures + 1;
     if (turn.failures >= this.#limits.failuresInARow) {
@@ -447,6 +493,70 @@ export class GoalLoop {
       this.#options.publishTask(driving.accountId, uuidv7(), resumed);
     }
     return resumed !== null;
+  }
+
+  async #reconnect(driving: Driving, turn: Turn): Promise<boolean> {
+    const { hub } = this.#options;
+    const name = turn.target.name;
+    if (!(await this.#hold(driving, turn, "device", lostDeviceWords(name)))) {
+      return false;
+    }
+    while (!hub.canAct(turn.target.id)) {
+      if (!(await this.#open(driving, turn))) {
+        return false;
+      }
+      const left = turn.deadline - Date.now();
+      if (left <= 0) {
+        await this.#end(driving, turn, "failed", goneDeviceWords(turn.task, name));
+        return false;
+      }
+      await this.#pause(driving, Math.min(left, this.#limits.recheckMs));
+    }
+    return (await this.#open(driving, turn)) && this.#resume(driving, turn, backDeviceWords(name));
+  }
+
+  async #thinkAgain(driving: Driving, turn: Turn): Promise<boolean> {
+    if (turn.held !== "thinking" && !(await this.#hold(driving, turn, "thinking", lostThinkingWords))) {
+      return false;
+    }
+    turn.hiccups += 1;
+    const wait = Math.min(this.#limits.retryMs * turn.hiccups, longestThinkingWaitMs);
+    if (Date.now() + wait > turn.deadline) {
+      await this.#end(driving, turn, "failed", goneThinkingWords(turn.task));
+      return false;
+    }
+    await this.#pause(driving, wait);
+    return !driving.abort.signal.aborted;
+  }
+
+  async #hold(driving: Driving, turn: Turn, why: Held, words: string): Promise<boolean> {
+    const held = turn.task.status === "awaiting_confirmation" ? turn.task : await this.#options.goals.hold(driving.accountId, driving.taskId, uuidv7());
+    if (held === null) {
+      return false;
+    }
+    turn.task = held;
+    turn.held = why;
+    this.#options.publishTask(driving.accountId, uuidv7(), held);
+    await this.#tell(held, "report", words, null);
+    return true;
+  }
+
+  async #resume(driving: Driving, turn: Turn, words: string): Promise<boolean> {
+    const resumed = turn.task.status === "awaiting_confirmation" ? await this.#options.goals.carryOn(driving.accountId, driving.taskId, uuidv7()) : turn.task;
+    if (resumed === null) {
+      return false;
+    }
+    turn.task = resumed;
+    turn.held = null;
+    turn.hiccups = 0;
+    turn.failures = 0;
+    this.#options.publishTask(driving.accountId, uuidv7(), resumed);
+    await this.#tell(resumed, "report", words, null);
+    return true;
+  }
+
+  #offline(turn: Turn): boolean {
+    return !this.#options.hub.canAct(turn.target.id);
   }
 
   async #keepGoing(driving: Driving, turn: Turn): Promise<boolean> {

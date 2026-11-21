@@ -99,6 +99,26 @@ export function goalPowerWords(task: Task, detail: string): string {
   return `${sentence(detail)} I paused ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when you are ready, and I will pick it up from the screen.`;
 }
 
+export function lostDeviceWords(device: string): string {
+  return `Ooh, I lost the connection to ${device}, buddy. I am holding the job and will pick it up by myself as soon as it is back.`;
+}
+
+export function backDeviceWords(device: string): string {
+  return `${device} is back. I am looking at the screen again and carrying on.`;
+}
+
+export function goneDeviceWords(task: Task, device: string): string {
+  return `${device} did not come back in time, so I stopped ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when it is back, and I will pick it up from the screen.`;
+}
+
+export const lostThinkingWords = "Ooh, I cannot reach my thinking right now, buddy; the network may have dropped. I am holding the job and will keep trying by myself.";
+
+export const backThinkingWords = "I can think again. I am looking at the screen again and carrying on.";
+
+export function goneThinkingWords(task: Task): string {
+  return `I still could not reach my thinking, so I stopped ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when the network is back, and I will pick it up from the screen.`;
+}
+
 export function goalCannotWords(task: Task, reason: string): string {
   return `I could not finish ${quoted(task.request_text)}: ${lowered(sentence(reason))} I stopped after ${moves(task.moves)}.`;
 }

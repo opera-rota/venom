@@ -30,7 +30,13 @@ export interface Report {
   readonly at: number;
 }
 
+export interface DeviceKeys {
+  readonly pair: KeyPair;
+  readonly serverKey: string;
+}
+
 export interface ActingDevice {
+  readonly keys: DeviceKeys;
   readonly events: GatewayEvent[];
   readonly reports: Report[];
   readonly stops: string[];
@@ -62,8 +68,12 @@ export async function liveHeaders(base: string, session: DeviceSession, pair: Ke
   };
 }
 
-export async function actingDevice(base: string, session: DeviceSession, { speed = 1, screen }: { readonly speed?: number; readonly screen?: Screen } = {}): Promise<ActingDevice> {
-  const { pair, serverKey } = await enrollKey(base, session);
+export async function actingDevice(
+  base: string,
+  session: DeviceSession,
+  { speed = 1, screen, keys }: { readonly speed?: number; readonly screen?: Screen; readonly keys?: DeviceKeys } = {},
+): Promise<ActingDevice> {
+  const { pair, serverKey } = keys ?? (await enrollKey(base, session));
   const socket = new WebSocket(`${base.replace("http", "ws")}/v1/live`, { headers: await liveHeaders(base, session, pair) });
   const guard = new CommandGuard(serverKey, session.device.id);
   const events: GatewayEvent[] = [];
@@ -247,6 +257,7 @@ export async function actingDevice(base: string, session: DeviceSession, { speed
   }
 
   return {
+    keys: { pair, serverKey },
     events,
     reports,
     stops,

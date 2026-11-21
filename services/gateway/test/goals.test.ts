@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { thumbnailOf } from "../src/thumbnail.ts";
 import { handToLoop, movesWith, type MoveScript } from "../src/testing.ts";
 import { actingDevice, type ActingDevice, type Screen } from "./acting-device.ts";
-import { call, createEnvironment, destroyEnvironment, drillMs, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
+import { attachOverHttp, call, createEnvironment, destroyEnvironment, drillMs, signUpOverHttp, startGateway, type Environment, type RunningGateway } from "./harness.ts";
 
 let environment: Environment;
 let gateway: RunningGateway;
@@ -192,6 +192,57 @@ describe("thinking power is checked kindly before VENOM says On it", () => {
       near.close();
       await tight.stop();
     }
+  });
+});
+
+describe("gentle when the connection drops", () => {
+  it("holds the job when the computer drops off, and carries on by itself when it is back", async () => {
+    gateway.brain.mover = movesWith([longWait, finished]);
+    const { here, near } = await account();
+    const there = await attachOverHttp(gateway.base, environment.mailer, `goals-${accounts}@venom.test`, "goals secret word");
+    const watch = await actingDevice(gateway.base, there);
+    opened.push(watch);
+    await say(here, "Wait for the slow page");
+    await near.until(() => near.moves.length === 1);
+    near.close();
+    const lost = (await watch.until(venom("report", "Ooh, I lost the connection to"))) as MessageEvent;
+    expect(lost.message.text).toContain("I am holding the job and will pick it up by myself as soon as it is back.");
+    await watch.until(goal("awaiting_confirmation"));
+    const again = await actingDevice(gateway.base, here, { screen: notepad, keys: near.keys });
+    opened.push(again);
+    const back = (await watch.until(venom("report", `${here.device.name} is back.`))) as MessageEvent;
+    expect(back.message.text).toBe(`${here.device.name} is back. I am looking at the screen again and carrying on.`);
+    const completed = (await watch.until(goal("completed"))) as TaskEvent;
+    expect(completed.task.result).toBe("Done. Your shopping list is in Notepad.");
+    expect(again.looks.length).toBeGreaterThanOrEqual(1);
+    expect(watch.events.filter(venom("report", "That did not work."))).toEqual([]);
+  }, drillMs);
+
+  it("holds the job while the thinking service cannot be reached, and carries on when it answers again", async () => {
+    let calls = 0;
+    const script = movesWith([typing, finished]);
+    gateway.brain.mover = (request) => {
+      calls += 1;
+      return calls <= 4 ? { type: "failed", reason: "unavailable", detail: "The model service could not be reached.", usage: { input_tokens: 0, output_tokens: 0, cost_micro_usd: 0 } } : script(request);
+    };
+    const { here, near } = await account();
+    await say(here, "Write a shopping list in Notepad");
+    const lost = (await near.until(venom("report", "Ooh, I cannot reach my thinking right now, buddy"))) as MessageEvent;
+    expect(lost.message.task_id).not.toBeNull();
+    await near.until(venom("report", "I can think again."));
+    await near.until(goal("completed"));
+    expect(near.events.filter(venom("report", "Ooh, I cannot reach my thinking"))).toHaveLength(1);
+    expect(near.moves).toHaveLength(1);
+  }, drillMs);
+
+  it("pauses kindly at once when the model account is out of credit", async () => {
+    gateway.brain.mover = () => ({ type: "failed", reason: "refused", detail: "Ooh, I am out of thinking power for now, buddy: VENOM's model account has run out of credit and needs more before I can carry on.", usage: { input_tokens: 0, output_tokens: 0, cost_micro_usd: 0 } });
+    const { here, near } = await account();
+    await say(here, "Open Notepad");
+    const paused = (await near.until(venom("report", "Ooh, I am out of thinking power for now, buddy"))) as MessageEvent;
+    expect(paused.message.text).toContain('I paused "Open Notepad" after 0 moves. Say carry on when you are ready, and I will pick it up from the screen.');
+    await near.until(goal("failed"));
+    expect(gateway.brain.moves.filter((request) => request.goal === "Open Notepad")).toHaveLength(1);
   });
 });
 

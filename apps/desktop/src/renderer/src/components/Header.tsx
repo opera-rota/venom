@@ -7,7 +7,7 @@ import { Icon, type IconName } from "./Icon.tsx";
 const connectionView: Record<ConnectionState, { readonly label: string; readonly icon: IconName; readonly tone: string; readonly dot: string }> = {
   online: { label: "Connected", icon: "check", tone: "text-status-ok", dot: "bg-status-ok" },
   connecting: { label: "Connecting", icon: "hourglass", tone: "text-status-wait", dot: "bg-status-wait" },
-  offline: { label: "Gateway unreachable, retrying", icon: "cross", tone: "text-status-fail", dot: "bg-status-fail" },
+  offline: { label: "Ooh, lost the network. Reconnecting by myself", icon: "hourglass", tone: "text-status-wait", dot: "bg-status-wait" },
 };
 
 export function LogoMark({ size }: { readonly size: number }) {
