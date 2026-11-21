@@ -24,6 +24,7 @@ import type {
   MemoryList,
   MessageHistory,
   PowerStatus,
+  ScreenSignal,
 } from "@venom/contracts";
 
 export type ConnectionState = "connecting" | "online" | "offline";
@@ -129,6 +130,7 @@ export interface VenomBridge {
   developer(): Promise<boolean>;
   openLink(url: string): Promise<void>;
   saveDocument(document: ChatDocument): Promise<SaveResult>;
+  screenSignal(toDeviceId: string, sessionId: string, signal: ScreenSignal): Promise<StepResult>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
   onConnection(listener: (state: ConnectionState) => void): () => void;
@@ -174,6 +176,7 @@ export const channels = {
   developer: "venom:developer",
   openLink: "venom:open-link",
   saveDocument: "venom:save-document",
+  screenSignal: "venom:screen-signal",
   connection: "venom:connection",
   event: "venom:event",
   connectionChanged: "venom:connection-changed",

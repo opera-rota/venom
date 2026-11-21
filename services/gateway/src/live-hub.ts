@@ -10,6 +10,7 @@ import {
   type Message,
   type PowerStatus,
   type QuestionRef,
+  type ScreenSignal,
   type StopReceipt,
   type Task,
   type TaskMove,
@@ -158,6 +159,10 @@ export function moveEvent(requestId: string, move: TaskMove, picture: Thumbnail 
 
 export function haltEvent(requestId: string, receipt: StopReceipt): GatewayEvent {
   return GatewayEvent.parse({ type: "halt", ...stamp(requestId, 0), ...receipt });
+}
+
+export function screenSignalEvent(requestId: string, fromDeviceId: string, sessionId: string, signal: ScreenSignal): GatewayEvent {
+  return GatewayEvent.parse({ type: "screen_signal", ...stamp(requestId, 0), from_device_id: fromDeviceId, session_id: sessionId, signal });
 }
 
 export class RequestTrace {

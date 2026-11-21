@@ -40,6 +40,8 @@ const paths = {
   pulse: "M1 8h3l1.5-4 2.5 8 2-5 1.2 1H15",
   chip: "M4.5 4.5h7v7h-7zM6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14",
   wave: "M2 6.5v3M4.75 4v8M7.5 2.5v11M10.25 5v6M13 6.75v2.5",
+  expand: "M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10",
+  eye: "M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8zM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
 } as const;
 
 export type IconName = keyof typeof paths;

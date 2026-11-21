@@ -1,0 +1,8 @@
+{
+  "to_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e91",
+  "session_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e92",
+  "signal": {
+    "kind": "offer",
+    "sdp": "v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+  }
+}

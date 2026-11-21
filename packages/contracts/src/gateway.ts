@@ -196,6 +196,70 @@ export const LaterRemovedEvent = z
   })
   .register(contracts, { id: "LaterRemovedEvent" });
 
+export const screenSignalLimits = {
+  sdp: 16_384,
+  candidate: 1_024,
+  mid: 64,
+  lines: 16,
+} as const;
+
+export const ScreenWatch = z
+  .strictObject({ kind: z.literal("watch") })
+  .register(contracts, { id: "ScreenWatch" });
+
+export const ScreenLeave = z
+  .strictObject({ kind: z.literal("leave") })
+  .register(contracts, { id: "ScreenLeave" });
+
+export const ScreenRefused = z
+  .strictObject({ kind: z.literal("refused") })
+  .register(contracts, { id: "ScreenRefused" });
+
+export const ScreenOffer = z
+  .strictObject({
+    kind: z.literal("offer"),
+    sdp: z.string().min(1).max(screenSignalLimits.sdp),
+  })
+  .register(contracts, { id: "ScreenOffer" });
+
+export const ScreenAnswer = z
+  .strictObject({
+    kind: z.literal("answer"),
+    sdp: z.string().min(1).max(screenSignalLimits.sdp),
+  })
+  .register(contracts, { id: "ScreenAnswer" });
+
+export const ScreenCandidate = z
+  .strictObject({
+    kind: z.literal("candidate"),
+    candidate: z.string().max(screenSignalLimits.candidate),
+    sdp_mid: z.string().max(screenSignalLimits.mid).nullable(),
+    sdp_m_line_index: z.int().min(0).max(screenSignalLimits.lines).nullable(),
+  })
+  .register(contracts, { id: "ScreenCandidate" });
+
+export const ScreenSignal = z
+  .discriminatedUnion("kind", [ScreenWatch, ScreenLeave, ScreenRefused, ScreenOffer, ScreenAnswer, ScreenCandidate])
+  .register(contracts, { id: "ScreenSignal" });
+
+export const SendScreenSignal = z
+  .strictObject({
+    to_device_id: Id,
+    session_id: Id,
+    signal: ScreenSignal,
+  })
+  .register(contracts, { id: "SendScreenSignal" });
+
+export const ScreenSignalEvent = z
+  .strictObject({
+    type: z.literal("screen_signal"),
+    ...eventFields,
+    from_device_id: Id,
+    session_id: Id,
+    signal: ScreenSignal,
+  })
+  .register(contracts, { id: "ScreenSignalEvent" });
+
 export const GatewayEvent = z
   .discriminatedUnion("type", [
     MessageEvent,
@@ -212,6 +276,7 @@ export const GatewayEvent = z
     HaltEvent,
     LaterEvent,
     LaterRemovedEvent,
+    ScreenSignalEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
 
@@ -237,4 +302,13 @@ export type MoveEvent = z.infer<typeof MoveEvent>;
 export type HaltEvent = z.infer<typeof HaltEvent>;
 export type LaterEvent = z.infer<typeof LaterEvent>;
 export type LaterRemovedEvent = z.infer<typeof LaterRemovedEvent>;
+export type ScreenWatch = z.infer<typeof ScreenWatch>;
+export type ScreenLeave = z.infer<typeof ScreenLeave>;
+export type ScreenRefused = z.infer<typeof ScreenRefused>;
+export type ScreenOffer = z.infer<typeof ScreenOffer>;
+export type ScreenAnswer = z.infer<typeof ScreenAnswer>;
+export type ScreenCandidate = z.infer<typeof ScreenCandidate>;
+export type ScreenSignal = z.infer<typeof ScreenSignal>;
+export type SendScreenSignal = z.infer<typeof SendScreenSignal>;
+export type ScreenSignalEvent = z.infer<typeof ScreenSignalEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

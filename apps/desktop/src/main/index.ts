@@ -1,6 +1,6 @@
 import { ChatDocument, ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
 import { newKeyPair } from "@venom/safety/device";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, powerMonitor, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, powerMonitor, safeStorage, screen as displays, session, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -28,6 +28,8 @@ if (config.profile !== null) {
 
 const appIcon = join(import.meta.dirname, "../../resources/icon.png");
 const handsScript = join(import.meta.dirname, "../../hands/venom-hands.ps1");
+
+app.commandLine.appendSwitch("disable-features", "WebRtcHideLocalIpsWithMdns");
 
 if (process.platform === "win32") {
   app.setAppUserModelId(config.profile === null ? "com.venom.desktop" : `com.venom.desktop.${config.profile}`);
@@ -96,6 +98,26 @@ async function saveDocument(document: unknown): Promise<SaveResult> {
   }
 }
 
+function allowScreenSharing(): void {
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      if (!(request.frame?.url ?? "").startsWith(trustedOrigin)) {
+        callback({});
+        return;
+      }
+      desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } }).then(
+        (sources) => {
+          const primary = String(displays.getPrimaryDisplay().id);
+          const source = sources.find((candidate) => candidate.display_id === primary) ?? sources[0];
+          callback(source === undefined ? {} : { video: source });
+        },
+        () => callback({}),
+      );
+    },
+    { useSystemPicker: false },
+  );
+}
+
 const zoomSteps: Readonly<Record<string, number>> = { "=": 0.5, "+": 0.5, "-": -0.5, "_": -0.5, "0": 0 };
 
 const zoomRange = 3;
@@ -117,6 +139,7 @@ function createWindow(): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true,
+      backgroundThrottling: false,
     },
   });
 
@@ -284,6 +307,7 @@ function wire(): void {
   handle(channels.developer, () => process.env["VENOM_DEVELOPER"] === "1");
   handle(channels.openLink, (url) => openLink(url));
   handle(channels.saveDocument, (document) => saveDocument(document));
+  handle(channels.screenSignal, (toDeviceId, sessionId, signal) => gateway.screenSignal(toDeviceId, sessionId, signal));
 
   if (!globalShortcut.register(haltShortcut, () => {
     if (sessions.view.kind === "signed_in") {
@@ -324,6 +348,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
+    allowScreenSharing();
     wire();
     createWindow();
     app.on("activate", () => {

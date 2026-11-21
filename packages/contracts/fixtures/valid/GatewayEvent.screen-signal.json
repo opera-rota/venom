@@ -1,0 +1,14 @@
+{
+  "type": "screen_signal",
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e90",
+  "sequence": 0,
+  "emitted_at": "2026-11-21T21:30:00.000Z",
+  "from_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e91",
+  "session_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e92",
+  "signal": {
+    "kind": "candidate",
+    "candidate": "candidate:1 1 udp 2122260223 100.101.12.7 54321 typ host generation 0",
+    "sdp_mid": "0",
+    "sdp_m_line_index": 0
+  }
+}

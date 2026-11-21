@@ -28,6 +28,7 @@ export interface HeaderProps {
   readonly menu: AccountMenuProps;
   readonly halt: HaltView;
   readonly waiting: number;
+  readonly watchedBy: string | null;
   readonly onStop: () => void;
   readonly onAsk: (text: string) => Promise<boolean>;
   readonly onWaiting: () => void;
@@ -67,7 +68,19 @@ function Ask({ onAsk, online }: { readonly onAsk: (text: string) => Promise<bool
   );
 }
 
-export function Header({ connection, deviceCount, menu, halt, waiting, onStop, onAsk, onWaiting }: HeaderProps) {
+function Watched({ words }: { readonly words: string | null }) {
+  if (words === null) {
+    return null;
+  }
+  return (
+    <div role="status" title={words} className={`flex items-center gap-2 rounded-full border border-green-400/40 bg-green-400/[0.08] px-3 py-2 text-green-300 shadow-glow ${text.detail}`}>
+      <Icon name="eye" className="h-3.5 w-3.5 animate-pulse" />
+      <span className="hidden max-w-[200px] truncate md:inline">{words}</span>
+    </div>
+  );
+}
+
+export function Header({ connection, deviceCount, menu, halt, waiting, watchedBy, onStop, onAsk, onWaiting }: HeaderProps) {
   const view = connectionView[connection];
 
   return (
@@ -83,6 +96,7 @@ export function Header({ connection, deviceCount, menu, halt, waiting, onStop, o
         <Ask onAsk={onAsk} online={connection === "online"} />
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <Watched words={watchedBy} />
         <div role="status" aria-live="polite" title={view.label} className={`glass flex items-center gap-2 rounded-full px-3 py-2 ${text.detail} ${view.tone}`}>
           <span className={`${mark.dot} ${view.dot}`} />
           <span className="hidden max-w-[240px] truncate lg:inline">{view.label}</span>

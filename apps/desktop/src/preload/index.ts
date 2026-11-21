@@ -54,6 +54,7 @@ const bridge: VenomBridge = {
   developer: () => ipcRenderer.invoke(channels.developer),
   openLink: (url) => ipcRenderer.invoke(channels.openLink, url),
   saveDocument: (document) => ipcRenderer.invoke(channels.saveDocument, document),
+  screenSignal: (toDeviceId, sessionId, signal) => ipcRenderer.invoke(channels.screenSignal, toDeviceId, sessionId, signal),
   connection: () => ipcRenderer.invoke(channels.connection),
   onEvent: (listener) => subscribe<GatewayEvent>(channels.event, listener),
   onConnection: (listener) => subscribe<ConnectionState>(channels.connectionChanged, listener),

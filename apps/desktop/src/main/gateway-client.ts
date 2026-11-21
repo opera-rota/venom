@@ -18,6 +18,7 @@ import {
   PowerStatus,
   SafetySettings,
   SendMessageAccepted,
+  SendScreenSignal,
   StopReceipt,
   Task,
   TaskControl,
@@ -86,6 +87,7 @@ const closeReasons: ReadonlyMap<number, Revocation> = new Map([
 const unreadableDraft = "Write what VENOM should remember, in 500 characters or fewer.";
 
 const laterGone = "That item is no longer kept for later.";
+const signalUnreadable = "VENOM could not read that live screen signal.";
 
 type Frame = { readonly kind: "event"; readonly event: GatewayEvent } | { readonly kind: "command"; readonly frame: CommandFrame };
 
@@ -456,6 +458,15 @@ export class GatewayClient {
 
   async interrupted(taskId: string): Promise<StepResult> {
     const result = await this.#api.request("POST", `/v1/tasks/${encodeURIComponent(taskId)}/interrupted`, { token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async screenSignal(toDeviceId: unknown, sessionId: unknown, signal: unknown): Promise<StepResult> {
+    const parsed = SendScreenSignal.safeParse({ to_device_id: toDeviceId, session_id: sessionId, signal });
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: signalUnreadable };
+    }
+    const result = await this.#api.request("POST", "/v1/screen/signal", { body: parsed.data, token: this.#token });
     return result.ok ? { ok: true } : result;
   }
 

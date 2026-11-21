@@ -6,14 +6,16 @@ export interface PlaceProps {
   readonly icon: IconName;
   readonly eyebrow?: string;
   readonly count?: number;
-  readonly width?: "narrow" | "wide";
+  readonly width?: "narrow" | "wide" | "full";
   readonly children: ReactNode;
 }
+
+const placeWidth = { narrow: "max-w-[760px]", wide: "max-w-[1100px]", full: "max-w-[1480px]" } as const;
 
 export function Place({ title, icon, eyebrow = "VENOM", count, width = "narrow", children }: PlaceProps) {
   return (
     <section aria-label={title} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-      <div className={`mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 ${width === "wide" ? "max-w-[1100px]" : "max-w-[760px]"}`}>
+      <div className={`mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 ${placeWidth[width]}`}>
         <header className="flex items-center gap-3.5">
           <span className="relative grid h-11 w-11 shrink-0 place-items-center rounded-control border border-green-400/35 bg-linear-to-br from-green-400/20 to-green-700/5 shadow-mark">
             <Icon name={icon} className="h-5 w-5 text-green-300" />

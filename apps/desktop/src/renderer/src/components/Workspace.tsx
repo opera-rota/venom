@@ -6,10 +6,13 @@ import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from "../tasks-state.ts";
 import { unseenCount } from "../later-state.ts";
+import { watcherWords } from "../live-screen.ts";
 import { useDevices } from "../use-devices.ts";
 import { useLater } from "../use-later.ts";
+import { useLiveScreen } from "../use-live-screen.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
+import { useScreenShare } from "../use-screen-share.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
 import { Backdrop } from "./Backdrop.tsx";
 import { Composer, type Seed } from "./Composer.tsx";
@@ -99,6 +102,8 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const job = useMemo(() => screenJob(state), [state]);
   const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen), later: unseenCount(later.items) }), [state, later.items]);
   const engine = power.power === null ? null : engineName(power.engines, power.power);
+  const live = useLiveScreen(bridge, devices.devices, device.id, connection, place === "screen", job?.target_device_id ?? null);
+  const share = useScreenShare(bridge, devices.devices, device);
   const online = devices.devices.filter((candidate) => candidate.status === "active").length;
   const waiting = (signals.waiting ? 1 : 0) + signals.later;
   const ask = useCallback(
@@ -130,6 +135,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
         connection={connection}
         deviceCount={devices.devices.length}
         waiting={waiting}
+        watchedBy={watcherWords(share.watchers)}
         onAsk={ask}
         onWaiting={() => setPlace(signals.waiting || signals.later === 0 ? "chat" : "screen")}
         menu={{
@@ -164,6 +170,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
                 picture={job === null ? null : (state.pictures.get(job.id) ?? null)}
                 deviceId={device.id}
                 devices={devices.devices}
+                live={live}
                 stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
                 later={later}
                 onLoad={loadMoves}
