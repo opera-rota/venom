@@ -33,7 +33,7 @@ export type AwakeLevel = "none" | "system" | "display";
 
 export type Failure = {
   readonly ok: false;
-  readonly code: ApiErrorCode | "network" | "secret_word_mismatch";
+  readonly code: ApiErrorCode | "network" | "outdated" | "secret_word_mismatch";
   readonly reason: string;
 };
 

@@ -37,6 +37,18 @@ describe("credential vault", () => {
     expect(vault.read()).toBeNull();
   });
 
+  it("keeps a device signed in after an update, even when its saved sign-in is older than the newest device details", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "venom-vault-"));
+    const session = await createAccount(backend, "older@venom.test", "older secret word");
+    const { in_use: _inUse, locked: _locked, ...olderDevice } = session.device;
+    const older = { device_token: session.device_token, session: { account: session.account, device: olderDevice } };
+    writeFileSync(join(folder, "device-credential.bin"), testEncryptor.encrypt(JSON.stringify(older)));
+
+    const kept = vaultIn(folder).read();
+    expect(kept?.device_token).toBe(session.device_token);
+    expect(kept?.session.device).toMatchObject({ id: session.device.id, in_use: false, locked: false });
+  });
+
   it("treats a damaged file as signed out", () => {
     const folder = mkdtempSync(join(tmpdir(), "venom-vault-"));
     writeFileSync(join(folder, "device-credential.bin"), "garbage");

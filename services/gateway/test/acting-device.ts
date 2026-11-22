@@ -93,18 +93,22 @@ export async function actingDevice(
     for (const check of [...waiters]) check();
   };
 
+  async function send(path: string, body: unknown): Promise<void> {
+    await call(base, "POST", path, { token: session.device_token, body }).catch(() => undefined);
+  }
+
   async function report(commandId: string, stepId: string, outcome: CommandOutcome, detail: string, output: string | null = null): Promise<void> {
     if (shut) {
       return;
     }
     reports.push({ stepId, outcome, at: Date.now() });
     wake();
-    await call(base, "POST", "/v1/commands/report", { token: session.device_token, body: { command_id: commandId, outcome, detail, output } });
+    await send("/v1/commands/report", { command_id: commandId, outcome, detail, output });
   }
 
   async function chunk(commandId: string, sequence: number, text: string): Promise<void> {
     if (!shut) {
-      await call(base, "POST", "/v1/commands/output", { token: session.device_token, body: { command_id: commandId, sequence, text } });
+      await send("/v1/commands/output", { command_id: commandId, sequence, text });
     }
   }
 
@@ -134,7 +138,7 @@ export async function actingDevice(
     seen = { marks: observation.marks, focused: observation.focused };
     spotted = null;
     if (!shut) {
-      void call(base, "POST", "/v1/commands/observation", { token: session.device_token, body: { command_id: commandId, observation } });
+      void send("/v1/commands/observation", { command_id: commandId, observation });
     }
   }
 
@@ -144,7 +148,7 @@ export async function actingDevice(
     const read = screen?.spot?.(body.point) ?? null;
     spotted = { point: body.point, spot: read };
     if (!shut) {
-      void call(base, "POST", "/v1/commands/spot", { token: session.device_token, body: { command_id: commandId, spot: read } });
+      void send("/v1/commands/spot", { command_id: commandId, spot: read });
     }
   }
 

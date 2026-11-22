@@ -2,9 +2,10 @@ import type { Device, DeviceStatus } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
 import { canWork } from "../live-screen.ts";
 import type { DevicesState } from "../use-devices.ts";
-import { button, field, mark, surface, text } from "../ui.ts";
+import { button, mark, surface, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
+import { Trouble } from "./Trouble.tsx";
 
 const statusView: Record<Exclude<DeviceStatus, "revoked">, { readonly label: string; readonly icon: IconName; readonly dot: string; readonly tone: string }> = {
   active: { label: "Online", icon: "check", dot: "bg-status-ok", tone: "text-status-ok" },
@@ -131,12 +132,7 @@ export function DevicesPlace({ state }: { readonly state: DevicesState }) {
   return (
     <Place title="Devices" eyebrow="Symbiote network" icon="devices" count={state.devices.length}>
       <p className={text.support}>Every device here is a body of the same VENOM. Choose the computer VENOM works on with "Use this device"; Screen shows it live. Add another device by choosing "Attach this device" on it.</p>
-      {state.failure !== null && (
-        <p role="alert" className={field.error}>
-          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{state.failure}</span>
-        </p>
-      )}
+      {state.failure !== null && <Trouble reason={state.failure} />}
       <ul className="flex flex-col gap-3">
         {state.devices.map((device) => (
           <DeviceRow

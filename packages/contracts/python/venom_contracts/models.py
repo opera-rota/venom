@@ -957,8 +957,8 @@ class Device(BaseModel):
     capabilities: Capabilities
     status: DeviceStatus
     last_seen_at: AwareDatetime | None
-    in_use: bool
-    locked: bool
+    in_use: bool = False
+    locked: bool = False
 
 
 class DeviceInfo(BaseModel):

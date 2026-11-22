@@ -6,6 +6,7 @@ import { button, field, mark, surface, text } from "../ui.ts";
 import { Choice } from "./Choice.tsx";
 import { Icon } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
+import { Trouble } from "./Trouble.tsx";
 
 const typeView: Record<MemoryType, { readonly label: string; readonly title: string; readonly blurb: string }> = {
   preference: { label: "Preference", title: "Preferences", blurb: "Used in every answer." },
@@ -209,12 +210,7 @@ export function MemoryPlace({ state }: { readonly state: MemoryState }) {
         </section>
       )}
 
-      {state.failure !== null && (
-        <p role="alert" className={field.error}>
-          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{state.failure}</span>
-        </p>
-      )}
+      {state.failure !== null && <Trouble reason={state.failure} />}
 
       {state.items.length > 0 && (
         <div className="relative">

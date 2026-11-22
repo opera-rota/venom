@@ -1349,9 +1349,11 @@
           ]
         },
         "in_use": {
+          "default": false,
           "type": "boolean"
         },
         "locked": {
+          "default": false,
           "type": "boolean"
         }
       },
@@ -1363,9 +1365,7 @@
         "platform",
         "capabilities",
         "status",
-        "last_seen_at",
-        "in_use",
-        "locked"
+        "last_seen_at"
       ],
       "additionalProperties": false
     },

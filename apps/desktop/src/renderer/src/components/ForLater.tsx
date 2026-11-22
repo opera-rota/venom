@@ -2,9 +2,10 @@ import type { LaterItem } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
 import { laterPreview, unseenCount } from "../later-state.ts";
 import type { LaterState } from "../use-later.ts";
-import { button, field, mark, surface, text } from "../ui.ts";
+import { button, mark, surface, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
 import { Markdown } from "./Markdown.tsx";
+import { Trouble } from "./Trouble.tsx";
 
 const keptFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const copiedMs = 1500;
@@ -125,12 +126,7 @@ export function ForLater({ state, onOpenLink }: { readonly state: LaterState; re
         <h3 className="text-base font-semibold text-ink">For later</h3>
         {waiting > 0 && <span className={mark.tag}>{waiting} new</span>}
       </div>
-      {state.failure !== null && (
-        <p role="alert" className={field.error}>
-          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{state.failure}</span>
-        </p>
-      )}
+      {state.failure !== null && <Trouble reason={state.failure} />}
       {state.loaded && state.items.length === 0 ? (
         <p className={text.support}>Nothing kept for later yet. Add "keep it for later" to a question or a job, and VENOM keeps the answer here.</p>
       ) : (

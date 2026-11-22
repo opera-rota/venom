@@ -1,9 +1,10 @@
 import { useId, useState } from "react";
 import type { Engine, EngineClass, PowerStatus, Proficiency } from "@venom/contracts";
 import type { PowerState } from "../use-power.ts";
-import { button, field, text } from "../ui.ts";
+import { button, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
+import { Trouble } from "./Trouble.tsx";
 
 interface ClassView {
   readonly title: string;
@@ -273,12 +274,7 @@ export function ModelsPlace({ state }: { readonly state: PowerState }) {
     <Place title="Models" eyebrow="Brain core" icon="bolt" width="wide">
       <p className={text.support}>The engine VENOM thinks with, and the power you have left.</p>
       {power !== null && <Core power={power} name={engineName(engines, power)} />}
-      {failure !== null && (
-        <p role="alert" className={field.error}>
-          <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{failure}</span>
-        </p>
-      )}
+      {failure !== null && <Trouble reason={failure} />}
       {available.length > 0 && (
         <section aria-label={classView[chosen].title} className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

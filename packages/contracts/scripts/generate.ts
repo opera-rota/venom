@@ -15,6 +15,7 @@ const enginesFile = join(pythonPackage, "engines.json");
 function buildSchema(): object {
   const { schemas } = z.toJSONSchema(contracts, {
     target: "draft-2020-12",
+    io: "input",
     uri: (id) => `#/$defs/${id}`,
     override: ({ zodSchema, jsonSchema }) => {
       if (jsonSchema.format !== undefined) {
@@ -68,6 +69,7 @@ function generatePythonModels(): void {
       "--field-constraints",
       "--use-type-alias",
       "--use-double-quotes",
+      "--strict-nullable",
       "--disable-timestamp",
       "--formatters", "builtin",
     ],

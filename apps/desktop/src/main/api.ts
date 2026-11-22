@@ -1,6 +1,7 @@
 import { ApiError } from "@venom/contracts";
 import type { z } from "zod";
 import type { Failure } from "../shared/bridge.ts";
+import { troubleWords } from "../shared/trouble.ts";
 
 export type Result<T> = { readonly ok: true; readonly value: T } | Failure;
 
@@ -13,7 +14,19 @@ export interface RequestOptions<T> {
 export const unreachable: Failure = {
   ok: false,
   code: "network",
-  reason: "VENOM's gateway is not reachable. Check that it is running, then try again.",
+  reason: troubleWords.unreachable,
+};
+
+export const outdated: Failure = {
+  ok: false,
+  code: "outdated",
+  reason: troubleWords.outdated,
+};
+
+export const hiccup: Failure = {
+  ok: false,
+  code: "internal",
+  reason: troubleWords.hiccup,
 };
 
 export class Api {
@@ -51,13 +64,13 @@ export class Api {
       const error = ApiError.safeParse(payload);
       return error.success
         ? { ok: false, code: error.data.error, reason: error.data.message }
-        : { ok: false, code: "internal", reason: `The gateway answered with status ${response.status}.` };
+        : hiccup;
     }
 
     if (schema === undefined) {
       return { ok: true, value: undefined as T };
     }
     const parsed = schema.safeParse(payload);
-    return parsed.success ? { ok: true, value: parsed.data } : { ok: false, code: "internal", reason: "The gateway sent an answer VENOM could not read." };
+    return parsed.success ? { ok: true, value: parsed.data } : outdated;
   }
 }
