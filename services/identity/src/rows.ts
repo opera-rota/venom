@@ -18,6 +18,8 @@ export interface DeviceRow {
   readonly capabilities: unknown;
   readonly status: string;
   readonly last_seen_at: Date | null;
+  readonly in_use: boolean;
+  readonly locked: boolean;
 }
 
 export function toAccount(row: AccountRow): Account {

@@ -31,6 +31,7 @@ export const refuse = {
   deviceLimit: (limit: number) =>
     new IdentityError(409, "device_limit_reached", `This VENOM already has ${limit} devices. Remove one before adding another.`),
   notFound: () => new IdentityError(404, "not_found", "That device is not part of your VENOM."),
+  cannotWork: () => new IdentityError(409, "conflict", "For now VENOM can work only on a computer. Choose one of your computers."),
   malformed: () => new IdentityError(400, "invalid_request", "The secure sign-in message was not valid."),
   mailUnavailable: () =>
     new IdentityError(503, "mail_unavailable", "VENOM could not send the email right now. Please try again in a moment."),

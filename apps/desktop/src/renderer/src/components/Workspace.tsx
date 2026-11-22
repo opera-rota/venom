@@ -6,7 +6,7 @@ import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from "../tasks-state.ts";
 import { unseenCount } from "../later-state.ts";
-import { watcherWords } from "../live-screen.ts";
+import { awakeFor, watcherWords } from "../live-screen.ts";
 import { useDevices } from "../use-devices.ts";
 import { useLater } from "../use-later.ts";
 import { useLiveScreen } from "../use-live-screen.ts";
@@ -87,12 +87,12 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
       moves: (taskId) => movesOf(state, taskId),
       move: (taskId, moveId) => moveOf(state, taskId, moveId),
       loaded: (taskId) => state.loaded.has(taskId),
-      picture: (taskId) => state.pictures.get(taskId) ?? null,
       stopping: (taskId) => controlling.has(controlKey(taskId, "stop")),
       stop: (taskId) => void stopTask(taskId),
       loadMoves,
       answerMove: (taskId, moveId, decision) => void answerMove(taskId, moveId, decision),
       carryOn: () => void send("continue"),
+      watch: () => setPlace("screen"),
     }),
     [state, device.id, devices.devices, controlling, control, sending, answer, answerMove, loadMoves, stopTask, send],
   );
@@ -102,8 +102,11 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const job = useMemo(() => screenJob(state), [state]);
   const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen), later: unseenCount(later.items) }), [state, later.items]);
   const engine = power.power === null ? null : engineName(power.engines, power.power);
-  const live = useLiveScreen(bridge, devices.devices, device.id, connection, place === "screen", job?.target_device_id ?? null);
+  const live = useLiveScreen(bridge, devices.devices, device.id, connection, place === "screen");
   const share = useScreenShare(bridge, devices.devices, device);
+  const self = devices.devices.find((candidate) => candidate.id === device.id) ?? null;
+  const workingHere = goalsOf(state).some((goal) => isOpen(goal) && goal.target_device_id === device.id);
+  const awake = awakeFor(self, share.watchers.length > 0, workingHere);
   const online = devices.devices.filter((candidate) => candidate.status === "active").length;
   const waiting = (signals.waiting ? 1 : 0) + signals.later;
   const ask = useCallback(
@@ -127,6 +130,10 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   );
 
   useEffect(() => conversation.connect(), [conversation]);
+
+  useEffect(() => {
+    void bridge.keepAwake(awake);
+  }, [bridge, awake]);
 
   return (
     <div className="relative flex h-full flex-col">
@@ -171,8 +178,12 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
                 deviceId={device.id}
                 devices={devices.devices}
                 live={live}
+                watched={share.watchers.length > 0}
+                using={devices.using}
                 stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
                 later={later}
+                onUse={(deviceId) => void devices.use(deviceId)}
+                onDevices={() => setPlace("devices")}
                 onLoad={loadMoves}
                 onStop={(taskId) => void stopTask(taskId)}
                 onOpenLink={openLink}

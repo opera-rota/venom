@@ -175,6 +175,9 @@
       "$ref": "#/$defs/LiveEvent"
     },
     {
+      "$ref": "#/$defs/LockReport"
+    },
+    {
       "$ref": "#/$defs/MakeMove"
     },
     {
@@ -1344,6 +1347,12 @@
               "type": "null"
             }
           ]
+        },
+        "in_use": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1354,7 +1363,9 @@
         "platform",
         "capabilities",
         "status",
-        "last_seen_at"
+        "last_seen_at",
+        "in_use",
+        "locked"
       ],
       "additionalProperties": false
     },
@@ -2303,6 +2314,23 @@
         "failed",
         "stopped"
       ]
+    },
+    "LockReport": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "locked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "device_id",
+        "locked"
+      ],
+      "additionalProperties": false
     },
     "MakeMove": {
       "type": "object",

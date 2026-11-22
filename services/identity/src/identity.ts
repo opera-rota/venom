@@ -77,6 +77,8 @@ export interface Identity {
   markPresence(device: DeviceRef, online: boolean): Promise<void>;
   resetPresence(): Promise<number>;
   revokeDevice(actor: DeviceRef, deviceId: string, requestId: string): Promise<Device>;
+  useDevice(actor: DeviceRef, deviceId: string, requestId: string): Promise<Device>;
+  reportLock(device: DeviceRef, locked: boolean): Promise<boolean>;
 }
 
 interface SignupRow {
@@ -166,7 +168,7 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
     const [row] = await tx<DeviceRow[]>`
       insert into devices (account_id, type, name, platform, capabilities, credential_hash)
       values (${accountId}, ${device.type}, ${device.name}, ${device.platform}, ${tx.json(device.capabilities)}, ${tokenDigest(token)})
-      returning id, account_id, type, name, platform, capabilities, status, last_seen_at
+      returning id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
     `;
     if (row === undefined) {
       throw new Error("Device insert returned no row");
@@ -470,7 +472,7 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
 
     async session(device) {
       const [row] = await sql<DeviceRow[]>`
-        select id, account_id, type, name, platform, capabilities, status, last_seen_at
+        select id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
         from devices where id = ${device.id} and account_id = ${device.account_id}
       `;
       if (row === undefined) {
@@ -481,7 +483,7 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
 
     async devices(accountId) {
       const rows = await sql<DeviceRow[]>`
-        select id, account_id, type, name, platform, capabilities, status, last_seen_at
+        select id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
         from devices
         where account_id = ${accountId} and status <> 'revoked' and credential_hash is not null
         order by created_at, id
@@ -494,7 +496,7 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
         const [row] = await tx<DeviceRow[]>`
           update devices set capabilities = ${tx.json(capabilities)}
           where id = ${device.id} and account_id = ${device.account_id} and status <> 'revoked'
-          returning id, account_id, type, name, platform, capabilities, status, last_seen_at
+          returning id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
         `;
         if (row === undefined) {
           throw refuse.notFound();
@@ -515,22 +517,22 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
     async markPresence(device, online) {
       await sql`
         update devices
-        set status = ${online ? "active" : "offline"}, last_seen_at = clock_timestamp()
+        set status = ${online ? "active" : "offline"}, last_seen_at = clock_timestamp(), locked = locked and ${online}
         where id = ${device.id} and account_id = ${device.account_id} and status <> 'revoked'
       `;
     },
 
     async resetPresence() {
-      const result = await sql`update devices set status = 'offline' where status = 'active'`;
+      const result = await sql`update devices set status = 'offline', locked = false where status = 'active'`;
       return result.count;
     },
 
     async revokeDevice(actor, deviceId, requestId) {
       return sql.begin(async (tx) => {
         const [row] = await tx<DeviceRow[]>`
-          update devices set status = 'revoked', revoked_at = clock_timestamp()
+          update devices set status = 'revoked', revoked_at = clock_timestamp(), in_use = false, locked = false
           where id = ${deviceId} and account_id = ${actor.account_id} and status <> 'revoked'
-          returning id, account_id, type, name, platform, capabilities, status, last_seen_at
+          returning id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
         `;
         if (row === undefined) {
           throw refuse.notFound();
@@ -546,6 +548,49 @@ export function createIdentity({ sql, mailer, serverSetup, limits: overrides = {
         });
         return toDevice(row);
       });
+    },
+
+    async useDevice(actor, deviceId, requestId) {
+      return sql.begin(async (tx) => {
+        const [chosen] = await tx<{ readonly type: string }[]>`
+          select type from devices
+          where id = ${deviceId} and account_id = ${actor.account_id} and status <> 'revoked' and credential_hash is not null
+          for update
+        `;
+        if (chosen === undefined) {
+          throw refuse.notFound();
+        }
+        if (chosen.type !== "computer") {
+          throw refuse.cannotWork();
+        }
+        await tx`update devices set in_use = false where account_id = ${actor.account_id} and in_use and id <> ${deviceId}`;
+        const [row] = await tx<DeviceRow[]>`
+          update devices set in_use = true
+          where id = ${deviceId} and account_id = ${actor.account_id}
+          returning id, account_id, type, name, platform, capabilities, status, last_seen_at, in_use, locked
+        `;
+        if (row === undefined) {
+          throw refuse.notFound();
+        }
+        await audit(tx, {
+          accountId: actor.account_id,
+          deviceId: actor.id,
+          requestId,
+          actor: "user",
+          action: "device.in_use",
+          subjectId: row.id,
+          detail: { from: actor.id },
+        });
+        return toDevice(row);
+      });
+    },
+
+    async reportLock(device, locked) {
+      const changed = await sql`
+        update devices set locked = ${locked}
+        where id = ${device.id} and account_id = ${device.account_id} and status <> 'revoked' and locked <> ${locked}
+      `;
+      return changed.count > 0;
     },
   };
 }

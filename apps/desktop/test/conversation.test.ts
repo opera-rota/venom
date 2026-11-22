@@ -260,6 +260,8 @@ describe("conversation state", () => {
       capabilities: { screen_control: false, microphone: true, speaker: true, shortcuts: false, notifications: true, network: true },
       status: "active",
       last_seen_at: at,
+      in_use: false,
+      locked: false,
     };
     const fromPhone = { ...question, device_id: phone.id };
     expect(sentFrom(question, [phone], base.device_id)).toBeNull();

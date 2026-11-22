@@ -51,10 +51,13 @@ import {
   goneDeviceWords,
   goneThinkingWords,
   keepGoingWords,
+  lockedWords,
   moveQuestionWords,
   refusedMoveWords,
+  stillLockedWords,
   stopHereWords,
   timeUpWords,
+  unlockedWords,
   youFirstWords,
 } from "./words.ts";
 
@@ -133,7 +136,7 @@ interface Turn {
   hiccups: number;
 }
 
-type Held = "device" | "thinking";
+type Held = "device" | "thinking" | "locked";
 
 type Looked = { readonly kind: "seen"; readonly observation: Observation } | { readonly kind: "unseen"; readonly outcome: CommandOutcome; readonly detail: string };
 
@@ -188,6 +191,7 @@ export class GoalLoop {
   readonly #limits: LoopLimits;
   readonly #awaiting = new Map<string, Awaiting>();
   readonly #driving = new Map<string, Driving>();
+  readonly #locked = new Set<string>();
 
   constructor(options: LoopOptions) {
     this.#options = options;
@@ -197,7 +201,12 @@ export class GoalLoop {
 
   async target(device: DeviceRef): Promise<Device | null> {
     const { identity, hub } = this.#options;
-    const able = (await identity.devices(device.account_id)).filter((candidate) => isComputer(candidate) && hub.canAct(candidate.id));
+    const devices = await identity.devices(device.account_id);
+    const chosen = devices.find((candidate) => candidate.in_use);
+    if (chosen !== undefined) {
+      return isComputer(chosen) && hub.canAct(chosen.id) ? chosen : null;
+    }
+    const able = devices.filter((candidate) => isComputer(candidate) && hub.canAct(candidate.id));
     return able.find((candidate) => candidate.id === device.id) ?? able.sort(recent)[0] ?? null;
   }
 
@@ -279,7 +288,17 @@ export class GoalLoop {
     }
   }
 
+  deviceLock(deviceId: string, locked: boolean): void {
+    if (locked) {
+      this.#locked.add(deviceId);
+      return;
+    }
+    this.#locked.delete(deviceId);
+    this.deviceBack(deviceId);
+  }
+
   deviceLost(deviceId: string): void {
+    this.#locked.delete(deviceId);
     for (const awaiting of [...this.#awaiting.values()]) {
       if (awaiting.deviceId === deviceId) {
         awaiting.settle({ kind: "lost", detail: "The computer went offline before it answered." });
@@ -327,6 +346,9 @@ export class GoalLoop {
     const { brain, goals, log } = this.#options;
     if (driving.interrupted) {
       return this.#youFirst(driving, turn);
+    }
+    if (this.#locked.has(turn.target.id)) {
+      return this.#unlock(driving, turn);
     }
     const looked = await this.#look(driving, turn);
     if (looked.kind === "unseen") {
@@ -537,6 +559,25 @@ export class GoalLoop {
       await this.#pause(driving, Math.min(left, this.#limits.recheckMs));
     }
     return (await this.#open(driving, turn)) && this.#resume(driving, turn, backDeviceWords(name));
+  }
+
+  async #unlock(driving: Driving, turn: Turn): Promise<boolean> {
+    const name = turn.target.name;
+    if (!(await this.#hold(driving, turn, "locked", lockedWords(name)))) {
+      return false;
+    }
+    while (this.#locked.has(turn.target.id)) {
+      if (!(await this.#open(driving, turn))) {
+        return false;
+      }
+      const left = turn.deadline - Date.now();
+      if (left <= 0) {
+        await this.#end(driving, turn, "failed", stillLockedWords(turn.task, name));
+        return false;
+      }
+      await this.#pause(driving, Math.min(left, this.#limits.recheckMs));
+    }
+    return (await this.#open(driving, turn)) && this.#resume(driving, turn, unlockedWords(name));
   }
 
   async #thinkAgain(driving: Driving, turn: Turn): Promise<boolean> {

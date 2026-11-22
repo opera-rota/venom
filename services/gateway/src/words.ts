@@ -111,6 +111,18 @@ export function goneDeviceWords(task: Task, device: string): string {
   return `${device} did not come back in time, so I stopped ${quoted(task.request_text)} after ${moves(task.moves)}. Say carry on when it is back, and I will pick it up from the screen.`;
 }
 
+export function lockedWords(device: string): string {
+  return `Ooh, ${device} is locked, buddy. Unlock it and I will carry on by myself; I am holding the job until then.`;
+}
+
+export function unlockedWords(device: string): string {
+  return `${device} is unlocked. I am looking at the screen again and carrying on.`;
+}
+
+export function stillLockedWords(task: Task, device: string): string {
+  return `${device} stayed locked, so I stopped ${quoted(task.request_text)} after ${moves(task.moves)}. Unlock it and say carry on, and I will pick it up from the screen.`;
+}
+
 export const youFirstWords = "Ooh, you go first, buddy. I will wait. Press Continue when you are done, or Leave it if you want me to stop here.";
 
 export const lostThinkingWords = "Ooh, I cannot reach my thinking right now, buddy; the network may have dropped. I am holding the job and will keep trying by myself.";

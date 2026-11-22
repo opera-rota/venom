@@ -61,6 +61,8 @@ export const Device = z
     capabilities: Capabilities,
     status: DeviceStatus,
     last_seen_at: Timestamp.nullable(),
+    in_use: z.boolean(),
+    locked: z.boolean(),
   })
   .register(contracts, { id: "Device" });
 

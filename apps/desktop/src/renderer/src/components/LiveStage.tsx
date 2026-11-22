@@ -47,11 +47,24 @@ function Waiting({ phase, name, onRetry }: { readonly phase: LivePhase; readonly
   }
   if (phase === "offline") {
     return (
-      <div className="flex flex-col items-center gap-3 px-6 text-center">
+      <div className="flex max-w-md flex-col items-center gap-3 px-6 text-center">
         <Icon name="devices" className="h-8 w-8 text-ink-faint" />
         <div className="flex flex-col gap-1">
-          <p className="font-medium text-ink">{name} is resting</p>
-          <p className={text.support}>Open VENOM on it and the live screen comes back by itself.</p>
+          <p className="font-medium text-ink">{name} is asleep or switched off</p>
+          <p className={text.support}>Nothing can wake a sleeping computer from far away. Open it and start VENOM, and the live screen comes back by itself.</p>
+        </div>
+      </div>
+    );
+  }
+  if (phase === "locked") {
+    return (
+      <div className="flex max-w-md flex-col items-center gap-3 px-6 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full border border-status-wait/40 bg-status-wait/[0.08] shadow-[0_0_24px_-6px_rgba(242,196,109,0.7)]">
+          <Icon name="lock" className="h-6 w-6 text-status-wait" />
+        </span>
+        <div className="flex flex-col gap-1">
+          <p className="font-medium text-ink">{name} is locked</p>
+          <p className={text.support}>Unlock it and VENOM carries on by itself. Windows lets no app unlock it from far away, so this part is yours.</p>
         </div>
       </div>
     );
@@ -131,7 +144,7 @@ export function LiveStage({ device, phase, stream, quality, move, onRetry }: Liv
     <div className="flex min-w-0 flex-col gap-3">
       <div
         ref={stage}
-        className={`relative isolate overflow-hidden bg-sunken ${full ? "grid h-full w-full place-items-center" : "rounded-overlay border border-green-400/25 shadow-glow"}`}
+        className={`relative isolate overflow-hidden bg-sunken ${full ? "grid h-full w-full place-items-center" : "rounded-overlay border border-green-400/25 shadow-glow"} ${live || full ? "" : "min-h-[300px] sm:min-h-0"}`}
       >
         <video
           ref={video}
@@ -141,7 +154,7 @@ export function LiveStage({ device, phase, stream, quality, move, onRetry }: Liv
           className={`block ${full ? "max-h-full max-w-full" : "aspect-video w-full"} object-contain ${live ? "" : "invisible"}`}
         />
         {!live && (
-          <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(ellipse_at_center,rgba(31,242,92,0.07),transparent_65%)]">
+          <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(ellipse_at_center,rgba(31,242,92,0.07),transparent_65%)] pt-12 pb-4 sm:py-0">
             <Waiting phase={phase} name={name} onRetry={onRetry} />
           </div>
         )}

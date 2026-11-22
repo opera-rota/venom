@@ -24,7 +24,9 @@
       "network": true
     },
     "status": "active",
-    "last_seen_at": "2026-10-18T09:00:05.000Z"
+    "last_seen_at": "2026-10-18T09:00:05.000Z",
+    "in_use": false,
+    "locked": false
   },
   "device_token": "vnm_short"
 }

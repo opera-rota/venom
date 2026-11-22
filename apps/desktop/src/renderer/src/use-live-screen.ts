@@ -1,15 +1,26 @@
 import type { Device } from "@venom/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ConnectionState, VenomBridge } from "../../shared/bridge.ts";
-import { firstSource, screenSources, type LiveScreen } from "./live-screen.ts";
+import { watchedDevice, type LivePhase, type LiveScreen } from "./live-screen.ts";
 import { laterWithTimers, receivingPeer } from "./rtc-peer.ts";
 import { ScreenWatcher, type WatchView } from "./screen-watch.ts";
 
 const resting: WatchView<MediaStream> = { phase: "idle", stream: null, quality: null };
 
-export function useLiveScreen(bridge: VenomBridge, devices: readonly Device[], selfId: string, connection: ConnectionState, active: boolean, preferred: string | null): LiveScreen<MediaStream> {
-  const sources = useMemo(() => screenSources(devices, selfId), [devices, selfId]);
-  const [chosen, setChosen] = useState<string | null>(null);
+function phaseOf(watching: Device | null, target: string | null, view: WatchView<MediaStream>): LivePhase {
+  if (watching === null) {
+    return "idle";
+  }
+  if (watching.status !== "active") {
+    return "offline";
+  }
+  if (watching.locked) {
+    return "locked";
+  }
+  return target === null || view.phase === "idle" ? "connecting" : view.phase;
+}
+
+export function useLiveScreen(bridge: VenomBridge, devices: readonly Device[], selfId: string, connection: ConnectionState, active: boolean): LiveScreen<MediaStream> {
   const [view, setView] = useState<WatchView<MediaStream>>(resting);
   const [watcher] = useState(
     () =>
@@ -21,8 +32,8 @@ export function useLiveScreen(bridge: VenomBridge, devices: readonly Device[], s
         changed: setView,
       }),
   );
-  const watching = firstSource(sources, chosen ?? preferred);
-  const reachable = active && connection === "online" && watching?.status === "active";
+  const watching = watchedDevice(devices, selfId);
+  const reachable = active && connection === "online" && watching !== null && watching.status === "active" && !watching.locked;
   const target = reachable ? watching.id : null;
 
   useEffect(
@@ -39,15 +50,13 @@ export function useLiveScreen(bridge: VenomBridge, devices: readonly Device[], s
 
   useEffect(() => () => watcher.close(), [watcher]);
 
-  const phase = watching === null ? "idle" : watching.status !== "active" ? "offline" : target === null ? "connecting" : view.phase === "idle" ? "connecting" : view.phase;
+  const phase = phaseOf(watching, target, view);
 
   return {
-    sources,
     watching,
     phase,
     stream: phase === "live" ? view.stream : null,
     quality: phase === "live" ? view.quality : null,
-    watch: setChosen,
     retry: () => watcher.retry(),
   };
 }

@@ -29,6 +29,8 @@ import type {
 
 export type ConnectionState = "connecting" | "online" | "offline";
 
+export type AwakeLevel = "none" | "system" | "display";
+
 export type Failure = {
   readonly ok: false;
   readonly code: ApiErrorCode | "network" | "secret_word_mismatch";
@@ -102,6 +104,8 @@ export interface VenomBridge {
   signOut(): Promise<StepResult>;
   devices(): Promise<DevicesResult>;
   removeDevice(deviceId: string): Promise<StepResult>;
+  useDevice(deviceId: string): Promise<StepResult>;
+  keepAwake(level: AwakeLevel): Promise<void>;
   engines(): Promise<EnginesResult>;
   power(): Promise<PowerResult>;
   chooseEngine(engine: EngineId): Promise<PowerResult>;
@@ -148,6 +152,8 @@ export const channels = {
   signOut: "venom:sign-out",
   devices: "venom:devices",
   removeDevice: "venom:remove-device",
+  useDevice: "venom:use-device",
+  keepAwake: "venom:keep-awake",
   engines: "venom:engines",
   power: "venom:power",
   chooseEngine: "venom:choose-engine",

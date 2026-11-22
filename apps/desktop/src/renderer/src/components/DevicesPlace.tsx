@@ -1,5 +1,6 @@
 import type { Device, DeviceStatus } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
+import { canWork } from "../live-screen.ts";
 import type { DevicesState } from "../use-devices.ts";
 import { button, field, mark, surface, text } from "../ui.ts";
 import { Icon, type IconName } from "./Icon.tsx";
@@ -52,28 +53,50 @@ function RemoveGate({ device, current, onCancel, onConfirm }: { readonly device:
   );
 }
 
-function DeviceRow({ device, current, onRemove }: { readonly device: Device; readonly current: boolean; readonly onRemove: () => Promise<boolean> }) {
+interface DeviceRowProps {
+  readonly device: Device;
+  readonly current: boolean;
+  readonly using: boolean;
+  readonly busy: boolean;
+  readonly onRemove: () => Promise<boolean>;
+  readonly onUse: () => void;
+}
+
+function DeviceRow({ device, current, using, busy, onRemove, onUse }: DeviceRowProps) {
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const view = statusView[device.status === "revoked" ? "offline" : device.status];
+  const workable = canWork(device);
 
   async function confirm() {
-    setBusy(true);
+    setRemoving(true);
     const removed = await onRemove();
-    setBusy(false);
+    setRemoving(false);
     if (!removed) {
       setConfirming(false);
     }
   }
 
   return (
-    <li className={`p-4 ${surface.card}`}>
+    <li className={`p-4 ${device.in_use ? surface.cardActive : surface.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Icon name="devices" className="h-4 w-4 shrink-0 text-ink-muted" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Icon name="devices" className={`h-4 w-4 shrink-0 ${device.in_use ? "text-green-300" : "text-ink-muted"}`} />
             <span className="truncate font-medium text-ink">{device.name}</span>
             {current && <span className={mark.tag}>This device</span>}
+            {device.in_use && (
+              <span className="hud inline-flex items-center gap-1.5 rounded-full bg-green-400/15 px-2.5 py-0.5 text-[9.5px] text-green-300 shadow-[0_0_0_1px_rgba(77,255,124,0.5),0_0_14px_-2px_rgba(31,242,92,0.7)]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+                In use
+              </span>
+            )}
+            {device.locked && (
+              <span className={mark.caution}>
+                <Icon name="lock" className="mr-1 h-3 w-3" />
+                Locked
+              </span>
+            )}
           </div>
           <span className={text.support}>
             {platformName[device.platform]}
@@ -86,9 +109,17 @@ function DeviceRow({ device, current, onRemove }: { readonly device: Device; rea
           </span>
         </div>
         {!confirming && (
-          <button type="button" onClick={() => setConfirming(true)} disabled={busy} className={button.destructive}>
-            {current ? "Sign out" : "Remove"}
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+            {workable && !device.in_use && (
+              <button type="button" onClick={onUse} disabled={busy} className={button.compact}>
+                <Icon name="bolt" className="h-3.5 w-3.5" />
+                {using ? "Choosing…" : "Use this device"}
+              </button>
+            )}
+            <button type="button" onClick={() => setConfirming(true)} disabled={removing} className={button.destructive}>
+              {current ? "Sign out" : "Remove"}
+            </button>
+          </div>
         )}
       </div>
       {confirming && <RemoveGate device={device} current={current} onCancel={() => setConfirming(false)} onConfirm={() => void confirm()} />}
@@ -99,7 +130,7 @@ function DeviceRow({ device, current, onRemove }: { readonly device: Device; rea
 export function DevicesPlace({ state }: { readonly state: DevicesState }) {
   return (
     <Place title="Devices" eyebrow="Symbiote network" icon="devices" count={state.devices.length}>
-      <p className={text.support}>Every device here is a body of the same VENOM. Add another by choosing "Attach this device" on it.</p>
+      <p className={text.support}>Every device here is a body of the same VENOM. Choose the computer VENOM works on with "Use this device"; Screen shows it live. Add another device by choosing "Attach this device" on it.</p>
       {state.failure !== null && (
         <p role="alert" className={field.error}>
           <Icon name="cross" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -108,7 +139,15 @@ export function DevicesPlace({ state }: { readonly state: DevicesState }) {
       )}
       <ul className="flex flex-col gap-3">
         {state.devices.map((device) => (
-          <DeviceRow key={device.id} device={device} current={device.id === state.currentId} onRemove={() => state.remove(device.id)} />
+          <DeviceRow
+            key={device.id}
+            device={device}
+            current={device.id === state.currentId}
+            using={state.using === device.id}
+            busy={state.using !== null}
+            onRemove={() => state.remove(device.id)}
+            onUse={() => void state.use(device.id)}
+          />
         ))}
       </ul>
     </Place>

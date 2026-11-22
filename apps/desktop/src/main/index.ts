@@ -1,6 +1,6 @@
 import { ChatDocument, ConfirmDecision, DrillKind, Id, SafetySettings } from "@venom/contracts";
 import { newKeyPair } from "@venom/safety/device";
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, powerMonitor, safeStorage, screen as displays, session, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, powerMonitor, powerSaveBlocker, safeStorage, screen as displays, session, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import { channels, type AuthView, type SaveResult } from "../shared/bridge.ts";
 import { Api } from "./api.ts";
 import { Attention } from "./attention.ts";
+import { Awake, awakeLevel } from "./awake.ts";
 import { loadConfig } from "./config.ts";
 import { describeThisComputer } from "./device-info.ts";
 import { documentFileName, documentText } from "./documents.ts";
@@ -202,9 +203,17 @@ function wire(): void {
     watch: attention,
   });
   const halt = new HaltController({ send: (stopId) => gateway.halt(stopId), haltLocally: () => hands.haltAll() });
+  const awake = new Awake(powerSaveBlocker);
   const device = () => describeThisComputer(config.profile, screen);
   const onboarding = new Onboarding({ api, device, complete: (session) => sessions.signIn(session) });
   let reported: string | null = null;
+
+  const reportLock = (locked: boolean) => {
+    const view = sessions.view;
+    if (gateway.state === "online" && view.kind === "signed_in") {
+      void gateway.reportLock(view.device.id, locked);
+    }
+  };
 
   const reportCapabilities = () => {
     const view = sessions.view;
@@ -244,7 +253,15 @@ function wire(): void {
       reportCapabilities();
       void sessions.refresh();
     }
+    if (state === "online") {
+      reportLock(powerMonitor.getSystemIdleState(1) === "locked");
+    }
   });
+  powerMonitor.on("lock-screen", () => {
+    attention.stop();
+    reportLock(true);
+  });
+  powerMonitor.on("unlock-screen", () => reportLock(false));
   gateway.onRevoked((reason) => sessions.forget(reason === "removed" ? removedNotice : expiredNotice));
 
   handle(channels.auth, () => sessions.view);
@@ -256,6 +273,13 @@ function wire(): void {
   handle(channels.cancelOnboarding, () => onboarding.reset());
   handle(channels.signOut, () => sessions.signOut());
   handle(channels.devices, () => gateway.devices());
+  handle(channels.useDevice, (deviceId) => gateway.useDevice(deviceId));
+  handle(channels.keepAwake, (level) => {
+    const chosen = awakeLevel(level);
+    if (chosen !== null) {
+      awake.set(chosen);
+    }
+  });
   handle(channels.removeDevice, (deviceId) => (typeof deviceId === "string" ? gateway.removeDevice(deviceId) : { ok: false, code: "invalid_request", reason: "Unknown device." }));
   handle(channels.engines, () => gateway.engines());
   handle(channels.power, () => gateway.power());
@@ -319,6 +343,7 @@ function wire(): void {
   handle(channels.connection, () => gateway.state);
 
   app.on("before-quit", () => {
+    awake.set("none");
     attention.stop();
     halt.close();
     gateway.stop();

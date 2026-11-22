@@ -246,6 +246,23 @@ export class GatewayClient {
     return result.ok ? { ok: true } : result;
   }
 
+  async useDevice(deviceId: unknown): Promise<StepResult> {
+    const id = Id.safeParse(deviceId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: "That device is not part of your VENOM." };
+    }
+    const result = await this.#api.request("POST", `/v1/devices/${id.data}/use`, { token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+    }
+    return result.ok ? { ok: true } : result;
+  }
+
+  async reportLock(deviceId: string, locked: boolean): Promise<StepResult> {
+    const result = await this.#api.request("PUT", "/v1/devices/current/lock", { body: { device_id: deviceId, locked }, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
   async engines(): Promise<EnginesResult> {
     const result = await this.#api.request("GET", "/v1/engines", { schema: EngineList, token: this.#token });
     if (!result.ok) {

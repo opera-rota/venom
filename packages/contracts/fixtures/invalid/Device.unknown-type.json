@@ -13,5 +13,7 @@
     "network": true
   },
   "status": "active",
-  "last_seen_at": null
+  "last_seen_at": null,
+  "in_use": false,
+  "locked": false
 }

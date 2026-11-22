@@ -94,6 +94,8 @@ export function createPhoneBridge({ origin, storage, device }: PhoneBridgeOption
     signOut: () => sessions.signOut(),
     devices: () => gateway.devices(),
     removeDevice: (deviceId) => gateway.removeDevice(deviceId),
+    useDevice: (deviceId) => gateway.useDevice(deviceId),
+    keepAwake: async () => undefined,
     engines: () => gateway.engines(),
     power: () => gateway.power(),
     chooseEngine: (engine) => gateway.chooseEngine(engine),

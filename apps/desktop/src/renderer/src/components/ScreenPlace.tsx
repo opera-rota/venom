@@ -1,6 +1,6 @@
 import type { Device, Task, TaskMove, Thumbnail } from "@venom/contracts";
 import { useEffect, useState } from "react";
-import type { LiveScreen } from "../live-screen.ts";
+import { deviceInUse, workers, type LiveScreen } from "../live-screen.ts";
 import { movesSoFar } from "../move-words.ts";
 import { isOpen } from "../tasks-state.ts";
 import type { LaterState } from "../use-later.ts";
@@ -20,8 +20,12 @@ export interface ScreenPlaceProps {
   readonly deviceId: string;
   readonly devices: readonly Device[];
   readonly live: LiveScreen<MediaStream>;
+  readonly watched: boolean;
+  readonly using: string | null;
   readonly stopping: boolean;
   readonly later: LaterState;
+  readonly onUse: (deviceId: string) => void;
+  readonly onDevices: () => void;
   readonly onLoad: (taskId: string) => void;
   readonly onStop: (taskId: string) => void;
   readonly onOpenLink: (url: string) => void;
@@ -52,30 +56,98 @@ function updatedWords(move: TaskMove | null, now: number): string | null {
   return `updated ${Math.round(seconds / 60)} min ago`;
 }
 
-function Sources({ live }: { readonly live: LiveScreen<MediaStream> }) {
-  if (live.sources.length < 2) {
-    return null;
+function stateWords(device: Device): { readonly label: string; readonly dot: string; readonly tone: string } {
+  if (device.status !== "active") {
+    return { label: "Asleep or off", dot: "bg-status-idle", tone: "text-ink-muted" };
   }
+  if (device.locked) {
+    return { label: "Locked", dot: "bg-status-wait", tone: "text-status-wait" };
+  }
+  return { label: "Awake", dot: "bg-green-400 shadow-[0_0_8px_2px_rgba(31,242,92,0.7)]", tone: "text-green-300" };
+}
+
+function InUse({ device, self, onDevices }: { readonly device: Device; readonly self: boolean; readonly onDevices: () => void }) {
+  const state = stateWords(device);
   return (
-    <div role="radiogroup" aria-label="Which screen to watch" className="flex flex-wrap gap-2">
-      {live.sources.map((source) => {
-        const chosen = source.id === live.watching?.id;
-        const online = source.status === "active";
-        return (
-          <button
-            key={source.id}
-            type="button"
-            role="radio"
-            aria-checked={chosen}
-            disabled={!online}
-            onClick={() => live.watch(source.id)}
-            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200 ease-ui disabled:cursor-not-allowed disabled:text-ink-faint ${chosen ? "border-green-400/55 bg-green-400/[0.1] text-green-300 shadow-glow" : "border-line bg-white/[0.03] text-ink hover:border-green-400/40"}`}
-          >
-            <span className={`${mark.dot} ${online ? "bg-green-400" : "bg-status-idle"}`} />
-            {source.name}
-          </button>
-        );
-      })}
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className={`flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 ${text.detail}`}>
+        <span className="hud inline-flex items-center gap-1.5 rounded-full bg-green-400/15 px-2.5 py-1 text-[9.5px] text-green-300 shadow-[0_0_0_1px_rgba(77,255,124,0.5)]">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+          In use
+        </span>
+        <span className="truncate text-sm font-medium text-ink">{device.name}</span>
+        {self && <span className={mark.tag}>This device</span>}
+        <span className={`flex items-center gap-1.5 ${state.tone}`}>
+          <span className={`${mark.dot} ${state.dot}`} />
+          {state.label}
+        </span>
+      </div>
+      <button type="button" className={button.mini} onClick={onDevices}>
+        <Icon name="devices" className="h-3 w-3" />
+        Change device
+      </button>
+    </div>
+  );
+}
+
+function Choose({ devices, deviceId, using, onUse }: { readonly devices: readonly Device[]; readonly deviceId: string; readonly using: string | null; readonly onUse: (deviceId: string) => void }) {
+  const choices = workers(devices);
+  return (
+    <div className={`flex flex-col gap-4 p-5 ${surface.cardActive}`}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-green-400/10">
+          <Icon name="screen" className="h-5 w-5 text-green-300" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="font-medium text-ink">Choose the device VENOM works on</p>
+          <p className={text.support}>It stays on Screen, live, and every job goes there. You can change it any time in Devices.</p>
+        </div>
+      </div>
+      {choices.length === 0 ? (
+        <p className={text.support}>Start VENOM on one of your computers to see it here.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {choices.map((device) => {
+            const online = device.status === "active";
+            return (
+              <li key={device.id} className="flex items-center justify-between gap-3 rounded-control border border-line bg-black/20 px-3.5 py-2.5">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className={`${mark.dot} ${online ? "bg-green-400" : "bg-status-idle"}`} />
+                  <span className="truncate text-sm text-ink">{device.name}</span>
+                  {device.id === deviceId && <span className={mark.tag}>This device</span>}
+                </span>
+                <button type="button" className={button.compact} disabled={using !== null} onClick={() => onUse(device.id)}>
+                  <Icon name="bolt" className="h-3.5 w-3.5" />
+                  {using === device.id ? "Choosing…" : (
+                    <>
+                      <span className="sm:hidden">Use</span>
+                      <span className="hidden sm:inline">Use this device</span>
+                    </>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Here({ device, watched }: { readonly device: Device; readonly watched: boolean }) {
+  return (
+    <div className={`grid aspect-video place-items-center px-6 text-center ${surface.card}`}>
+      <div className="flex max-w-md flex-col items-center gap-3">
+        <span className="grid h-14 w-14 place-items-center rounded-full border border-green-400/35 bg-green-400/10 shadow-mark">
+          <Icon name={watched ? "eye" : "screen"} className="h-6 w-6 text-green-300" />
+        </span>
+        <p className="font-medium text-ink">VENOM works right here, on {device.name}</p>
+        <p className={text.support}>
+          {watched
+            ? "Someone is watching this screen live from another device."
+            : "VENOM keeps this computer awake while it is in use. Open Screen on your phone to watch it live from anywhere."}
+        </p>
+      </div>
     </div>
   );
 }
@@ -100,7 +172,7 @@ function Job({ task, moves, loaded, devices, deviceId, stopping, onStop }: Pick<
   return (
     <div className="grid content-start gap-4 min-[960px]:max-[1279px]:grid-cols-2">
       <section aria-label="The job" className={`flex min-w-0 flex-col gap-3 p-4 ${open ? surface.cardActive : surface.card}`}>
-        <span className={text.eyebrow + " text-[9.5px]"}>{open ? "Working on" : "Last job"}</span>
+        <span className={`${text.eyebrow} text-[9.5px]`}>{open ? "Working on" : "Last job"}</span>
         <p className="break-words text-[15px] leading-snug font-medium text-ink">{task.request_text}</p>
         <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 ${text.detail}`}>
           <span className={`flex items-center gap-1.5 ${look.tone}`}>
@@ -136,20 +208,6 @@ function Job({ task, moves, loaded, devices, deviceId, stopping, onStop }: Pick<
   );
 }
 
-function Unwatchable({ computer }: { readonly computer: boolean }) {
-  return (
-    <div className={`grid aspect-video place-items-center px-6 text-center ${surface.card}`}>
-      <div className="flex max-w-sm flex-col items-center gap-3">
-        <Icon name={computer ? "eye" : "screen"} className="h-8 w-8 text-green-300/70" />
-        <p className="font-medium text-ink">{computer ? "This computer is the one VENOM works on" : "No computer to watch yet"}</p>
-        <p className={text.support}>
-          {computer ? "Open VENOM on your phone and choose Screen to watch it live from anywhere." : "When VENOM runs on one of your computers, its screen shows here live."}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function Resting() {
   return (
     <div className={`flex h-fit items-center gap-3 px-4 py-3.5 ${surface.card}`}>
@@ -164,13 +222,13 @@ function Resting() {
   );
 }
 
-export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, stopping, later, onLoad, onStop, onOpenLink }: ScreenPlaceProps) {
+export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, watched, using, stopping, later, onUse, onDevices, onLoad, onStop, onOpenLink }: ScreenPlaceProps) {
   const taskId = task?.id ?? null;
   const open = task !== null && isOpen(task);
-  const target = task?.target_device_id ?? null;
-  const watchingJob = open && live.watching !== null && live.watching.id === target;
-  const showLive = live.sources.length > 0 && (task === null || target !== deviceId || !open);
-  const self = devices.find((device) => device.id === deviceId) ?? null;
+  const chosen = deviceInUse(devices);
+  const here = chosen !== null && chosen.id === deviceId;
+  const elsewhere = open && task.target_device_id !== null && task.target_device_id !== chosen?.id;
+  const watchingJob = open && live.watching !== null && live.watching.id === task.target_device_id;
 
   useEffect(() => {
     if (taskId !== null && !loaded) {
@@ -178,19 +236,21 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, l
     }
   }, [taskId, loaded, onLoad]);
 
+  function stage() {
+    if (chosen === null) {
+      return elsewhere ? <Picture picture={picture} open={open} name={devices.find((device) => device.id === task?.target_device_id)?.name ?? "the computer"} /> : <Choose devices={devices} deviceId={deviceId} using={using} onUse={onUse} />;
+    }
+    if (here) {
+      return <Here device={chosen} watched={watched} />;
+    }
+    return <LiveStage device={live.watching} phase={live.phase} stream={live.stream} quality={live.quality} move={watchingJob ? (moves.at(-1) ?? null) : null} onRetry={live.retry} />;
+  }
+
   return (
     <Place title="Screen" eyebrow="Live view" icon="screen" width="full">
-      <Sources live={live} />
+      {chosen !== null && <InUse device={chosen} self={here} onDevices={onDevices} />}
       <div className="grid gap-4 min-[1280px]:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex min-w-0 flex-col gap-3">
-          {showLive ? (
-            <LiveStage device={live.watching} phase={live.phase} stream={live.stream} quality={live.quality} move={watchingJob ? (moves.at(-1) ?? null) : null} onRetry={live.retry} />
-          ) : task !== null ? (
-            <Picture picture={picture} open={open} name={devices.find((device) => device.id === target)?.name ?? "the computer"} />
-          ) : (
-            <Unwatchable computer={self?.type === "computer"} />
-          )}
-        </div>
+        <div className="flex min-w-0 flex-col gap-3">{stage()}</div>
         {task === null ? (
           <Resting />
         ) : (

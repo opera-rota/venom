@@ -147,6 +147,31 @@ describe("device tokens and the registry", () => {
     expect((await harness.identity.session(ref)).device.status).toBe("offline");
   });
 
+  it("keeps one computer in use per account, clears it when removed, and remembers a lock until the device goes away", async () => {
+    const first = await signUp(harness, "in-use@venom.test", secretWord);
+    const second = await attach(harness, "in-use@venom.test", secretWord);
+    const stranger = await signUp(harness, "in-use-stranger@venom.test", secretWord);
+    const actor = { id: first.device.id, account_id: first.account.id };
+    expect(first.device).toMatchObject({ in_use: false, locked: false });
+
+    expect((await harness.identity.useDevice(actor, first.device.id, uuidv7())).in_use).toBe(true);
+    expect((await harness.identity.useDevice(actor, second.device.id, uuidv7())).in_use).toBe(true);
+    const inUse = (await harness.identity.devices(first.account.id)).filter((device) => device.in_use).map((device) => device.id);
+    expect(inUse).toEqual([second.device.id]);
+    await expect(harness.identity.useDevice(actor, stranger.device.id, uuidv7())).rejects.toMatchObject({ code: "not_found" });
+
+    const secondRef = { id: second.device.id, account_id: second.account.id };
+    await harness.identity.markPresence(secondRef, true);
+    expect(await harness.identity.reportLock(secondRef, true)).toBe(true);
+    expect(await harness.identity.reportLock(secondRef, true)).toBe(false);
+    expect((await harness.identity.session(secondRef)).device.locked).toBe(true);
+    await harness.identity.markPresence(secondRef, false);
+    expect((await harness.identity.session(secondRef)).device.locked).toBe(false);
+
+    await harness.identity.revokeDevice(actor, second.device.id, uuidv7());
+    expect((await harness.identity.devices(first.account.id)).some((device) => device.in_use)).toBe(false);
+  });
+
   it("does not let the app role rewrite a device credential", async () => {
     await expect(harness.app`update devices set credential_hash = null`).rejects.toMatchObject({ code: "42501" });
     await expect(harness.app`delete from account_secrets`).rejects.toMatchObject({ code: "42501" });

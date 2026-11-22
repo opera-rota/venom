@@ -38,6 +38,8 @@ function savedSignIn(): StoredCredential {
         ...describeThisPhone(androidChrome, ""),
         status: "active",
         last_seen_at: null,
+        in_use: false,
+        locked: false,
       },
     },
     keys: { private_key: keys.privateKey, public_key: keys.publicKey, server_key: null },

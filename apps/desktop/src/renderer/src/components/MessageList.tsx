@@ -1,4 +1,4 @@
-import type { ChatDocument, ConfirmDecision, ConfirmRequest, Device, Message, Task, TaskMove, Thumbnail } from "@venom/contracts";
+import type { ChatDocument, ConfirmDecision, ConfirmRequest, Device, Message, Task, TaskMove } from "@venom/contracts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
@@ -70,12 +70,12 @@ export interface Plans {
   moves(taskId: string): readonly TaskMove[];
   move(taskId: string, moveId: string): TaskMove | null;
   loaded(taskId: string): boolean;
-  picture(taskId: string): Thumbnail | null;
   stopping(taskId: string): boolean;
   stop(taskId: string): void;
   loadMoves(taskId: string): void;
   answerMove(taskId: string, moveId: string, decision: ConfirmDecision): void;
   carryOn(taskId: string): void;
+  watch(): void;
 }
 
 interface MessageItemProps {
@@ -187,13 +187,13 @@ const MessageItem = memo(function MessageItem({ message, from, plans, task, job,
                 task={task}
                 moves={plans.moves(message.task_id)}
                 loaded={plans.loaded(message.task_id)}
-                picture={plans.picture(message.task_id)}
                 deviceId={plans.deviceId}
                 devices={plans.devices}
                 stopping={plans.stopping(message.task_id)}
                 onLoad={plans.loadMoves}
                 onStop={plans.stop}
                 onContinue={plans.carryOn}
+                onWatch={plans.watch}
               />
             )}
           </div>

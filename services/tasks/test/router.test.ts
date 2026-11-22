@@ -14,6 +14,8 @@ function device(n: number, overrides: Partial<Device> = {}): Device {
     capabilities: { screen_control: true, microphone: true, speaker: true, shortcuts: false, notifications: true, network: true },
     status: "active",
     last_seen_at: `2026-11-01T08:0${n}:00.000Z`,
+    in_use: false,
+    locked: false,
     ...overrides,
   };
 }

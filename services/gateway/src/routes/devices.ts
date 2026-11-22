@@ -1,4 +1,4 @@
-import { CapabilityReport, DeviceList, Id } from "@venom/contracts";
+import { CapabilityReport, DeviceList, Id, LockReport } from "@venom/contracts";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireSignedIn } from "../auth.ts";
@@ -7,7 +7,7 @@ import { forbidden } from "../errors.ts";
 
 const DeviceParams = z.strictObject({ device_id: Id });
 
-export function deviceRoutes(app: FastifyInstance, { identity, hub, broadcastDevices }: GatewayContext): void {
+export function deviceRoutes(app: FastifyInstance, { identity, hub, loop, broadcastDevices }: GatewayContext): void {
   app.get("/v1/session", async (request) => {
     return identity.session(requireSignedIn(request));
   });
@@ -26,6 +26,27 @@ export function deviceRoutes(app: FastifyInstance, { identity, hub, broadcastDev
     const updated = await identity.reportCapabilities(device, report.capabilities, request.id);
     await broadcastDevices(device.account_id, request.id);
     return updated;
+  });
+
+  app.put("/v1/devices/current/lock", async (request, reply) => {
+    const device = requireSignedIn(request);
+    const report = LockReport.parse(request.body);
+    if (report.device_id !== device.id) {
+      throw forbidden();
+    }
+    loop.deviceLock(device.id, report.locked);
+    if (await identity.reportLock(device, report.locked)) {
+      await broadcastDevices(device.account_id, request.id);
+    }
+    return reply.code(204).send();
+  });
+
+  app.post("/v1/devices/:device_id/use", async (request) => {
+    const device = requireSignedIn(request);
+    const { device_id } = DeviceParams.parse(request.params);
+    const chosen = await identity.useDevice(device, device_id, request.id);
+    await broadcastDevices(device.account_id, request.id);
+    return chosen;
   });
 
   app.delete("/v1/devices/:device_id", async (request) => {

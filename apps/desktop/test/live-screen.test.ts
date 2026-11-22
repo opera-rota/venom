@@ -1,6 +1,6 @@
 import type { Device, ScreenSignal } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
-import { firstSource, screenSources, watcherWords } from "../src/renderer/src/live-screen.ts";
+import { awakeFor, deviceInUse, watchedDevice, watcherWords, workers } from "../src/renderer/src/live-screen.ts";
 import type { Peer, PeerEvents, PeerState } from "../src/renderer/src/screen-peer.ts";
 import { ScreenSharer, shareLimits } from "../src/renderer/src/screen-share.ts";
 import { ScreenWatcher, watchLimits, type WatchView } from "../src/renderer/src/screen-watch.ts";
@@ -10,7 +10,8 @@ const laptop = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02";
 const phone = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03";
 const tablet = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e04";
 
-function device(id: string, type: Device["type"], name: string, status: Device["status"] = "active", control = type === "computer"): Device {
+function device(id: string, type: Device["type"], name: string, status: Device["status"] = "active", inUse = false): Device {
+  const control = type === "computer";
   return {
     id,
     account_id: accountId,
@@ -20,6 +21,8 @@ function device(id: string, type: Device["type"], name: string, status: Device["
     capabilities: { screen_control: control, microphone: true, speaker: true, shortcuts: control, notifications: true, network: true },
     status,
     last_seen_at: null,
+    in_use: inUse,
+    locked: false,
   };
 }
 
@@ -145,14 +148,26 @@ function watcherRig() {
   return { watcher, sent, peers, views, time, unreachable: () => (reachable = false) };
 }
 
-describe("which screens can be watched", () => {
-  it("lists only other computers that can be driven, online ones first", () => {
-    const devices = [device(tablet, "computer", "Home PC", "offline"), device(phone, "phone", "Android phone"), device(laptop, "computer", "RS-APP-CED")];
-    expect(screenSources(devices, phone).map((entry) => entry.name)).toEqual(["RS-APP-CED", "Home PC"]);
-    expect(screenSources(devices, laptop).map((entry) => entry.name)).toEqual(["Home PC"]);
-    expect(firstSource(screenSources(devices, phone), tablet)?.name).toBe("RS-APP-CED");
+describe("the device in use and its screen", () => {
+  it("offers only computers, online ones first, and watches the one in use unless it is this device", () => {
+    const devices = [device(tablet, "computer", "Home PC", "offline"), device(phone, "phone", "Android phone"), device(laptop, "computer", "RS-APP-CED", "active", true)];
+    expect(workers(devices).map((entry) => entry.name)).toEqual(["RS-APP-CED", "Home PC"]);
+    expect(deviceInUse(devices)?.name).toBe("RS-APP-CED");
+    expect(watchedDevice(devices, phone)?.name).toBe("RS-APP-CED");
+    expect(watchedDevice(devices, laptop)).toBeNull();
+    expect(watchedDevice([device(laptop, "computer", "RS-APP-CED")], phone)).toBeNull();
     expect(watcherWords([device(phone, "phone", "Android phone")])).toBe("Watched from Android phone");
     expect(watcherWords([])).toBeNull();
+  });
+
+  it("keeps the computer in use from sleeping, and its display on while watched or working", () => {
+    const inUse = device(laptop, "computer", "RS-APP-CED", "active", true);
+    const spare = device(tablet, "computer", "Home PC");
+    expect(awakeFor(inUse, false, false)).toBe("system");
+    expect(awakeFor(inUse, true, false)).toBe("display");
+    expect(awakeFor(spare, false, true)).toBe("display");
+    expect(awakeFor(spare, false, false)).toBe("none");
+    expect(awakeFor(null, false, false)).toBe("none");
   });
 });
 

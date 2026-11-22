@@ -73,6 +73,13 @@ export const CapabilityReport = z
   })
   .register(contracts, { id: "CapabilityReport" });
 
+export const LockReport = z
+  .strictObject({
+    device_id: Id,
+    locked: z.boolean(),
+  })
+  .register(contracts, { id: "LockReport" });
+
 export const LiveEventKind = z
   .enum(["started", "output", "awaiting_confirmation", "done", "failed", "stopped"])
   .register(contracts, { id: "LiveEventKind" });
@@ -99,5 +106,6 @@ export type StopDevice = z.infer<typeof StopDevice>;
 export type StopScope = z.infer<typeof StopScope>;
 export type StopSignal = z.infer<typeof StopSignal>;
 export type CapabilityReport = z.infer<typeof CapabilityReport>;
+export type LockReport = z.infer<typeof LockReport>;
 export type LiveEventKind = z.infer<typeof LiveEventKind>;
 export type LiveEvent = z.infer<typeof LiveEvent>;

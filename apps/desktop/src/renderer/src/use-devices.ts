@@ -6,12 +6,15 @@ export interface DevicesState {
   readonly devices: readonly Device[];
   readonly currentId: string;
   readonly failure: string | null;
+  readonly using: string | null;
   remove(deviceId: string): Promise<boolean>;
+  use(deviceId: string): Promise<boolean>;
 }
 
 export function useDevices(bridge: VenomBridge, currentId: string, connection: ConnectionState): DevicesState {
   const [devices, setDevices] = useState<readonly Device[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const [using, setUsing] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -48,5 +51,19 @@ export function useDevices(bridge: VenomBridge, currentId: string, connection: C
     [bridge, currentId],
   );
 
-  return { devices, currentId, failure, remove };
+  const use = useCallback(
+    async (deviceId: string) => {
+      setUsing(deviceId);
+      const result = await bridge.useDevice(deviceId);
+      setUsing(null);
+      setFailure(result.ok ? null : result.reason);
+      if (result.ok) {
+        setDevices((listed) => listed.map((device) => ({ ...device, in_use: device.id === deviceId })));
+      }
+      return result.ok;
+    },
+    [bridge],
+  );
+
+  return { devices, currentId, failure, using, remove, use };
 }

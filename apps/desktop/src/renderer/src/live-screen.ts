@@ -1,6 +1,7 @@
 import type { Device } from "@venom/contracts";
+import type { AwakeLevel } from "../../shared/bridge.ts";
 
-export type LivePhase = "idle" | "connecting" | "live" | "offline" | "lost";
+export type LivePhase = "idle" | "connecting" | "live" | "offline" | "locked" | "lost";
 
 export interface LiveQuality {
   readonly width: number;
@@ -9,12 +10,10 @@ export interface LiveQuality {
 }
 
 export interface LiveScreen<S> {
-  readonly sources: readonly Device[];
   readonly watching: Device | null;
   readonly phase: LivePhase;
   readonly stream: S | null;
   readonly quality: LiveQuality | null;
-  watch(deviceId: string): void;
   retry(): void;
 }
 
@@ -22,18 +21,34 @@ export interface ScreenShare {
   readonly watchers: readonly Device[];
 }
 
-export function canShare(device: Device): boolean {
-  return device.type === "computer" && device.capabilities.screen_control && device.status !== "revoked";
+export function canWork(device: Device): boolean {
+  return device.type === "computer" && device.status !== "revoked";
 }
 
-export function screenSources(devices: readonly Device[], selfId: string): readonly Device[] {
+export function canShare(device: Device): boolean {
+  return canWork(device) && device.capabilities.screen_control;
+}
+
+export function deviceInUse(devices: readonly Device[]): Device | null {
+  return devices.find((device) => device.in_use && canWork(device)) ?? null;
+}
+
+export function workers(devices: readonly Device[]): readonly Device[] {
   return devices
-    .filter((device) => device.id !== selfId && canShare(device))
+    .filter(canWork)
     .toSorted((left, right) => Number(right.status === "active") - Number(left.status === "active") || left.name.localeCompare(right.name));
 }
 
-export function firstSource(sources: readonly Device[], preferred: string | null): Device | null {
-  return sources.find((device) => device.id === preferred && device.status === "active") ?? sources.find((device) => device.status === "active") ?? sources[0] ?? null;
+export function watchedDevice(devices: readonly Device[], selfId: string): Device | null {
+  const chosen = deviceInUse(devices);
+  return chosen === null || chosen.id === selfId ? null : chosen;
+}
+
+export function awakeFor(self: Device | null, watched: boolean, working: boolean): AwakeLevel {
+  if (watched || working) {
+    return "display";
+  }
+  return self?.in_use === true ? "system" : "none";
 }
 
 export function watcherWords(watchers: readonly Device[]): string | null {

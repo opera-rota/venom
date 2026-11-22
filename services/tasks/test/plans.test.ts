@@ -45,6 +45,8 @@ function routed(here: DeviceRef): RoutedPlan {
     capabilities: { screen_control: true, microphone: false, speaker: false, shortcuts: false, notifications: false, network: true },
     status: "active",
     last_seen_at: null,
+    in_use: false,
+    locked: false,
   };
   return { title: "Shopping list", target, elsewhere: false, missing: null, steps };
 }

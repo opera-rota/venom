@@ -246,6 +246,60 @@ describe("gentle when the connection drops", () => {
   });
 });
 
+describe("the device in use, and a locked computer", () => {
+  async function lock(session: DeviceSession, locked: boolean, deviceId = session.device.id): Promise<number> {
+    return (await call(gateway.base, "PUT", "/v1/devices/current/lock", { token: session.device_token, body: { device_id: deviceId, locked } })).status;
+  }
+
+  it("sends a new job to the computer in use, even when she asks from another one", async () => {
+    gateway.brain.mover = movesWith([typing, finished]);
+    const { here, near } = await account();
+    const there = await attachOverHttp(gateway.base, environment.mailer, `goals-${accounts}@venom.test`, "goals secret word");
+    const capable = await call(gateway.base, "PUT", "/v1/devices/current/capabilities", {
+      token: there.device_token,
+      body: { device_id: there.device.id, capabilities: { ...there.device.capabilities, screen_control: true } },
+    });
+    expect(capable.status).toBe(200);
+    const far = await actingDevice(gateway.base, there, { screen: notepad });
+    opened.push(far);
+
+    const chosen = await call(gateway.base, "POST", `/v1/devices/${there.device.id}/use`, { token: here.device_token });
+    expect(chosen.status).toBe(200);
+    const listed = await near.until((event) => event.type === "devices" && event.devices.some((device) => device.id === there.device.id && device.in_use));
+    expect(listed.type === "devices" && listed.devices.filter((device) => device.in_use)).toHaveLength(1);
+
+    await say(here, "Write a shopping list in Notepad");
+    await far.until(goal("completed"));
+    expect(far.moves).toHaveLength(1);
+    expect(near.moves).toEqual([]);
+  });
+
+  it("holds the job while the computer is locked, and carries on by itself once it is unlocked", async () => {
+    gateway.brain.mover = movesWith([waiting, typing, finished]);
+    const { here, near } = await account();
+    await say(here, "Write a shopping list in Notepad");
+    await near.until(() => near.moves.length === 1);
+    expect(await lock(here, true)).toBe(204);
+    const shown = await near.until((event) => event.type === "devices" && event.devices.some((device) => device.id === here.device.id && device.locked));
+    expect(shown.type).toBe("devices");
+
+    const held = (await near.until(venom("report", `Ooh, ${here.device.name} is locked, buddy.`))) as MessageEvent;
+    expect(held.message.text).toBe(`Ooh, ${here.device.name} is locked, buddy. Unlock it and I will carry on by myself; I am holding the job until then.`);
+    await near.until(goal("awaiting_confirmation"));
+    expect(near.moves).toHaveLength(1);
+
+    expect(await lock(here, false)).toBe(204);
+    await near.until(venom("report", `${here.device.name} is unlocked.`));
+    await near.until(goal("completed"));
+    expect(near.moves.map((command) => command.move.name)).toEqual(["pause", "type"]);
+  }, drillMs);
+
+  it("lets a device report only its own lock", async () => {
+    const { here } = await account();
+    expect(await lock(here, true, "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e99")).toBe(403);
+  });
+});
+
 describe("gentle when she takes the mouse or keyboard", () => {
   async function interrupt(session: DeviceSession, taskId: string): Promise<number> {
     return (await call(gateway.base, "POST", `/v1/tasks/${taskId}/interrupted`, { token: session.device_token })).status;
