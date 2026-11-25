@@ -1,16 +1,15 @@
-import type { Device, Task, TaskMove, Thumbnail } from "@venom/contracts";
+import type { Device, Task, TaskMove, TaskStatus, Thumbnail } from "@venom/contracts";
 import { useEffect, useState } from "react";
 import { deviceInUse, workers, type LiveScreen } from "../live-screen.ts";
-import { movesSoFar } from "../move-words.ts";
+import { lastedWords, sinceWords } from "../move-words.ts";
 import { isOpen } from "../tasks-state.ts";
 import type { LaterState } from "../use-later.ts";
 import { button, mark, surface, text } from "../ui.ts";
 import { ForLater } from "./ForLater.tsx";
-import { Icon } from "./Icon.tsx";
+import { Icon, type IconName } from "./Icon.tsx";
 import { LiveStage } from "./LiveStage.tsx";
 import { MoveList } from "./MoveList.tsx";
 import { Place } from "./Place.tsx";
-import { lookOfTask, routeTag } from "./StepList.tsx";
 
 export interface ScreenPlaceProps {
   readonly task: Task | null;
@@ -43,17 +42,6 @@ function useNow(running: boolean): number {
   }, [running]);
 
   return now;
-}
-
-function updatedWords(move: TaskMove | null, now: number): string | null {
-  if (move === null) {
-    return null;
-  }
-  const seconds = Math.max(0, Math.round((now - Date.parse(move.finished_at ?? move.created_at)) / 1000));
-  if (seconds < 60) {
-    return `updated ${seconds} s ago`;
-  }
-  return `updated ${Math.round(seconds / 60)} min ago`;
 }
 
 function stateWords(device: Device): { readonly label: string; readonly dot: string; readonly tone: string } {
@@ -163,48 +151,83 @@ function Picture({ picture, open, name }: { readonly picture: Thumbnail | null; 
   );
 }
 
+const jobLook: Record<TaskStatus, { readonly word: string; readonly icon: IconName; readonly tone: string; readonly orb: string }> = {
+  created: { word: "Starting", icon: "sparkle", tone: "text-green-300", orb: "border-green-400/50 bg-green-400/10 text-green-300" },
+  planned: { word: "Starting", icon: "sparkle", tone: "text-green-300", orb: "border-green-400/50 bg-green-400/10 text-green-300" },
+  running: { word: "Working", icon: "pulse", tone: "text-green-300", orb: "ring-live border-green-400/60 bg-green-400/15 text-green-300" },
+  awaiting_confirmation: { word: "Needs you", icon: "hourglass", tone: "text-status-wait", orb: "border-status-wait/60 bg-status-wait/10 text-status-wait" },
+  completed: { word: "Done", icon: "check", tone: "text-status-ok", orb: "border-green-400/50 bg-green-400/10 text-status-ok" },
+  failed: { word: "Did not finish", icon: "pause", tone: "text-status-wait", orb: "border-status-wait/45 bg-status-wait/[0.08] text-status-wait" },
+  cancelled: { word: "Stopped", icon: "stop", tone: "text-ink-muted", orb: "border-line-strong bg-white/[0.04] text-ink-muted" },
+  stopped: { word: "Stopped", icon: "stop", tone: "text-ink-muted", orb: "border-line-strong bg-white/[0.04] text-ink-muted" },
+};
+
+function Stat({ icon, label, value }: { readonly icon: IconName; readonly label: string; readonly value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-[12px] border border-line-subtle bg-black/30 px-3 py-2.5">
+      <span className="hud flex items-center gap-1.5 text-[9px] text-ink-faint">
+        <Icon name={icon} className="h-3 w-3 text-green-300/70" />
+        {label}
+      </span>
+      <span className="tabular truncate text-[13px] font-semibold text-ink">{value}</span>
+    </div>
+  );
+}
+
 function Job({ task, moves, loaded, devices, deviceId, stopping, onStop }: Pick<ScreenPlaceProps, "moves" | "loaded" | "devices" | "deviceId" | "stopping" | "onStop"> & { readonly task: Task }) {
   const open = isOpen(task);
   const now = useNow(open);
-  const look = lookOfTask(task);
-  const updated = updatedWords(moves.at(-1) ?? null, now);
+  const look = jobLook[task.status];
+  const [whole, setWhole] = useState(false);
+  const target = devices.find((device) => device.id === task.target_device_id) ?? null;
+  const where = target === null ? "No device" : target.id === deviceId ? "This one" : target.name.replace(/\s*\(.*\)\s*$/u, "");
 
   return (
-    <div className="grid content-start gap-4 min-[960px]:max-[1279px]:grid-cols-2">
-      <section aria-label="The job" className={`flex min-w-0 flex-col gap-3 p-4 ${open ? surface.cardActive : surface.card}`}>
-        <span className={`${text.eyebrow} text-[9.5px]`}>{open ? "Working on" : "Last job"}</span>
-        <p className="break-words text-[15px] leading-snug font-medium text-ink">{task.request_text}</p>
-        <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 ${text.detail}`}>
-          <span className={`flex items-center gap-1.5 ${look.tone}`}>
-            <Icon name={look.icon} />
-            <span>{look.word}</span>
+    <section aria-label={open ? "Working on" : "Last job"} className={`flex h-fit min-w-0 flex-col gap-4 p-5 ${open ? surface.cardActive : surface.card}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2.5">
+          <span className={`grid h-8 w-8 place-items-center rounded-full border ${look.orb}`}>
+            <Icon name={look.icon} className="h-3.5 w-3.5" />
           </span>
-          <span className="tabular-nums text-ink-muted">· {movesSoFar(task, open)}</span>
-          <span className="text-ink-faint">· {routeTag(task.target_device_id, deviceId, devices)}</span>
-          {updated !== null && <span className="tabular-nums text-ink-faint">· {updated}</span>}
+          <span className="flex flex-col leading-tight">
+            <span className="hud text-[9px] text-ink-faint">{open ? "Working on" : "Last job"}</span>
+            <span className={`text-[13px] font-semibold ${look.tone}`}>{look.word}</span>
+          </span>
         </span>
-        {!open && task.result !== null && <p className={`break-words ${text.support}`}>{task.result}</p>}
-        {open && (
-          <div className="mt-1 flex">
-            <button type="button" className={button.destructive} disabled={stopping} onClick={() => onStop(task.id)}>
-              <Icon name="stop" className="h-3 w-3" />
-              {stopping ? "Stopping…" : "Stop"}
-            </button>
-          </div>
-        )}
-      </section>
-      <section aria-label="Moves" className={`flex min-w-0 flex-col gap-3 p-4 ${surface.card}`}>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <Icon name="list" className="h-3.5 w-3.5 text-green-300" />
-          Moves
-        </h3>
+        <span className="tabular text-[11px] text-ink-faint">{sinceWords(task.updated_at, now)}</span>
+      </div>
+      <button type="button" onClick={() => setWhole((shown) => !shown)} aria-expanded={whole} className={`text-left break-words text-[15px] leading-snug font-semibold text-ink first-letter:uppercase ${whole ? "" : "line-clamp-2"}`}>
+        {task.request_text}
+      </button>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">
+        <Stat icon="list" label="Moves" value={String(task.moves)} />
+        <Stat icon="laptop" label="Device" value={where} />
+        <Stat icon="hourglass" label={open ? "So far" : "Took"} value={lastedWords(task)} />
+      </div>
+      {!open && task.result !== null && (
+        <button type="button" onClick={() => setWhole((shown) => !shown)} className={`text-left text-[12.5px] leading-normal text-ink-muted ${whole ? "" : "line-clamp-2"}`}>
+          {task.result}
+        </button>
+      )}
+      {open && (
+        <button type="button" className={`${button.destructive} self-start`} disabled={stopping} onClick={() => onStop(task.id)}>
+          <Icon name="stop" className="h-3 w-3" />
+          {stopping ? "Stopping…" : "Stop"}
+        </button>
+      )}
+      <div className={mark.divider} />
+      <div className="flex flex-col gap-3">
+        <span className="hud flex items-center justify-between text-[9.5px] text-ink-faint">
+          <span>Moves</span>
+          {moves.length > 0 && <span className="text-green-300/70">Tap one to see why</span>}
+        </span>
         {moves.length > 0 ? (
           <MoveList moves={moves} />
         ) : (
-          <p className={text.support}>{open ? (loaded ? "VENOM is looking at the screen." : "Getting VENOM's moves…") : "No moves were made."}</p>
+          <p className={text.support}>{open ? (loaded ? "Looking at the screen…" : "Loading moves…") : "No moves were made."}</p>
         )}
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -249,7 +272,7 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, l
   return (
     <Place title="Screen" eyebrow="Live view" icon="screen" width="full">
       {chosen !== null && <InUse device={chosen} self={here} onDevices={onDevices} />}
-      <div className="grid gap-4 min-[1280px]:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-4 min-[1280px]:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-3">{stage()}</div>
         {task === null ? (
           <Resting />

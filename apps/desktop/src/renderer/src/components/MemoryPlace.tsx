@@ -1,20 +1,21 @@
 import { memoryLimits, type MemoryDraft, type MemoryItem, type MemoryType } from "@venom/contracts";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { matching, memoryTypes } from "../memory-state.ts";
+import { sinceWords } from "../move-words.ts";
 import type { MemoryState } from "../use-memory.ts";
-import { button, field, mark, surface, text } from "../ui.ts";
+import { button, field, surface, text } from "../ui.ts";
 import { Choice } from "./Choice.tsx";
-import { Icon } from "./Icon.tsx";
+import { Icon, type IconName } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
 import { Trouble } from "./Trouble.tsx";
 
-const typeView: Record<MemoryType, { readonly label: string; readonly title: string; readonly blurb: string }> = {
-  preference: { label: "Preference", title: "Preferences", blurb: "Used in every answer." },
-  fact: { label: "Fact", title: "Facts", blurb: "Recalled when they matter." },
-  event: { label: "Event", title: "Events", blurb: "Dates and plans, recalled when they matter." },
+const typeView: Record<MemoryType, { readonly label: string; readonly plural: string; readonly hint: string; readonly icon: IconName }> = {
+  preference: { label: "Preference", plural: "Preferences", hint: "Shapes every answer", icon: "heart" },
+  fact: { label: "Fact", plural: "Facts", hint: "Recalled when it matters", icon: "file" },
+  event: { label: "Event", plural: "Events", hint: "Dates and plans", icon: "calendar" },
 };
 
-const savedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+type Filter = MemoryType | "all";
 
 const count = new Intl.NumberFormat();
 
@@ -25,13 +26,11 @@ function cleaned(content: string): string {
 function Draft({
   initial,
   submitLabel,
-  primary,
   onSubmit,
   onCancel,
 }: {
   readonly initial: MemoryDraft;
   readonly submitLabel: string;
-  readonly primary: boolean;
   readonly onSubmit: (draft: MemoryDraft) => Promise<boolean>;
   readonly onCancel?: () => void;
 }) {
@@ -42,10 +41,11 @@ function Draft({
   const length = cleaned(content).length;
   const tooLong = length > memoryLimits.characters;
   const unchanged = cleaned(content) === initial.content && type === initial.type;
+  const blocked = length === 0 || tooLong || busy || (onCancel !== undefined && unchanged);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (length === 0 || tooLong || busy) {
+  async function submit(event?: FormEvent) {
+    event?.preventDefault();
+    if (blocked) {
       return;
     }
     setBusy(true);
@@ -56,8 +56,17 @@ function Draft({
     }
   }
 
+  function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submit();
+    } else if (event.key === "Escape" && onCancel !== undefined) {
+      onCancel();
+    }
+  }
+
   return (
-    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-2">
+    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
       <label htmlFor={contentId} className="sr-only">
         What VENOM should remember
       </label>
@@ -65,40 +74,84 @@ function Draft({
         id={contentId}
         value={content}
         onChange={(event) => setContent(event.target.value)}
-        rows={2}
+        onKeyDown={onKey}
+        rows={1}
         maxLength={memoryLimits.characters * 2}
-        placeholder="Something VENOM should remember about you"
+        placeholder="I prefer metric units and short answers"
         aria-invalid={tooLong}
-        className={field.input}
+        autoFocus={onCancel !== undefined}
+        className={`${field.input} min-h-11 bg-black/45 text-[14px]`}
       />
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Choice label="Kind" value={type} options={memoryTypes.map((option) => ({ value: option, label: typeView[option].label, hint: typeView[option].hint, icon: typeView[option].icon }))} onChange={setType} />
         <div className="flex items-center gap-2">
-          <Choice
-            label="Kind of memory"
-            value={type}
-            options={memoryTypes.map((option) => ({ value: option, label: typeView[option].label, hint: typeView[option].blurb }))}
-            onChange={setType}
-          />
-          <span className={`tabular ${text.detail} ${tooLong ? "text-red-400" : "text-ink-faint"}`}>
-            {length}/{memoryLimits.characters}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
+          {length > memoryLimits.characters * 0.8 && (
+            <span className={`tabular text-[11px] ${tooLong ? "text-red-400" : "text-ink-faint"}`}>
+              {length}/{memoryLimits.characters}
+            </span>
+          )}
           {onCancel !== undefined && (
             <button type="button" onClick={onCancel} className={button.ghost}>
               Cancel
             </button>
           )}
-          <button
-            type="submit"
-            disabled={length === 0 || tooLong || busy || (onCancel !== undefined && unchanged)}
-            className={primary ? button.primary : button.compact}
-          >
+          <button type="submit" disabled={blocked} className={onCancel === undefined ? button.primary : button.compact}>
+            <Icon name={onCancel === undefined ? "plus" : "check"} className="h-3.5 w-3.5" />
             {busy ? "Saving" : submitLabel}
           </button>
         </div>
       </div>
     </form>
+  );
+}
+
+function Capacity({ used, limit }: { readonly used: number; readonly limit: number }) {
+  const share = Math.min(100, Math.round((used / Math.max(limit, 1)) * 100));
+  return (
+    <section aria-label="Memory space" className={`flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4 ${surface.card}`}>
+      <div className="flex items-baseline gap-2">
+        <span className="tabular text-[28px] leading-none font-bold text-ink">{count.format(used)}</span>
+        <span className="text-[12.5px] text-ink-faint">of {count.format(limit)} kept</span>
+      </div>
+      <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-full rounded-full bg-linear-to-r from-green-600 to-green-400 shadow-[0_0_12px_rgba(31,242,92,0.7)]" style={{ width: `${Math.max(share, used > 0 ? 2 : 0)}%` }} />
+        </div>
+        <span className="flex items-center gap-1.5 text-[11.5px] text-ink-faint">
+          <Icon name="shield" className="h-3 w-3 text-green-300/70" />
+          Only what you ask. Forget means gone for good.
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function Filters({ items, filter, onFilter }: { readonly items: readonly MemoryItem[]; readonly filter: Filter; readonly onFilter: (filter: Filter) => void }) {
+  const tabs: readonly { readonly value: Filter; readonly label: string; readonly total: number }[] = [
+    { value: "all", label: "All", total: items.length },
+    ...memoryTypes.map((type) => ({ value: type, label: typeView[type].plural, total: items.filter((item) => item.type === type).length })),
+  ];
+  return (
+    <div role="tablist" aria-label="Kinds of memory" className="flex shrink-0 gap-1 rounded-[12px] border border-line bg-black/35 p-1">
+      {tabs.map((tab) => {
+        const chosen = tab.value === filter;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={chosen}
+            onClick={() => onFilter(tab.value)}
+            className={`flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12.5px] font-medium transition-colors duration-200 ease-ui ${
+              chosen ? "bg-green-400/[0.12] text-green-300 shadow-[inset_0_0_0_1px_rgba(77,255,124,0.35)]" : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            {tab.label}
+            <span className={`tabular text-[10.5px] ${chosen ? "text-green-300/80" : "text-ink-faint"}`}>{tab.total}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -110,18 +163,16 @@ function ForgetGate({ item, onCancel, onConfirm }: { readonly item: MemoryItem; 
   }, []);
 
   return (
-    <div role="alertdialog" aria-labelledby={`forget-${item.id}`} className="mt-3 flex flex-col gap-3 border-t border-line-subtle pt-3">
+    <div role="alertdialog" aria-labelledby={`forget-${item.id}`} className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-3">
       <p id={`forget-${item.id}`} className={text.support}>
-        {item.source === "chat"
-          ? "Forget this for good? I delete it, together with the chat message where you told me and my reply. This cannot be undone."
-          : "Forget this for good? I delete it and will not use it again. This cannot be undone."}
+        {item.source === "chat" ? "Forget this and the chat where you said it? This cannot be undone." : "Forget this for good? This cannot be undone."}
       </p>
       <div className="flex gap-2">
         <button ref={cancel} type="button" onClick={onCancel} className={button.gateCancel}>
-          Cancel
+          Keep it
         </button>
         <button type="button" onClick={onConfirm} className={button.gateApprove}>
-          <Icon name="warning" className="h-3.5 w-3.5 text-status-wait" />
+          <Icon name="trash" className="h-3.5 w-3.5 text-status-wait" />
           <span>Forget</span>
         </button>
       </div>
@@ -132,6 +183,7 @@ function ForgetGate({ item, onCancel, onConfirm }: { readonly item: MemoryItem; 
 function MemoryRow({ item, state }: { readonly item: MemoryItem; readonly state: MemoryState }) {
   const [mode, setMode] = useState<"view" | "edit" | "forget">("view");
   const [busy, setBusy] = useState(false);
+  const view = typeView[item.type];
 
   async function forget() {
     setBusy(true);
@@ -152,28 +204,34 @@ function MemoryRow({ item, state }: { readonly item: MemoryItem; readonly state:
 
   if (mode === "edit") {
     return (
-      <li className={`p-3 ${surface.cardActive}`}>
-        <Draft initial={{ type: item.type, content: item.content }} submitLabel="Save" primary={false} onSubmit={edit} onCancel={() => setMode("view")} />
+      <li className={`p-4 ${surface.cardActive}`}>
+        <Draft initial={{ type: item.type, content: item.content }} submitLabel="Save" onSubmit={edit} onCancel={() => setMode("view")} />
       </li>
     );
   }
 
   return (
-    <li className={`p-3 ${surface.card}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="break-words text-sm text-ink">{item.content}</span>
-          <span className={`${text.detail} text-ink-faint`}>
-            {item.source === "chat" ? "Told in chat" : "Added here"} · {savedFormat.format(new Date(item.updated_at))}
+    <li className={`group px-4 py-3.5 transition-colors duration-200 ease-ui hover:border-line-strong ${surface.card}`}>
+      <div className="flex items-start gap-3.5">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-green-400/20 bg-green-400/[0.07] text-green-300">
+          <Icon name={view.icon} className="h-4 w-4" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="break-words text-[14px] leading-snug text-ink">{item.content}</span>
+          <span className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-faint">
+            <span className="hud text-[8.5px] text-green-300/70">{view.label}</span>
+            <span>{item.source === "chat" ? "From chat" : "Added here"}</span>
+            <span>·</span>
+            <span>{sinceWords(item.updated_at, Date.now())}</span>
           </span>
         </div>
         {mode === "view" && (
-          <div className="flex shrink-0 items-center gap-1">
-            <button type="button" onClick={() => setMode("edit")} className={button.ghost} aria-label={`Edit: ${item.content}`}>
-              Edit
+          <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity duration-200 group-hover:opacity-100">
+            <button type="button" onClick={() => setMode("edit")} className={button.icon} aria-label={`Edit: ${item.content}`}>
+              <Icon name="pencil" className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={() => setMode("forget")} disabled={busy} className={button.destructive}>
-              Forget
+            <button type="button" onClick={() => setMode("forget")} disabled={busy} className={`${button.icon} hover:border-red-500/50 hover:text-red-400`} aria-label={`Forget: ${item.content}`}>
+              <Icon name="trash" className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
@@ -185,79 +243,63 @@ function MemoryRow({ item, state }: { readonly item: MemoryItem; readonly state:
 
 export function MemoryPlace({ state }: { readonly state: MemoryState }) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const searchId = useId();
-  const shown = matching(state.items, query);
+  const found = matching(state.items, query);
+  const shown = filter === "all" ? found : found.filter((item) => item.type === filter);
   const full = state.items.length >= state.limit;
 
   return (
-    <Place title="Memory" eyebrow="What I keep" icon="memory">
-      <p className={text.support}>
-        I only keep what you ask me to. Start a message with "Remember that…", or add it here.{" "}
-        <span className="tabular text-green-400">
-          {count.format(state.items.length)} of {count.format(state.limit)}
-        </span>{" "}
-        kept.
-      </p>
+    <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined}>
+      <Capacity used={state.items.length} limit={state.limit} />
 
       {full ? (
         <p className="flex items-start gap-1.5 text-[13px] text-status-wait">
           <Icon name="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>My memory is full. Forget something before adding more.</span>
+          <span>Memory is full. Forget something to make room.</span>
         </p>
       ) : (
-        <section aria-label="Add a memory" className={`p-3 ${surface.card}`}>
-          <Draft initial={{ type: "fact", content: "" }} submitLabel="Remember" primary onSubmit={state.add} />
+        <section aria-label="Add a memory" className={`p-4 ${surface.cardActive}`}>
+          <Draft initial={{ type: "fact", content: "" }} submitLabel="Remember" onSubmit={state.add} />
         </section>
       )}
 
       {state.failure !== null && <Trouble reason={state.failure} />}
 
       {state.items.length > 0 && (
-        <div className="relative">
-          <label htmlFor={searchId} className="sr-only">
-            Search memory
-          </label>
-          <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-          <input
-            id={searchId}
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search what I remember"
-            className={`${field.text} pl-9`}
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <Filters items={found} filter={filter} onFilter={setFilter} />
+          <div className="relative min-w-[180px] flex-1">
+            <label htmlFor={searchId} className="sr-only">
+              Search memory
+            </label>
+            <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+            <input id={searchId} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" className={`${field.text} h-10 bg-black/35 py-0 pl-9`} />
+          </div>
         </div>
       )}
 
       {state.loaded && state.items.length === 0 && (
-        <div className="flex flex-col gap-1 px-1 py-6 text-center">
-          <p className="font-medium text-ink">Nothing remembered yet</p>
-          <p className={text.support}>Tell me "Remember that I prefer metric units", or add something above.</p>
+        <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+          <span className="grid h-14 w-14 place-items-center rounded-[16px] border border-green-400/25 bg-green-400/[0.06] text-green-300 shadow-mark">
+            <Icon name="memory" className="h-6 w-6" />
+          </span>
+          <p className="text-[15px] font-semibold text-ink">Nothing kept yet</p>
+          <p className={`max-w-sm ${text.support}`}>
+            Say <span className="text-green-300">“Remember that…”</span> in Chat, or add it above.
+          </p>
         </div>
       )}
 
-      {state.items.length > 0 && shown.length === 0 && <p className={`px-1 ${text.support}`}>Nothing I remember matches "{query.trim()}".</p>}
+      {state.items.length > 0 && shown.length === 0 && <p className={`px-1 ${text.support}`}>Nothing here matches “{query.trim()}”.</p>}
 
-      {memoryTypes.map((type) => {
-        const group = shown.filter((item) => item.type === type);
-        if (group.length === 0) {
-          return null;
-        }
-        return (
-          <section key={type} aria-label={typeView[type].title} className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between gap-2 px-1">
-              <h3 className="text-sm font-semibold text-ink">{typeView[type].title}</h3>
-              <span className={mark.tag}>{group.length}</span>
-            </div>
-            <p className={`px-1 ${text.support}`}>{typeView[type].blurb}</p>
-            <ul className="flex flex-col gap-2">
-              {group.map((item) => (
-                <MemoryRow key={item.id} item={item} state={state} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      {shown.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {shown.map((item) => (
+            <MemoryRow key={item.id} item={item} state={state} />
+          ))}
+        </ul>
+      )}
     </Place>
   );
 }

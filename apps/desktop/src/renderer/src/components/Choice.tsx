@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { Icon } from "./Icon.tsx";
+import { Icon, type IconName } from "./Icon.tsx";
 
 export interface ChoiceOption<T extends string> {
   readonly value: T;
   readonly label: string;
   readonly hint?: string;
+  readonly icon?: IconName;
 }
 
 export interface ChoiceProps<T extends string> {
@@ -17,7 +18,7 @@ export interface ChoiceProps<T extends string> {
 
 export function Choice<T extends string>({ label, value, options, onChange }: ChoiceProps<T>) {
   const [open, setOpen] = useState(false);
-  const [spot, setSpot] = useState<{ readonly top: number; readonly left: number } | null>(null);
+  const [spot, setSpot] = useState<{ readonly top: number; readonly left: number; readonly width: number } | null>(null);
   const [active, setActive] = useState(() => Math.max(0, options.findIndex((option) => option.value === value)));
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -53,7 +54,8 @@ export function Choice<T extends string>({ label, value, options, onChange }: Ch
   function toggle() {
     const box = trigger.current?.getBoundingClientRect();
     if (box !== undefined) {
-      setSpot({ top: box.bottom + 8, left: box.left });
+      const width = Math.max(box.width, 264);
+      setSpot({ top: box.bottom + 6, left: Math.min(box.left, window.innerWidth - width - 12), width });
     }
     setOpen((shown) => !shown);
   }
@@ -110,15 +112,18 @@ export function Choice<T extends string>({ label, value, options, onChange }: Ch
         aria-label={`${label}: ${current?.label ?? ""}`}
         onClick={toggle}
         onKeyDown={onTriggerKey}
-        className={`flex min-w-[132px] items-center justify-between gap-3 rounded-full border bg-black/40 py-2 pr-3 pl-4 text-[13px] font-medium text-ink transition-colors duration-200 ease-ui ${
-          open ? "border-green-400/40" : "border-line hover:border-line-strong"
+        className={`group flex h-10 min-w-[168px] items-center gap-2.5 rounded-[12px] border bg-black/45 pr-2.5 pl-1.5 text-left backdrop-blur transition-[border-color,box-shadow] duration-200 ease-ui ${
+          open ? "border-green-400/55 shadow-[0_0_0_3px_rgba(31,242,92,0.12)]" : "border-line-strong hover:border-green-400/35"
         }`}
       >
-        <span className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-green-400/80" />
-          {current?.label}
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] border border-green-400/25 bg-green-400/[0.08] text-green-300">
+          <Icon name={current?.icon ?? "sparkle"} className="h-3.5 w-3.5" />
         </span>
-        <Icon name="chevron" className={`h-3.5 w-3.5 text-ink-faint transition-transform duration-300 ease-ui ${open ? "rotate-180" : ""}`} />
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="hud text-[8.5px] text-ink-faint">{label}</span>
+          <span className="truncate text-[13px] font-semibold text-ink">{current?.label}</span>
+        </span>
+        <Icon name="chevron" className={`h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform duration-300 ease-ui group-hover:text-green-300 ${open ? "rotate-180 text-green-300" : ""}`} />
       </button>
       {open &&
         spot !== null &&
@@ -131,8 +136,8 @@ export function Choice<T extends string>({ label, value, options, onChange }: Ch
             aria-label={label}
             aria-activedescendant={`${listId}-${active}`}
             onKeyDown={onListKey}
-            style={{ top: spot.top, left: spot.left }}
-            className="glass-strong fixed z-50 flex w-[240px] animate-rise flex-col gap-0.5 rounded-control p-1.5 outline-none"
+            style={{ top: spot.top, left: spot.left, width: spot.width }}
+            className="glass-strong fixed z-50 flex animate-rise flex-col gap-0.5 rounded-[14px] p-1.5 outline-none"
           >
             {options.map((option, index) => {
               const chosen = option.value === value;
@@ -145,15 +150,17 @@ export function Choice<T extends string>({ label, value, options, onChange }: Ch
                   aria-selected={chosen}
                   onPointerEnter={() => setActive(index)}
                   onClick={() => pick(index)}
-                  className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] px-3 py-2 transition-colors duration-150 ${lit ? "bg-white/[0.06]" : ""}`}
+                  className={`relative flex cursor-pointer items-center gap-3 rounded-[10px] px-2.5 py-2 transition-colors duration-150 ${lit ? "bg-white/[0.06]" : ""}`}
                 >
-                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center">
-                    {chosen && <Icon name="check" className="h-3.5 w-3.5 text-green-400" />}
+                  {chosen && <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-green-400 shadow-[0_0_10px_rgba(31,242,92,0.9)]" />}
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border ${chosen ? "border-green-400/45 bg-green-400/[0.12] text-green-300" : "border-line bg-black/40 text-ink-muted"}`}>
+                    <Icon name={option.icon ?? "sparkle"} className="h-3.5 w-3.5" />
                   </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className={`text-[13px] font-medium ${chosen ? "text-ink" : "text-ink-muted"}`}>{option.label}</span>
-                    {option.hint !== undefined && <span className="text-[11.5px] text-ink-faint">{option.hint}</span>}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className={`text-[13px] font-semibold ${chosen ? "text-ink" : "text-ink-muted"}`}>{option.label}</span>
+                    {option.hint !== undefined && <span className="truncate text-[11.5px] text-ink-faint">{option.hint}</span>}
                   </span>
+                  {chosen && <Icon name="check" className="h-3.5 w-3.5 shrink-0 text-green-400" />}
                 </li>
               );
             })}

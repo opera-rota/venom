@@ -5,7 +5,7 @@ export interface PlaceProps {
   readonly title: string;
   readonly icon: IconName;
   readonly eyebrow?: string;
-  readonly count?: number;
+  readonly count?: number | undefined;
   readonly width?: "narrow" | "wide" | "full";
   readonly children: ReactNode;
 }

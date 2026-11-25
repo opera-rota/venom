@@ -52,16 +52,16 @@
 
   --animate-breathe: breathe 6s ease-in-out infinite;
   --animate-drift: drift 28s ease-in-out infinite alternate;
-  --animate-drift-slow: drift-slow 40s ease-in-out infinite alternate;
   --animate-spin-slow: spin 22s linear infinite;
   --animate-pulse-line: pulse-line 3.2s linear infinite;
   --animate-rise: rise 0.5s var(--ease-ui) both;
   --animate-shimmer: shimmer 3.5s linear infinite;
   --animate-orbit: orbit 14s linear infinite;
-  --animate-smoke: smoke 34s ease-in-out infinite alternate;
-  --animate-writhe: writhe 18s ease-in-out infinite alternate;
-  --animate-glint: glint 5s ease-in-out infinite;
-  --animate-writhe-slow: writhe-slow 26s ease-in-out infinite alternate;
+  --animate-smoke: smoke 16s ease-in-out infinite alternate;
+  --animate-smoke-back: smoke-back 21s ease-in-out infinite alternate;
+  --animate-coil: coil 9s ease-in-out infinite alternate;
+  --animate-wisp: wisp 28s linear infinite;
+  --animate-cloud: cloud 14s ease-in-out infinite alternate;
 
   @keyframes breathe {
     0%,
@@ -81,15 +81,6 @@
     }
     100% {
       transform: translate3d(8%, 6%, 0) scale(1.18) rotate(18deg);
-    }
-  }
-
-  @keyframes drift-slow {
-    0% {
-      transform: translate3d(4%, 6%, 0) scale(1.1) rotate(0deg);
-    }
-    100% {
-      transform: translate3d(-8%, -6%, 0) scale(0.95) rotate(-24deg);
     }
   }
 
@@ -124,47 +115,56 @@
 
   @keyframes smoke {
     0% {
-      transform: scale(1.14) translate3d(-3%, -2%, 0);
+      transform: scale(1.2) translate3d(-7%, 3%, 0) rotate(-3deg);
     }
     100% {
-      transform: scale(1.2) translate3d(3%, 2.5%, 0);
+      transform: scale(1.32) translate3d(6%, -5%, 0) rotate(3deg);
     }
   }
 
-  @keyframes writhe {
+  @keyframes smoke-back {
+    0% {
+      transform: scale(1.3) translate3d(8%, 4%, 0) rotate(176deg);
+    }
+    100% {
+      transform: scale(1.2) translate3d(-8%, -6%, 0) rotate(186deg);
+    }
+  }
+
+  @keyframes coil {
     0% {
       transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
     }
-    50% {
-      transform: translate3d(1.5%, -2%, 0) rotate(2.5deg) scale(1.03, 0.98);
-    }
     100% {
-      transform: translate3d(-1%, 1%, 0) rotate(-1.5deg) scale(0.98, 1.03);
+      transform: translate3d(0.6%, -1.2%, 0) rotate(-1.2deg) scale(1.025);
     }
   }
 
-  @keyframes writhe-slow {
+  @keyframes wisp {
     0% {
-      transform: translate3d(0, 0, 0) rotate(0deg);
+      transform: translate3d(0, 0, 0) scale(0.7);
+      opacity: 0;
     }
-    100% {
-      transform: translate3d(-2%, 3%, 0) rotate(-4deg);
-    }
-  }
-
-  @keyframes glint {
-    0%,
-    100% {
+    20% {
       opacity: 1;
     }
-    45% {
+    100% {
+      transform: translate3d(6vw, -120vh, 0) scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  @keyframes cloud {
+    0% {
+      transform: translate3d(-3%, 2%, 0) scale(0.92);
       opacity: 0.55;
     }
     50% {
-      opacity: 0.15;
+      opacity: 1;
     }
-    55% {
-      opacity: 0.9;
+    100% {
+      transform: translate3d(4%, -3%, 0) scale(1.08);
+      opacity: 0.7;
     }
   }
 
@@ -179,24 +179,23 @@
 }
 
 @utility glass {
-  background: linear-gradient(160deg, rgba(16, 20, 18, 0.42), rgba(6, 8, 7, 0.38) 55%, rgba(3, 4, 4, 0.48));
-  backdrop-filter: blur(9px) saturate(130%);
-  border: 1px solid var(--color-line);
-  box-shadow: var(--shadow-card);
+  background: linear-gradient(160deg, rgba(14, 18, 16, 0.26), rgba(2, 3, 3, 0.16) 50%, rgba(0, 0, 0, 0.3));
+  backdrop-filter: blur(2px) saturate(120%);
+  border: 1px solid rgba(220, 255, 235, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 60px -28px rgba(0, 0, 0, 0.9);
 }
 
 @utility glass-glow {
-  background: linear-gradient(160deg, rgba(14, 24, 18, 0.56), rgba(6, 9, 8, 0.52) 55%, rgba(3, 5, 4, 0.62));
-  backdrop-filter: blur(9px) saturate(130%);
-  border: 1px solid rgba(77, 255, 124, 0.2);
-  box-shadow: var(--shadow-glow);
+  background: linear-gradient(160deg, rgba(12, 26, 17, 0.34), rgba(2, 5, 3, 0.22) 50%, rgba(0, 0, 0, 0.36));
+  backdrop-filter: blur(2px) saturate(120%);
+  border: 1px solid rgba(77, 255, 124, 0.34);
+  box-shadow: 0 0 0 1px rgba(77, 255, 124, 0.06), 0 0 26px -10px rgba(31, 242, 92, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 @utility glass-thin {
-  background: linear-gradient(160deg, rgba(14, 18, 16, 0.3), rgba(4, 6, 5, 0.26) 55%, rgba(2, 3, 3, 0.34));
-  backdrop-filter: blur(3px) saturate(120%);
-  border: 1px solid var(--color-line);
-  box-shadow: var(--shadow-card);
+  background: linear-gradient(160deg, rgba(14, 18, 16, 0.12), rgba(0, 0, 0, 0.04) 55%, rgba(0, 0, 0, 0.14));
+  border: 1px solid rgba(220, 255, 235, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 60px -28px rgba(0, 0, 0, 0.9);
 }
 
 @utility glass-strong {
