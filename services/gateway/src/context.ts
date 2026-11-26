@@ -1,4 +1,4 @@
-import type { ConfirmationAnswered, ConfirmRequest, LaterItem, MemoryForgotten, MemoryItem, PowerStatus, StopReceipt, Task } from "@venom/contracts";
+import type { ConfirmationAnswered, ConfirmRequest, HowTo, LaterItem, MemoryForgotten, MemoryItem, PowerStatus, StopReceipt, Task } from "@venom/contracts";
 import type { Kept, Store } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import type { Memory } from "@venom/memory";
@@ -41,6 +41,8 @@ export interface GatewayContext {
   broadcastKept(accountId: string, requestId: string, kept: Kept): void;
   broadcastLaterSeen(accountId: string, requestId: string, item: LaterItem): void;
   broadcastLaterRemoved(accountId: string, requestId: string, itemId: string): void;
+  broadcastHowTo(accountId: string, requestId: string, howto: HowTo): void;
+  broadcastHowToRemoved(accountId: string, requestId: string, howtoId: string): void;
   say(task: Task, kind: SaidKind, text: string, stepId: string | null): Promise<void>;
   availableEngines(): Promise<Availability>;
 }

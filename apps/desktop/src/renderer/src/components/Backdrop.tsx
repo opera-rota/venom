@@ -1,5 +1,3 @@
-import snake from "../assets/venom-snake.png";
-
 const smoke = (seed: number, tone: string, density = "1.35 -0.62") =>
   `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='1000'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.008' numOctaves='5' seed='${seed}'/%3E%3CfeColorMatrix values='0 0 0 0 ${tone} 0 0 0 0 0.72 0 0 0 0 0.32 0 0 0 ${density}'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E")`;
 
@@ -31,15 +29,6 @@ export function Backdrop() {
         className="absolute inset-0 animate-smoke-back opacity-40 mix-blend-screen will-change-transform"
         style={{ backgroundImage: smoke(23, "0.16"), backgroundSize: "cover", maskImage: "radial-gradient(ellipse 80% 45% at 35% 100%, black 15%, transparent 72%)" }}
       />
-      <div className="absolute bottom-0 left-0 h-[min(96vh,1040px)] origin-bottom-left animate-coil will-change-transform">
-        <img
-          src={snake}
-          alt=""
-          draggable={false}
-          className="block h-full w-auto max-w-none translate-y-[13%] contrast-[1.12] saturate-[1.1]"
-          style={{ clipPath: "inset(0 0 13% 0)", maskImage: "radial-gradient(ellipse 80% 76% at 40% 40%, black 50%, transparent 80%)" }}
-        />
-      </div>
       {wisps.map((wisp) => (
         <span
           key={wisp.left}

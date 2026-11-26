@@ -1,10 +1,15 @@
 import {
+  ChangeHowTo,
   CommandFrame,
   ConfirmationAnswered,
   DeviceList,
   EngineId,
   EngineList,
   GatewayEvent,
+  HowTo,
+  HowToList,
+  HowToNote,
+  HowToStep,
   Id,
   LaterItem,
   LaterList,
@@ -40,6 +45,8 @@ import type {
   ConnectionState,
   DevicesResult,
   EnginesResult,
+  HowToResult,
+  HowTosResult,
   LaterItemResult,
   LaterResult,
   MemoryItemResult,
@@ -87,6 +94,10 @@ const closeReasons: ReadonlyMap<number, Revocation> = new Map([
 const unreadableDraft = "Write what VENOM should remember, in 500 characters or fewer.";
 
 const laterGone = "That item is no longer kept for later.";
+
+const howToGone = "That how-to is no longer kept.";
+
+const howToUnreadable = "VENOM could not read that change to the how-to.";
 const signalUnreadable = "VENOM could not read that live screen signal.";
 
 type Frame = { readonly kind: "event"; readonly event: GatewayEvent } | { readonly kind: "command"; readonly frame: CommandFrame };
@@ -370,6 +381,64 @@ export class GatewayClient {
       return result;
     }
     return { ok: true };
+  }
+
+  async howtos(): Promise<HowTosResult> {
+    const result = await this.#api.request("GET", "/v1/howtos", { schema: HowToList, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, list: result.value };
+  }
+
+  async saveHowTo(taskId: unknown): Promise<HowToResult> {
+    const id = Id.safeParse(taskId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: howToUnreadable };
+    }
+    return this.#howTo("POST", "/v1/howtos", { task_id: id.data });
+  }
+
+  async changeHowTo(howtoId: unknown, change: unknown): Promise<HowToResult> {
+    const id = Id.safeParse(howtoId);
+    const parsed = ChangeHowTo.safeParse(change);
+    if (!id.success || !parsed.success) {
+      return { ok: false, code: "invalid_request", reason: howToUnreadable };
+    }
+    return this.#howTo("PATCH", `/v1/howtos/${id.data}`, parsed.data);
+  }
+
+  async noteHowTo(howtoId: unknown, number: unknown, note: unknown): Promise<HowToResult> {
+    const id = Id.safeParse(howtoId);
+    const step = HowToStep.shape.number.safeParse(number);
+    const parsed = HowToNote.safeParse({ note });
+    if (!id.success || !step.success || !parsed.success) {
+      return { ok: false, code: "invalid_request", reason: howToUnreadable };
+    }
+    return this.#howTo("PUT", `/v1/howtos/${id.data}/steps/${step.data}/note`, parsed.data);
+  }
+
+  async forgetHowTo(howtoId: unknown): Promise<StepResult> {
+    const id = Id.safeParse(howtoId);
+    if (!id.success) {
+      return { ok: false, code: "invalid_request", reason: howToGone };
+    }
+    const result = await this.#api.request("DELETE", `/v1/howtos/${id.data}`, { token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true };
+  }
+
+  async #howTo(method: "POST" | "PATCH" | "PUT", path: string, body: unknown): Promise<HowToResult> {
+    const result = await this.#api.request(method, path, { schema: HowTo, body, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, howto: result.value };
   }
 
   async #memoryItem(method: "POST" | "PUT", path: string, draft: MemoryDraft): Promise<MemoryItemResult> {

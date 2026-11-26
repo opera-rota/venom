@@ -1,5 +1,7 @@
-import type { MoveStatus, ScreenKey, Task, TaskMove } from "@venom/contracts";
+import type { MoveStatus, Task, TaskMove } from "@venom/contracts";
 import type { IconName } from "./components/Icon.tsx";
+
+export { moveLabel } from "@venom/contracts";
 
 export interface MoveLook {
   readonly word: string;
@@ -35,34 +37,6 @@ export function moveAnswerWords(move: TaskMove | null): string {
   }
 }
 
-const keyNames: Partial<Record<ScreenKey, string>> = {
-  enter: "Enter",
-  tab: "Tab",
-  escape: "Esc",
-  backspace: "Backspace",
-  delete: "Delete",
-  page_up: "Page up",
-  page_down: "Page down",
-  win: "Start",
-  "win+d": "Desktop",
-  "alt+tab": "Switch app",
-  f5: "Refresh",
-};
-
-function keyName(key: ScreenKey): string {
-  return keyNames[key] ?? key.split("+").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("+");
-}
-
-function shortened(words: string, size: number): string {
-  const clean = words.replace(/\s+/gu, " ").trim();
-  return clean.length > size ? `${clean.slice(0, size - 1)}…` : clean;
-}
-
-function markName(move: TaskMove): string | null {
-  const named = /'([^']{1,40})'/u.exec(move.detail ?? "");
-  return named?.[1] ?? null;
-}
-
 export function moveIcon(move: TaskMove): IconName {
   switch (move.move.name) {
     case "click":
@@ -77,24 +51,6 @@ export function moveIcon(move: TaskMove): IconName {
       return "app";
     case "pause":
       return "pause";
-  }
-}
-
-export function moveLabel(move: TaskMove): string {
-  const step = move.move;
-  switch (step.name) {
-    case "click":
-      return markName(move) ?? (step.double ? "Double click" : "Click");
-    case "type":
-      return `“${shortened(step.text, 18)}”`;
-    case "key":
-      return keyName(step.key);
-    case "scroll":
-      return step.direction === "down" ? "Scroll down" : "Scroll up";
-    case "open":
-      return shortened(step.app, 18);
-    case "pause":
-      return `${step.seconds} s`;
   }
 }
 

@@ -14,13 +14,14 @@ import type { Brain } from "./brain.ts";
 import type { GatewayContext } from "./context.ts";
 import { installErrorHandling } from "./errors.ts";
 import { asksForLater, keptWords, laterTitle } from "./later.ts";
-import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, laterEvent, laterRemovedEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
+import { confirmationEvent, devicesEvent, forgottenEvent, haltEvent, howToEvent, howToRemovedEvent, laterEvent, laterRemovedEvent, LiveHub, memoryEvent, messageEvent, moveEvent, powerEvent, stepOutputEvent, taskEvent } from "./live-hub.ts";
 import { GoalLoop, type LoopLimits } from "./loop.ts";
 import { phoneRoutes, type PhoneApp } from "./phone.ts";
 import { LiveRequests } from "./requests.ts";
 import { TaskRunner, type SaidKind } from "./runner.ts";
 import { deviceRoutes } from "./routes/devices.ts";
 import { identityRoutes } from "./routes/identity.ts";
+import { howToRoutes } from "./routes/howtos.ts";
 import { laterRoutes } from "./routes/later.ts";
 import { liveRoute } from "./routes/live.ts";
 import { memoryRoutes } from "./routes/memory.ts";
@@ -200,6 +201,12 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     broadcastLaterRemoved(accountId, requestId, itemId) {
       hub.publishToAccount(accountId, laterRemovedEvent(requestId, itemId));
     },
+    broadcastHowTo(accountId, requestId, howto) {
+      hub.publishToAccount(accountId, howToEvent(requestId, howto));
+    },
+    broadcastHowToRemoved(accountId, requestId, howtoId) {
+      hub.publishToAccount(accountId, howToRemovedEvent(requestId, howtoId));
+    },
     say,
     availableEngines,
   };
@@ -236,6 +243,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
   powerRoutes(app, context);
   memoryRoutes(app, context);
   laterRoutes(app, context);
+  howToRoutes(app, context);
   safetyRoutes(app, context);
   taskRoutes(app, context);
   screenRoutes(app, context);

@@ -1,5 +1,6 @@
 import postgres, { type Sql } from "postgres";
 import { ConversationEntry, Message, type ChatDocument, type IntentKind, type MessageKind, type QuestionRef, type Speaker } from "@venom/contracts";
+import { howToStore, type HowToStore } from "./howtos.ts";
 import { laterStore, type LaterStore } from "./later.ts";
 
 export interface DeviceRef {
@@ -30,7 +31,7 @@ export interface Conversation {
   readonly unanswered: QuestionRef[];
 }
 
-export interface Store extends LaterStore {
+export interface Store extends LaterStore, HowToStore {
   recordMessage(input: RecordMessage): Promise<Message>;
   listConversation(accountId: string, limit: number): Promise<Conversation>;
   conversationBefore(accountId: string, messageId: string, limit: number): Promise<ConversationEntry[]>;
@@ -87,6 +88,7 @@ export function createStore(url: string): Store {
 
   return {
     ...laterStore(sql),
+    ...howToStore(sql),
 
     async recordMessage({ device, requestId, speaker, text, kind: requested, taskId = null, stepId = null, moveId = null, document = null, answer }) {
       const kind = requested ?? (taskId === null ? "text" : "plan");

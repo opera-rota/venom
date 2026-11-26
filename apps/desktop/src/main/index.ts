@@ -291,6 +291,11 @@ function wire(): void {
   handle(channels.later, () => gateway.later());
   handle(channels.laterSeen, (itemId) => gateway.laterSeen(itemId));
   handle(channels.laterRemove, (itemId) => gateway.laterRemove(itemId));
+  handle(channels.howtos, () => gateway.howtos());
+  handle(channels.saveHowTo, (taskId) => gateway.saveHowTo(taskId));
+  handle(channels.changeHowTo, (howtoId, change) => gateway.changeHowTo(howtoId, change));
+  handle(channels.noteHowTo, (howtoId, number, note) => gateway.noteHowTo(howtoId, number, note));
+  handle(channels.forgetHowTo, (howtoId) => gateway.forgetHowTo(howtoId));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));
   handle(channels.retry, (requestId) => gateway.retry(requestId));

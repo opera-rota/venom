@@ -1,10 +1,12 @@
-import { memoryLimits, type MemoryDraft, type MemoryItem, type MemoryType } from "@venom/contracts";
+import { memoryLimits, type MemoryDraft, type MemoryItem, type MemoryType, type Task } from "@venom/contracts";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { matching, memoryTypes } from "../memory-state.ts";
 import { sinceWords } from "../move-words.ts";
+import type { HowTosState } from "../use-howtos.ts";
 import type { MemoryState } from "../use-memory.ts";
 import { button, field, surface, text } from "../ui.ts";
 import { Choice } from "./Choice.tsx";
+import { HowTos } from "./HowTos.tsx";
 import { Icon, type IconName } from "./Icon.tsx";
 import { Place } from "./Place.tsx";
 import { Trouble } from "./Trouble.tsx";
@@ -16,6 +18,8 @@ const typeView: Record<MemoryType, { readonly label: string; readonly plural: st
 };
 
 type Filter = MemoryType | "all";
+
+type View = "know" | "howtos";
 
 const count = new Intl.NumberFormat();
 
@@ -241,16 +245,44 @@ function MemoryRow({ item, state }: { readonly item: MemoryItem; readonly state:
   );
 }
 
-export function MemoryPlace({ state }: { readonly state: MemoryState }) {
+function Tabs({ view, known, learned, onView }: { readonly view: View; readonly known: number; readonly learned: number; readonly onView: (view: View) => void }) {
+  const tabs: readonly { readonly value: View; readonly icon: IconName; readonly label: string; readonly total: number }[] = [
+    { value: "know", icon: "memory", label: "Things I know", total: known },
+    { value: "howtos", icon: "sparkle", label: "How-tos", total: learned },
+  ];
+  return (
+    <div role="tablist" aria-label="Memory" className="grid grid-cols-2 gap-1 rounded-[14px] border border-line bg-black/40 p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          role="tab"
+          aria-selected={view === tab.value}
+          onClick={() => onView(tab.value)}
+          className={`flex items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13.5px] font-semibold transition-colors duration-200 ease-ui ${
+            view === tab.value ? "bg-green-400/[0.12] text-green-300 shadow-[inset_0_0_0_1px_rgba(77,255,124,0.4),0_0_20px_-8px_rgba(31,242,92,0.7)]" : "text-ink-muted hover:text-ink"
+          }`}
+        >
+          <Icon name={tab.icon} className="h-4 w-4" />
+          {tab.label}
+          <span className="tabular text-[11px] opacity-70">{tab.total}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Known({ state }: { readonly state: MemoryState }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const searchId = useId();
   const found = matching(state.items, query);
   const shown = filter === "all" ? found : found.filter((item) => item.type === filter);
   const full = state.items.length >= state.limit;
+  const searching = query.trim() !== "";
 
   return (
-    <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined}>
+    <>
       <Capacity used={state.items.length} limit={state.limit} />
 
       {full ? (
@@ -291,7 +323,9 @@ export function MemoryPlace({ state }: { readonly state: MemoryState }) {
         </div>
       )}
 
-      {state.items.length > 0 && shown.length === 0 && <p className={`px-1 ${text.support}`}>Nothing here matches “{query.trim()}”.</p>}
+      {state.items.length > 0 && shown.length === 0 && (
+        <p className={`px-1 ${text.support}`}>{searching ? `Nothing here matches “${query.trim()}”.` : `No ${filter === "all" ? "memories" : typeView[filter].plural.toLowerCase()} yet.`}</p>
+      )}
 
       {shown.length > 0 && (
         <ul className="flex flex-col gap-2">
@@ -300,6 +334,23 @@ export function MemoryPlace({ state }: { readonly state: MemoryState }) {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+export interface MemoryPlaceProps {
+  readonly state: MemoryState;
+  readonly howtos: HowTosState;
+  readonly jobs: readonly Task[];
+}
+
+export function MemoryPlace({ state, howtos, jobs }: MemoryPlaceProps) {
+  const [view, setView] = useState<View>("know");
+
+  return (
+    <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined} width={view === "howtos" ? "wide" : "narrow"}>
+      <Tabs view={view} known={state.items.length} learned={howtos.howtos.length} onView={setView} />
+      {view === "know" ? <Known state={state} /> : <HowTos state={howtos} jobs={jobs} />}
     </Place>
   );
 }

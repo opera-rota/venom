@@ -1,5 +1,6 @@
 export * from "./brain.ts";
 export * from "./gateway.ts";
+export * from "./howtos.ts";
 export * from "./identity.ts";
 export * from "./later.ts";
 export * from "./memory.ts";

@@ -1,4 +1,4 @@
-import type { Device, Task, TaskMove, TaskStatus, Thumbnail } from "@venom/contracts";
+import type { Device, HowTo, Task, TaskMove, TaskStatus, Thumbnail } from "@venom/contracts";
 import { useEffect, useState } from "react";
 import { deviceInUse, workers, type LiveScreen } from "../live-screen.ts";
 import { lastedWords, sinceWords } from "../move-words.ts";
@@ -23,6 +23,9 @@ export interface ScreenPlaceProps {
   readonly using: string | null;
   readonly stopping: boolean;
   readonly later: LaterState;
+  readonly howto: HowTo | null;
+  readonly savingHowTo: boolean;
+  readonly onSaveHowTo: (taskId: string) => void;
   readonly onUse: (deviceId: string) => void;
   readonly onDevices: () => void;
   readonly onLoad: (taskId: string) => void;
@@ -174,7 +177,7 @@ function Stat({ icon, label, value }: { readonly icon: IconName; readonly label:
   );
 }
 
-function Job({ task, moves, loaded, devices, deviceId, stopping, onStop }: Pick<ScreenPlaceProps, "moves" | "loaded" | "devices" | "deviceId" | "stopping" | "onStop"> & { readonly task: Task }) {
+function Job({ task, moves, loaded, devices, deviceId, stopping, howto, savingHowTo, onStop, onSaveHowTo }: Pick<ScreenPlaceProps, "moves" | "loaded" | "devices" | "deviceId" | "stopping" | "howto" | "savingHowTo" | "onStop" | "onSaveHowTo"> & { readonly task: Task }) {
   const open = isOpen(task);
   const now = useNow(open);
   const look = jobLook[task.status];
@@ -209,6 +212,18 @@ function Job({ task, moves, loaded, devices, deviceId, stopping, onStop }: Pick<
           {task.result}
         </button>
       )}
+      {!open && task.moves > 0 &&
+        (howto === null ? (
+          <button type="button" disabled={savingHowTo} onClick={() => onSaveHowTo(task.id)} className={`${button.compact} self-start`}>
+            <Icon name="sparkle" className="h-3.5 w-3.5 text-green-300" />
+            {savingHowTo ? "Saving…" : "Save as how-to"}
+          </button>
+        ) : (
+          <span className="flex items-center gap-1.5 self-start rounded-full border border-green-400/30 bg-green-400/[0.08] px-3 py-1.5 text-[12px] font-medium text-green-300">
+            <Icon name="check" className="h-3.5 w-3.5" />
+            Saved as a how-to in Memory
+          </span>
+        ))}
       {open && (
         <button type="button" className={`${button.destructive} self-start`} disabled={stopping} onClick={() => onStop(task.id)}>
           <Icon name="stop" className="h-3 w-3" />
@@ -245,7 +260,7 @@ function Resting() {
   );
 }
 
-export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, watched, using, stopping, later, onUse, onDevices, onLoad, onStop, onOpenLink }: ScreenPlaceProps) {
+export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, watched, using, stopping, later, howto, savingHowTo, onUse, onDevices, onLoad, onStop, onSaveHowTo, onOpenLink }: ScreenPlaceProps) {
   const taskId = task?.id ?? null;
   const open = task !== null && isOpen(task);
   const chosen = deviceInUse(devices);
@@ -277,7 +292,7 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, l
         {task === null ? (
           <Resting />
         ) : (
-          <Job task={task} moves={moves} loaded={loaded} devices={devices} deviceId={deviceId} stopping={stopping} onStop={onStop} />
+          <Job task={task} moves={moves} loaded={loaded} devices={devices} deviceId={deviceId} stopping={stopping} howto={howto} savingHowTo={savingHowTo} onStop={onStop} onSaveHowTo={onSaveHowTo} />
         )}
       </div>
       <div className="mt-2 border-t border-line-subtle pt-5">

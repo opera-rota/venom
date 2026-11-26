@@ -1,7 +1,10 @@
 import type {
   Account,
   ApiErrorCode,
+  ChangeHowTo,
   ChatDocument,
+  HowTo,
+  HowToList,
   LaterItem,
   LaterList,
   ConfirmationAnswered,
@@ -54,6 +57,10 @@ export type MemoryItemResult = { readonly ok: true; readonly item: MemoryItem } 
 export type LaterResult = { readonly ok: true; readonly list: LaterList } | Failure;
 
 export type LaterItemResult = { readonly ok: true; readonly item: LaterItem } | Failure;
+
+export type HowTosResult = { readonly ok: true; readonly list: HowToList } | Failure;
+
+export type HowToResult = { readonly ok: true; readonly howto: HowTo } | Failure;
 
 export type TasksResult = { readonly ok: true; readonly list: TaskList } | Failure;
 
@@ -116,6 +123,11 @@ export interface VenomBridge {
   later(): Promise<LaterResult>;
   laterSeen(itemId: string): Promise<LaterItemResult>;
   laterRemove(itemId: string): Promise<StepResult>;
+  howtos(): Promise<HowTosResult>;
+  saveHowTo(taskId: string): Promise<HowToResult>;
+  changeHowTo(howtoId: string, change: ChangeHowTo): Promise<HowToResult>;
+  noteHowTo(howtoId: string, number: number, note: string | null): Promise<HowToResult>;
+  forgetHowTo(howtoId: string): Promise<StepResult>;
   history(): Promise<MessageHistory>;
   send(text: string): Promise<SendResult>;
   retry(requestId: string): Promise<SendResult>;
@@ -164,6 +176,11 @@ export const channels = {
   later: "venom:later",
   laterSeen: "venom:later-seen",
   laterRemove: "venom:later-remove",
+  howtos: "venom:howtos",
+  saveHowTo: "venom:save-howto",
+  changeHowTo: "venom:change-howto",
+  noteHowTo: "venom:note-howto",
+  forgetHowTo: "venom:forget-howto",
   history: "venom:history",
   send: "venom:send",
   retry: "venom:retry",

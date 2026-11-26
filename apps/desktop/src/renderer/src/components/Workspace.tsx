@@ -8,6 +8,8 @@ import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from 
 import { unseenCount } from "../later-state.ts";
 import { awakeFor, watcherWords } from "../live-screen.ts";
 import { useDevices } from "../use-devices.ts";
+import { savedFrom } from "../howtos-state.ts";
+import { useHowTos } from "../use-howtos.ts";
 import { useLater } from "../use-later.ts";
 import { useLiveScreen } from "../use-live-screen.ts";
 import { useMemory } from "../use-memory.ts";
@@ -40,6 +42,13 @@ function goalsOf(state: TasksState): readonly Task[] {
   return [...state.tasks.values()].filter((task) => task.kind === "goal");
 }
 
+function finishedJobs(state: TasksState): readonly Task[] {
+  return goalsOf(state)
+    .filter((goal) => !isOpen(goal) && goal.moves > 0)
+    .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
+    .slice(0, 30);
+}
+
 function screenJob(state: TasksState): Task | null {
   const goals = goalsOf(state);
   const open = goals.filter(isOpen).sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -65,6 +74,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const memory = useMemory(bridge, connection);
   const tasks = useTasks(bridge, connection);
   const later = useLater(bridge, connection);
+  const howtos = useHowTos(bridge, connection);
   const [place, setPlace] = useState<PlaceName>("chat");
   const [seed, setSeed] = useState<Seed | null>(null);
   const openLink = useCallback((url: string) => void bridge.openLink(url), [bridge]);
@@ -100,6 +110,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const gateQueue = useMemo(() => state.queue.filter((request) => !inChat.has(request.task_id)), [state.queue, inChat]);
   const gateClosed = useMemo(() => state.closed.filter((entry) => !inChat.has(entry.request.task_id)), [state.closed, inChat]);
   const job = useMemo(() => screenJob(state), [state]);
+  const jobs = useMemo(() => finishedJobs(state), [state]);
   const signals = useMemo(() => ({ waiting: taskCount(state).needsYou, working: goalsOf(state).some(isOpen), later: unseenCount(later.items) }), [state, later.items]);
   const engine = power.power === null ? null : engineName(power.engines, power.power);
   const live = useLiveScreen(bridge, devices.devices, device.id, connection, place === "screen");
@@ -182,6 +193,9 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
                 using={devices.using}
                 stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
                 later={later}
+                howto={job === null ? null : savedFrom(howtos.howtos, job.id)}
+                savingHowTo={job !== null && howtos.saving.has(job.id)}
+                onSaveHowTo={(taskId) => void howtos.save(taskId)}
                 onUse={(deviceId) => void devices.use(deviceId)}
                 onDevices={() => setPlace("devices")}
                 onLoad={loadMoves}
@@ -190,7 +204,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
               />
             )}
             {place === "devices" && <DevicesPlace state={devices} />}
-            {place === "memory" && <MemoryPlace state={memory} />}
+            {place === "memory" && <MemoryPlace state={memory} howtos={howtos} jobs={jobs} />}
             {place === "models" && <ModelsPlace state={power} />}
           </main>
         )}

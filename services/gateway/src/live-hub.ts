@@ -4,6 +4,7 @@ import {
   type ConfirmationAnswered,
   type ConfirmRequest,
   type Device,
+  type HowTo,
   type LaterItem,
   type MemoryForgotten,
   type MemoryItem,
@@ -131,6 +132,14 @@ export function laterEvent(requestId: string, item: LaterItem): GatewayEvent {
 
 export function laterRemovedEvent(requestId: string, itemId: string): GatewayEvent {
   return GatewayEvent.parse({ type: "later_removed", ...stamp(requestId, 0), item_id: itemId });
+}
+
+export function howToEvent(requestId: string, howto: HowTo): GatewayEvent {
+  return GatewayEvent.parse({ type: "howto", ...stamp(requestId, 0), howto });
+}
+
+export function howToRemovedEvent(requestId: string, howtoId: string): GatewayEvent {
+  return GatewayEvent.parse({ type: "howto_removed", ...stamp(requestId, 0), howto_id: howtoId });
 }
 
 export function forgottenEvent(requestId: string, forgotten: MemoryForgotten): GatewayEvent {

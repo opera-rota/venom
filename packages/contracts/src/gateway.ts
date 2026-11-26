@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HowTo } from "./howtos.ts";
 import { LaterItem } from "./later.ts";
 import { ConfirmRequest } from "./messages.ts";
 import { PowerStatus } from "./power.ts";
@@ -196,6 +197,22 @@ export const LaterRemovedEvent = z
   })
   .register(contracts, { id: "LaterRemovedEvent" });
 
+export const HowToEvent = z
+  .strictObject({
+    type: z.literal("howto"),
+    ...eventFields,
+    howto: HowTo,
+  })
+  .register(contracts, { id: "HowToEvent" });
+
+export const HowToRemovedEvent = z
+  .strictObject({
+    type: z.literal("howto_removed"),
+    ...eventFields,
+    howto_id: Id,
+  })
+  .register(contracts, { id: "HowToRemovedEvent" });
+
 export const screenSignalLimits = {
   sdp: 16_384,
   candidate: 1_024,
@@ -276,6 +293,8 @@ export const GatewayEvent = z
     HaltEvent,
     LaterEvent,
     LaterRemovedEvent,
+    HowToEvent,
+    HowToRemovedEvent,
     ScreenSignalEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
@@ -302,6 +321,8 @@ export type MoveEvent = z.infer<typeof MoveEvent>;
 export type HaltEvent = z.infer<typeof HaltEvent>;
 export type LaterEvent = z.infer<typeof LaterEvent>;
 export type LaterRemovedEvent = z.infer<typeof LaterRemovedEvent>;
+export type HowToEvent = z.infer<typeof HowToEvent>;
+export type HowToRemovedEvent = z.infer<typeof HowToRemovedEvent>;
 export type ScreenWatch = z.infer<typeof ScreenWatch>;
 export type ScreenLeave = z.infer<typeof ScreenLeave>;
 export type ScreenRefused = z.infer<typeof ScreenRefused>;
