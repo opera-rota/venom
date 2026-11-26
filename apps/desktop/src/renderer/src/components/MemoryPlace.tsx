@@ -348,7 +348,7 @@ export function MemoryPlace({ state, howtos, jobs }: MemoryPlaceProps) {
   const [view, setView] = useState<View>("know");
 
   return (
-    <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined} width={view === "howtos" ? "wide" : "narrow"}>
+    <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined} width="wide">
       <Tabs view={view} known={state.items.length} learned={howtos.howtos.length} onView={setView} />
       {view === "know" ? <Known state={state} /> : <HowTos state={howtos} jobs={jobs} />}
     </Place>
