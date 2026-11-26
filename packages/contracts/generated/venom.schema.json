@@ -49,6 +49,9 @@
       "$ref": "#/$defs/CapabilityReport"
     },
     {
+      "$ref": "#/$defs/ChangeHowTo"
+    },
+    {
       "$ref": "#/$defs/ChatDocument"
     },
     {
@@ -149,6 +152,24 @@
     },
     {
       "$ref": "#/$defs/HaltEvent"
+    },
+    {
+      "$ref": "#/$defs/HowTo"
+    },
+    {
+      "$ref": "#/$defs/HowToEvent"
+    },
+    {
+      "$ref": "#/$defs/HowToList"
+    },
+    {
+      "$ref": "#/$defs/HowToNote"
+    },
+    {
+      "$ref": "#/$defs/HowToRemovedEvent"
+    },
+    {
+      "$ref": "#/$defs/HowToStep"
     },
     {
       "$ref": "#/$defs/IgnoreStep"
@@ -302,6 +323,9 @@
     },
     {
       "$ref": "#/$defs/SafetySettings"
+    },
+    {
+      "$ref": "#/$defs/SaveHowTo"
     },
     {
       "$ref": "#/$defs/ScreenAnswer"
@@ -866,6 +890,21 @@
         "device_id",
         "capabilities"
       ],
+      "additionalProperties": false
+    },
+    "ChangeHowTo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "pinned": {
+          "type": "boolean"
+        }
+      },
       "additionalProperties": false
     },
     "ChatDocument": {
@@ -1947,6 +1986,12 @@
           "$ref": "#/$defs/LaterRemovedEvent"
         },
         {
+          "$ref": "#/$defs/HowToEvent"
+        },
+        {
+          "$ref": "#/$defs/HowToRemovedEvent"
+        },
+        {
           "$ref": "#/$defs/ScreenSignalEvent"
         }
       ],
@@ -2039,6 +2084,285 @@
         "tasks"
       ],
       "additionalProperties": false
+    },
+    "HowTo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "app": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "learned": {
+          "$ref": "#/$defs/HowToLearned"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "applied": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "worked": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "seconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "minItems": 1,
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HowToStep"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "task_id",
+        "name",
+        "app",
+        "learned",
+        "pinned",
+        "applied",
+        "worked",
+        "seconds",
+        "steps",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "HowToEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "howto"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "howto": {
+          "$ref": "#/$defs/HowTo"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "howto"
+      ],
+      "additionalProperties": false
+    },
+    "HowToLearned": {
+      "type": "string",
+      "enum": [
+        "show",
+        "tell",
+        "job"
+      ]
+    },
+    "HowToList": {
+      "type": "object",
+      "properties": {
+        "howtos": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HowTo"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "howtos",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "HowToNote": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "HowToRemovedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "howto_removed"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "howto_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "howto_id"
+      ],
+      "additionalProperties": false
+    },
+    "HowToStep": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "kind": {
+          "$ref": "#/$defs/HowToStepKind"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "\\S"
+        },
+        "said": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "kind",
+        "label",
+        "said",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "HowToStepKind": {
+      "type": "string",
+      "enum": [
+        "click",
+        "type",
+        "key",
+        "scroll",
+        "open",
+        "pause"
+      ]
     },
     "IgnoreStep": {
       "type": "object",
@@ -3864,6 +4188,25 @@
       "required": [
         "confirmation_strictness",
         "skip_asking"
+      ],
+      "additionalProperties": false
+    },
+    "SaveHowTo": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "task_id"
       ],
       "additionalProperties": false
     },
