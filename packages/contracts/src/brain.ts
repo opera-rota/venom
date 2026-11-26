@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MessageText } from "./gateway.ts";
+import { FollowHowTo } from "./howtos.ts";
 import { MemoryContext } from "./memory.ts";
 import { EngineId, ModelName } from "./power.ts";
 import { Id } from "./primitives.ts";
@@ -176,6 +177,7 @@ export const MoveRequest = z
     moves: z.array(PastMove).max(screenLimits.moves),
     guidance: z.array(MessageText).max(screenLimits.guidance),
     memories: z.array(MemoryContext).max(40),
+    howto: FollowHowTo.nullable().default(null),
     observation: Observation,
   })
   .register(contracts, { id: "MoveRequest" });

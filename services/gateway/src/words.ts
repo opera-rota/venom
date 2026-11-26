@@ -79,6 +79,13 @@ export function goalStartWords(task: Task, target: string, elsewhere: boolean): 
   return `On it, buddy. ${where} I look at the screen, make one move, look again, and tell you each move here. Type to guide me while I work, or say stop at any moment.`;
 }
 
+export function howToStartWords(name: string, target: string, stepByStep: boolean): string {
+  const asking = stepByStep ? "I will ask you before each step, so you stay in charge." : "I follow your steps and notes, look at the screen before each move, and tell you how it went.";
+  return `On it, buddy. I am applying your how-to ${quoted(name)} on ${target}. ${asking} Type to guide me, or say stop at any moment.`;
+}
+
+export const stepByStepWords = "You asked me to go step by step.";
+
 export function moveQuestionWords(move: TaskMove, because: readonly string[], target: string): string {
   return `Quick check, buddy. Next I would ${lowered(clause(move.intent))} on ${target}. ${because.join(" ")} Shall I do it? Just say yes or no.`;
 }

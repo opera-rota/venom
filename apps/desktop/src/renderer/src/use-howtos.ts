@@ -9,10 +9,22 @@ export interface HowTosState {
   readonly loaded: boolean;
   readonly failure: string | null;
   readonly saving: ReadonlySet<string>;
+  readonly applying: ReadonlySet<string>;
   save(taskId: string): Promise<HowTo | null>;
   change(howtoId: string, change: ChangeHowTo): Promise<boolean>;
   note(howtoId: string, number: number, note: string | null): Promise<boolean>;
   forget(howtoId: string): Promise<boolean>;
+  apply(howtoId: string, stepByStep: boolean): Promise<boolean>;
+}
+
+function adding(current: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  return new Set(current).add(id);
+}
+
+function removing(current: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(current);
+  next.delete(id);
+  return next;
 }
 
 export function useHowTos(bridge: VenomBridge, connection: ConnectionState): HowTosState {
@@ -21,6 +33,7 @@ export function useHowTos(bridge: VenomBridge, connection: ConnectionState): How
   const [loaded, setLoaded] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
+  const [applying, setApplying] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -52,13 +65,9 @@ export function useHowTos(bridge: VenomBridge, connection: ConnectionState): How
 
   const save = useCallback(
     async (taskId: string) => {
-      setSaving((current) => new Set(current).add(taskId));
+      setSaving((current) => adding(current, taskId));
       const result = await bridge.saveHowTo(taskId);
-      setSaving((current) => {
-        const next = new Set(current);
-        next.delete(taskId);
-        return next;
-      });
+      setSaving((current) => removing(current, taskId));
       setFailure(result.ok ? null : result.reason);
       if (!result.ok) {
         return null;
@@ -105,5 +114,19 @@ export function useHowTos(bridge: VenomBridge, connection: ConnectionState): How
     [bridge],
   );
 
-  return { howtos, limit, loaded, failure, saving, save, change, note, forget };
+  const apply = useCallback(
+    async (howtoId: string, stepByStep: boolean) => {
+      setApplying((current) => adding(current, howtoId));
+      const result = await bridge.applyHowTo(howtoId, stepByStep);
+      setApplying((current) => removing(current, howtoId));
+      setFailure(result.ok ? null : result.reason);
+      if (result.ok) {
+        setHowTos((current) => withHowTo(current, result.howto));
+      }
+      return result.ok;
+    },
+    [bridge],
+  );
+
+  return { howtos, limit, loaded, failure, saving, applying, save, change, note, forget, apply };
 }

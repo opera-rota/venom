@@ -113,4 +113,37 @@ describe("how-tos VENOM keeps", () => {
       insert into howtos (account_id, device_id, name, learned, worked, steps) values (${device.account_id}, ${device.id}, 'Lucky', 'tell', 2, '[{}]'::jsonb)
     `).rejects.toThrow();
   });
+
+  it("counts each apply once, follows it with its notes, and counts worked only once per job", async () => {
+    const device = await freshDevice();
+    const stranger = await freshDevice();
+    const saved = await save(device, null);
+    if (saved.kind !== "saved") {
+      throw new Error("should be saved");
+    }
+    const howtoId = saved.howto.id;
+    await store.noteHowToStep({ device, requestId: uuidv7(), howtoId, number: 3, note: "Press Enter twice." });
+    const taskId = await finishedGoal(device);
+
+    expect(await store.startHowTo({ device: stranger, requestId: uuidv7(), howtoId, taskId, stepByStep: false })).toBeNull();
+    expect(await store.howTo(stranger.account_id, howtoId)).toBeNull();
+    const started = await store.startHowTo({ device, requestId: uuidv7(), howtoId, taskId, stepByStep: true });
+    expect(started).toMatchObject({ applied: 1, worked: 0 });
+
+    const run = { accountId: device.account_id, taskId };
+    expect(await store.followedHowTo({ accountId: stranger.account_id, taskId })).toBeNull();
+    expect(await store.followedHowTo(run)).toEqual({ name: "Add numbers", step_by_step: true, steps: steps.map((step) => (step.number === 3 ? { ...step, note: "Press Enter twice." } : step)) });
+
+    expect(await store.howToWorked({ accountId: stranger.account_id, taskId })).toBeNull();
+    expect(await store.howToWorked(run)).toMatchObject({ applied: 1, worked: 1 });
+    expect(await store.howToWorked(run)).toBeNull();
+    expect(await store.howToWorked({ accountId: device.account_id, taskId: await finishedGoal(device) })).toBeNull();
+    expect((await store.howTo(device.account_id, howtoId))?.worked).toBe(1);
+
+    const entries = await owner<{ action: string; detail: unknown }[]>`select action, detail from audit_log where subject_id = ${howtoId} and action = 'howto.applied'`;
+    expect(entries).toEqual([{ action: "howto.applied", detail: { task_id: taskId, step_by_step: true } }]);
+
+    expect(await store.forgetHowTo({ device, requestId: uuidv7(), howtoId })).toBe(true);
+    expect(await store.followedHowTo(run)).toBeNull();
+  });
 });

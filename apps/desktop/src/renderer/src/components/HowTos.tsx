@@ -67,6 +67,33 @@ function Ring({ howto }: { readonly howto: HowTo }) {
   );
 }
 
+function StepSwitch({ on, onToggle }: { readonly on: boolean; readonly onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      title={on ? "Step by step: VENOM asks before each step" : "Go step by step: VENOM asks before each step"}
+      className={`flex h-10 shrink-0 items-center gap-2 rounded-full border px-2.5 transition-colors duration-200 ease-ui ${on ? "border-green-400/55 bg-green-400/[0.1] text-green-300" : "border-line bg-black/35 text-ink-faint hover:text-ink"}`}
+    >
+      <span className={`relative h-4 w-7 rounded-full transition-colors duration-200 ${on ? "bg-green-400/70 shadow-[0_0_10px_-1px_rgba(31,242,92,0.8)]" : "bg-white/12"}`}>
+        <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-ink transition-[left] duration-200 ease-ui ${on ? "left-3.5" : "left-0.5"}`} />
+      </span>
+      <span className="hud text-[9px]">Steps</span>
+    </button>
+  );
+}
+
+function ApplyButton({ busy, stepwise, onApply }: { readonly busy: boolean; readonly stepwise: boolean; readonly onApply: () => void }) {
+  return (
+    <button type="button" disabled={busy} onClick={onApply} title={stepwise ? "Apply, asking before each step" : "Apply this how-to"} className={`${button.primary} min-w-0 flex-1`}>
+      <Icon name="play" className="h-3.5 w-3.5" />
+      {busy ? "Starting…" : "Apply"}
+    </button>
+  );
+}
+
 function Path({ steps }: { readonly steps: readonly HowToStep[] }) {
   const shown = steps.slice(0, 7);
   return (
@@ -84,7 +111,14 @@ function Path({ steps }: { readonly steps: readonly HowToStep[] }) {
   );
 }
 
-function Tile({ howto, now, onOpen, onPin }: { readonly howto: HowTo; readonly now: number; readonly onOpen: () => void; readonly onPin: () => void }) {
+interface Applying {
+  readonly busy: boolean;
+  readonly stepwise: boolean;
+  onStepwise(): void;
+  onApply(): void;
+}
+
+function Tile({ howto, now, run, onOpen, onPin }: { readonly howto: HowTo; readonly now: number; readonly run: Applying; readonly onOpen: () => void; readonly onPin: () => void }) {
   const { glyph, hue } = looksOf(howto);
   const learned = learnedLook[howto.learned];
   const notes = howto.steps.filter((step) => step.note !== null).length;
@@ -121,11 +155,8 @@ function Tile({ howto, now, onOpen, onPin }: { readonly howto: HowTo; readonly n
         )}
       </div>
       <div className="relative mt-auto flex items-center gap-2">
-        <button type="button" disabled title="Apply arrives in the next update" className={`${button.primary} flex-1`}>
-          <Icon name="play" className="h-3.5 w-3.5" />
-          Apply
-          <span className="hud rounded-full bg-black/30 px-1.5 py-0.5 text-[8px]">soon</span>
-        </button>
+        <ApplyButton busy={run.busy} stepwise={run.stepwise} onApply={run.onApply} />
+        <StepSwitch on={run.stepwise} onToggle={run.onStepwise} />
         <button type="button" onClick={onOpen} className={`${button.icon} relative`} aria-label="Steps and notes">
           <Icon name="list" className="h-4 w-4" />
           <span className="tabular absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-green-400 px-1 text-[9.5px] font-bold text-on-accent">{howto.steps.length}</span>
@@ -186,7 +217,7 @@ function NoteBox({ initial, onSave, onCancel }: { readonly initial: string; read
   );
 }
 
-function Sheet({ howto, state, onClose }: { readonly howto: HowTo; readonly state: HowTosState; readonly onClose: () => void }) {
+function Sheet({ howto, state, run, onClose }: { readonly howto: HowTo; readonly state: HowTosState; readonly run: Applying; readonly onClose: () => void }) {
   const { glyph, hue } = looksOf(howto);
   const [editing, setEditing] = useState<number | null>(null);
   const [naming, setNaming] = useState(false);
@@ -295,11 +326,8 @@ function Sheet({ howto, state, onClose }: { readonly howto: HowTo; readonly stat
             </>
           ) : (
             <>
-              <button type="button" disabled title="Apply arrives in the next update" className={`${button.primary} flex-1`}>
-                <Icon name="play" className="h-3.5 w-3.5" />
-                Apply
-                <span className="hud rounded-full bg-black/30 px-1.5 py-0.5 text-[8px]">soon</span>
-              </button>
+              <ApplyButton busy={run.busy} stepwise={run.stepwise} onApply={run.onApply} />
+              <StepSwitch on={run.stepwise} onToggle={run.onStepwise} />
               <button type="button" onClick={() => setNaming(true)} className={button.icon} aria-label="Rename">
                 <Icon name="pencil" className="h-4 w-4" />
               </button>
@@ -377,13 +405,39 @@ const ways: readonly { readonly icon: IconName; readonly title: string; readonly
   { icon: "list", title: "Save a job", hint: "Keep a finished job", ready: true },
 ];
 
-export function HowTos({ state, jobs }: { readonly state: HowTosState; readonly jobs: readonly Task[] }) {
+export function HowTos({ state, jobs, onApplied }: { readonly state: HowTosState; readonly jobs: readonly Task[]; readonly onApplied: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [stepwise, setStepwise] = useState<ReadonlySet<string>>(new Set());
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const now = Date.now();
   const open = state.howtos.find((howto) => howto.id === openId) ?? null;
   const shown = findHowTos(state.howtos, query);
+
+  function run(howto: HowTo): Applying {
+    const on = stepwise.has(howto.id);
+    return {
+      busy: state.applying.has(howto.id),
+      stepwise: on,
+      onStepwise: () =>
+        setStepwise((current) => {
+          const next = new Set(current);
+          if (on) {
+            next.delete(howto.id);
+          } else {
+            next.add(howto.id);
+          }
+          return next;
+        }),
+      onApply: () =>
+        void state.apply(howto.id, on).then((started) => {
+          if (started) {
+            setOpenId(null);
+            onApplied();
+          }
+        }),
+    };
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -431,11 +485,11 @@ export function HowTos({ state, jobs }: { readonly state: HowTosState; readonly 
       {shown.length > 0 && (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((howto) => (
-            <Tile key={howto.id} howto={howto} now={now} onOpen={() => setOpenId(howto.id)} onPin={() => void state.change(howto.id, { pinned: !howto.pinned })} />
+            <Tile key={howto.id} howto={howto} now={now} run={run(howto)} onOpen={() => setOpenId(howto.id)} onPin={() => void state.change(howto.id, { pinned: !howto.pinned })} />
           ))}
         </ul>
       )}
-      {open !== null && <Sheet key={open.id} howto={open} state={state} onClose={() => setOpenId(null)} />}
+      {open !== null && <Sheet key={open.id} howto={open} state={state} run={run(open)} onClose={() => setOpenId(null)} />}
       {picking && <Jobs jobs={jobs} state={state} now={now} onClose={() => setPicking(false)} />}
     </div>
   );

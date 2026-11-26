@@ -111,6 +111,7 @@ export function createPhoneBridge({ origin, storage, device }: PhoneBridgeOption
     changeHowTo: (howtoId, change) => gateway.changeHowTo(howtoId, change),
     noteHowTo: (howtoId, number, note) => gateway.noteHowTo(howtoId, number, note),
     forgetHowTo: (howtoId) => gateway.forgetHowTo(howtoId),
+    applyHowTo: (howtoId, stepByStep) => gateway.applyHowTo(howtoId, stepByStep),
     history: () => gateway.history(),
     send: (text) => gateway.send(text),
     retry: (requestId) => gateway.retry(requestId),

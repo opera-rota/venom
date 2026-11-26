@@ -29,6 +29,13 @@ class ApiIssue(BaseModel):
     message: str
 
 
+class ApplyHowTo(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    step_by_step: bool = False
+
+
 class AskUser(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1578,6 +1585,15 @@ class EngineSpec(BaseModel):
     models: Annotated[list[ModelName], Field(max_length=3, min_length=1)]
 
 
+class FollowHowTo(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(max_length=60, min_length=1, pattern="\\S")]
+    step_by_step: bool
+    steps: Annotated[list[HowToStep], Field(max_length=40, min_length=1)]
+
+
 class HowTo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1876,6 +1892,14 @@ class HaltEvent(BaseModel):
     tasks: list[Task]
 
 
+class HowToApplied(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    task: Task
+    howto: HowTo
+
+
 class MoveChosen(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1901,6 +1925,7 @@ class MoveRequest(BaseModel):
     moves: Annotated[list[PastMove], Field(max_length=40)]
     guidance: Annotated[list[MessageText], Field(max_length=10)]
     memories: Annotated[list[MemoryContext], Field(max_length=40)]
+    howto: FollowHowTo | None = None
     observation: Observation
 
 
@@ -1929,7 +1954,7 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChangeHowTo | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | HowTo | HowToEvent | HowToList | HowToNote | HowToRemovedEvent | HowToStep | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | LockReport | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SaveHowTo | ScreenAnswer | ScreenBox | ScreenCandidate | ScreenClick | ScreenKeyPress | ScreenLeave | ScreenMark | ScreenOffer | ScreenOpen | ScreenPause | ScreenPoint | ScreenRefused | ScreenScroll | ScreenSignalEvent | ScreenSpot | ScreenType | ScreenWatch | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | SendScreenSignal | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | ApplyHowTo | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChangeHowTo | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | FollowHowTo | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | HowTo | HowToApplied | HowToEvent | HowToList | HowToNote | HowToRemovedEvent | HowToStep | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | LockReport | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SaveHowTo | ScreenAnswer | ScreenBox | ScreenCandidate | ScreenClick | ScreenKeyPress | ScreenLeave | ScreenMark | ScreenOffer | ScreenOpen | ScreenPause | ScreenPoint | ScreenRefused | ScreenScroll | ScreenSignalEvent | ScreenSpot | ScreenType | ScreenWatch | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | SendScreenSignal | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 

@@ -8,6 +8,7 @@ import {
   type EarlierGoal,
   type Effect,
   type EngineId,
+  type FollowHowTo,
   type MakeMove,
   type MemoryContext,
   type MoveOutcome,
@@ -54,6 +55,7 @@ import {
   lockedWords,
   moveQuestionWords,
   refusedMoveWords,
+  stepByStepWords,
   stillLockedWords,
   stopHereWords,
   timeUpWords,
@@ -87,6 +89,7 @@ export interface LoopOptions {
   publishTask(accountId: string, requestId: string, task: Task): void;
   publishMove(accountId: string, requestId: string, move: TaskMove, picture: Thumbnail | null): void;
   publishPower(accountId: string, requestId: string, status: PowerStatus): void;
+  followed(accountId: string, taskId: string): Promise<FollowHowTo | null>;
   tell(task: Task, kind: SaidKind, text: string, moveId: string | null): Promise<void>;
   finished(task: Task): Promise<void>;
 }
@@ -127,6 +130,7 @@ interface Turn {
   readonly earlier: EarlierGoal | null;
   readonly target: Device;
   readonly memories: readonly MemoryContext[];
+  readonly howto: FollowHowTo | null;
   readonly deadline: number;
   spent: TokenUsage;
   budget: number;
@@ -308,15 +312,17 @@ export class GoalLoop {
 
   async #drive(driving: Driving, task: Task, target: Device, requestId: string): Promise<void> {
     const { memory } = this.#options;
-    const [recalled, earlier] = await Promise.all([
+    const [recalled, earlier, howto] = await Promise.all([
       memory.recall(task.account_id, task.request_text, requestId).catch(() => ({ memories: [], usage: nothingUsed })),
       this.#options.goals.earlier(task.account_id, task.id).catch(() => null),
+      this.#options.followed(task.account_id, task.id).catch(() => null),
     ]);
     const turn: Turn = {
       task,
       earlier,
       target,
       memories: recalled.memories.slice(0, 40),
+      howto,
       deadline: Date.now() + this.#limits.totalMs,
       spent: recalled.usage,
       budget: this.#limits.moves,
@@ -376,6 +382,7 @@ export class GoalLoop {
           moves: await goals.history(driving.accountId, driving.taskId),
           guidance: driving.guidance,
           memories: turn.memories,
+          howto: turn.howto,
           observation,
         }),
         AbortSignal.any([driving.abort.signal, this.#options.closing]),
@@ -428,7 +435,8 @@ export class GoalLoop {
     const point = choice.move.name === "click" ? choice.move.point : null;
     const spot = point === null ? null : await this.#spot(driving, turn, point);
     const { confirmation_strictness, skip_asking } = await tasks.settings(driving.accountId);
-    const judgement = judgeMove(choice, observation, confirmation_strictness, [...skip_asking, ...turn.allowed], spot);
+    const judged = judgeMove(choice, observation, confirmation_strictness, [...skip_asking, ...turn.allowed], spot);
+    const judgement = turn.howto?.step_by_step === true && judged.verdict === "go" && choice.move.name !== "pause" ? { ...judged, verdict: "ask" as const, because: [stepByStepWords] } : judged;
     const proposed = await goals.propose(
       driving.accountId,
       driving.taskId,

@@ -342,15 +342,16 @@ export interface MemoryPlaceProps {
   readonly state: MemoryState;
   readonly howtos: HowTosState;
   readonly jobs: readonly Task[];
+  readonly onApplied: () => void;
 }
 
-export function MemoryPlace({ state, howtos, jobs }: MemoryPlaceProps) {
+export function MemoryPlace({ state, howtos, jobs, onApplied }: MemoryPlaceProps) {
   const [view, setView] = useState<View>("know");
 
   return (
     <Place title="Memory" eyebrow="What I keep" icon="memory" count={state.items.length > 0 ? state.items.length : undefined} width="wide">
       <Tabs view={view} known={state.items.length} learned={howtos.howtos.length} onView={setView} />
-      {view === "know" ? <Known state={state} /> : <HowTos state={howtos} jobs={jobs} />}
+      {view === "know" ? <Known state={state} /> : <HowTos state={howtos} jobs={jobs} onApplied={onApplied} />}
     </Place>
   );
 }

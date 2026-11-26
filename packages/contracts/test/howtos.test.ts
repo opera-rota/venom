@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChangeHowTo, HowTo, HowToStep, howToApp, howToName, howToSteps, moveLabel, type TaskMove } from "../src/index.ts";
+import { ApplyHowTo, ChangeHowTo, FollowHowTo, HowTo, HowToStep, MoveRequest, howToApp, howToName, howToSteps, moveLabel, type TaskMove } from "../src/index.ts";
 
 const base = {
   task_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e92",
@@ -69,5 +69,14 @@ describe("how-tos made from a finished job", () => {
     expect(HowTo.safeParse({ ...howto, worked: 2 }).success).toBe(false);
     expect(ChangeHowTo.safeParse({}).success).toBe(false);
     expect(ChangeHowTo.safeParse({ pinned: true }).success).toBe(true);
+  });
+
+  it("applies plainly by default, and hands the brain a how-to only with steps", () => {
+    expect(ApplyHowTo.parse({})).toEqual({ step_by_step: false });
+    expect(ApplyHowTo.safeParse({ step_by_step: "yes" }).success).toBe(false);
+    const steps = [{ number: 1, kind: "open", label: "Calculator", said: "Open the Calculator app.", note: null }];
+    expect(FollowHowTo.safeParse({ name: "Add numbers", step_by_step: true, steps }).success).toBe(true);
+    expect(FollowHowTo.safeParse({ name: "Add numbers", step_by_step: true, steps: [] }).success).toBe(false);
+    expect(MoveRequest.shape.howto.parse(undefined)).toBeNull();
   });
 });

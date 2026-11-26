@@ -1,9 +1,12 @@
-import { ChangeHowTo, HowTo, HowToList, HowToNote, howToApp, howToLimits, howToName, howToSteps, Id, SaveHowTo, type TaskStatus } from "@venom/contracts";
+import { ApplyHowTo, ChangeHowTo, HowTo, HowToApplied, HowToList, HowToNote, howToApp, howToLimits, howToName, howToSteps, Id, SaveHowTo, type TaskStatus } from "@venom/contracts";
+import { refusePower, spec } from "@venom/power";
 import type { FastifyInstance } from "fastify";
+import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import { requireSignedIn } from "../auth.ts";
 import type { GatewayContext } from "../context.ts";
 import { conflict, notFound } from "../errors.ts";
+import { howToStartWords } from "../words.ts";
 
 const HowToParams = z.strictObject({ howto_id: Id });
 
@@ -19,9 +22,10 @@ export const howToWords = {
   exists: "That job is already saved as a how-to.",
   full: "VENOM keeps up to 200 how-tos. Forget one to make room.",
   noStep: "That step is not part of this how-to.",
+  noComputer: "No computer is ready for this right now, buddy. Open VENOM on your computer, or choose one with Use this device on Devices.",
 } as const;
 
-export function howToRoutes(app: FastifyInstance, { store, tasks, goals, broadcastHowTo, broadcastHowToRemoved }: GatewayContext): void {
+export function howToRoutes(app: FastifyInstance, { store, tasks, goals, loop, power, broadcastTask, broadcastHowTo, broadcastHowToRemoved, say }: GatewayContext): void {
   app.get("/v1/howtos", async (request) => {
     return HowToList.parse({ howtos: await store.howtos(requireSignedIn(request).account_id), limit: howToLimits.items });
   });
@@ -87,6 +91,31 @@ export function howToRoutes(app: FastifyInstance, { store, tasks, goals, broadca
     }
     broadcastHowTo(device.account_id, request.id, noted.howto);
     return noted.howto;
+  });
+
+  app.post("/v1/howtos/:howto_id/apply", async (request, reply) => {
+    const device = requireSignedIn(request);
+    const { howto_id } = HowToParams.parse(request.params);
+    const { step_by_step } = ApplyHowTo.parse(request.body ?? {});
+    const howto = await store.howTo(device.account_id, howto_id);
+    if (howto === null) {
+      throw notFound(howToWords.gone);
+    }
+    const left = await power.status(device.account_id);
+    if (left.answers_left <= 1) {
+      throw left.engine_class === "free" ? refusePower.freeUsedUp(spec(left.engine), left.free_daily_answers) : refusePower.noPower(spec(left.engine));
+    }
+    const target = await loop.target(device);
+    if (target === null) {
+      throw conflict(howToWords.noComputer);
+    }
+    const task = await loop.begin(device, howto.name, target, request.id);
+    const applied = (await store.startHowTo({ device, requestId: request.id, howtoId: howto.id, taskId: task.id, stepByStep: step_by_step })) ?? howto;
+    broadcastTask(device.account_id, uuidv7(), task);
+    broadcastHowTo(device.account_id, uuidv7(), applied);
+    await say(task, "report", howToStartWords(applied.name, target.name, step_by_step), null);
+    loop.run(task, target, request.id);
+    return reply.code(201).send(HowToApplied.parse({ task, howto: applied }));
   });
 
   app.delete("/v1/howtos/:howto_id", async (request, reply) => {

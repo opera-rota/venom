@@ -8,6 +8,7 @@ from venom_contracts.engines import get_engine
 from venom_contracts.models import (
     ConversationEntry,
     EngineId,
+    FollowHowTo,
     MakeMove,
     MoveChosen,
     MoveFailed,
@@ -116,11 +117,18 @@ def briefing(asked: MoveRequest) -> list[ConversationEntry]:
         entries.append(said("Moves you made so far: none yet. This is your first look."))
     if done := [step for move in asked.moves if move.outcome == "done" and (step := trail(move)) is not None]:
         entries.append(said("VENOM's exact record of what you already did, in order:\n" + "; ".join(done)))
+    if asked.howto is not None:
+        entries.append(said(taught(asked.howto)))
     if asked.guidance:
         lines = (f"- {line}" for line in asked.guidance)
         entries.append(said("\n".join(["What the user said while you worked, oldest first. It stays true for the whole job; where it differs from the goal, the newest words win:", *lines])))
     entries.append(said(screen(asked.observation)))
     return entries
+
+
+def taught(howto: FollowHowTo) -> str:
+    steps = (f"{step.number}. {step.said}" + (f"\n   Note from the user: {step.note}" if step.note is not None else "") for step in howto.steps)
+    return "\n".join([f"The how-to the user taught you for this job, \"{howto.name}\", step by step:", *steps])
 
 
 def trail(move: PastMove) -> str | None:

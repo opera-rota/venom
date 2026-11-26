@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Id, Timestamp } from "./primitives.ts";
+import { Task } from "./records.ts";
 import { contracts } from "./registry.ts";
 import { screenLimits, type ScreenKey, type TaskMove } from "./screen.ts";
 
@@ -86,6 +87,27 @@ export const HowToNote = z
   })
   .register(contracts, { id: "HowToNote" });
 
+export const ApplyHowTo = z
+  .strictObject({
+    step_by_step: z.boolean().default(false),
+  })
+  .register(contracts, { id: "ApplyHowTo" });
+
+export const HowToApplied = z
+  .strictObject({
+    task: Task,
+    howto: HowTo,
+  })
+  .register(contracts, { id: "HowToApplied" });
+
+export const FollowHowTo = z
+  .strictObject({
+    name: said(howToLimits.name),
+    step_by_step: z.boolean(),
+    steps: z.array(HowToStep).min(1).max(howToLimits.steps),
+  })
+  .register(contracts, { id: "FollowHowTo" });
+
 export type HowToLearned = z.infer<typeof HowToLearned>;
 export type HowToStepKind = z.infer<typeof HowToStepKind>;
 export type HowToStep = z.infer<typeof HowToStep>;
@@ -94,6 +116,9 @@ export type HowToList = z.infer<typeof HowToList>;
 export type SaveHowTo = z.infer<typeof SaveHowTo>;
 export type ChangeHowTo = z.infer<typeof ChangeHowTo>;
 export type HowToNote = z.infer<typeof HowToNote>;
+export type ApplyHowTo = z.infer<typeof ApplyHowTo>;
+export type HowToApplied = z.infer<typeof HowToApplied>;
+export type FollowHowTo = z.infer<typeof FollowHowTo>;
 
 const keyNames: Partial<Record<ScreenKey, string>> = {
   enter: "Enter",

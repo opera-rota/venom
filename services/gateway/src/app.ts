@@ -94,7 +94,21 @@ export async function buildGateway({ store, identity, brain, power, memory, task
       hub.publishToAccount(accountId, laterRemovedEvent(uuidv7(), itemId));
     }
   };
+  const counted = async (task: Task) => {
+    if (task.status !== "completed") {
+      return;
+    }
+    try {
+      const howto = await store.howToWorked({ accountId: task.account_id, taskId: task.id });
+      if (howto !== null) {
+        hub.publishToAccount(task.account_id, howToEvent(uuidv7(), howto));
+      }
+    } catch (error) {
+      app.log.error({ err: error, task_id: task.id }, "could not count the how-to as worked");
+    }
+  };
   const finished = async (task: Task) => {
+    await counted(task);
     if (task.result === null || !asksForLater(task.request_text)) {
       return;
     }
@@ -150,6 +164,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     publishTask: (accountId, requestId, task) => hub.publishToAccount(accountId, taskEvent(requestId, task)),
     publishMove: (accountId, requestId, move, picture) => hub.publishToAccount(accountId, moveEvent(requestId, move, picture)),
     publishPower: (accountId, requestId, status) => hub.publishToAccount(accountId, powerEvent(requestId, status)),
+    followed: (accountId, taskId) => store.followedHowTo({ accountId, taskId }),
     tell: (task, kind, text, moveId) => tell(task, kind, text, moveId === null ? {} : { moveId }),
     finished,
   });

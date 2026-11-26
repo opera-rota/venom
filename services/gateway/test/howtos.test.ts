@@ -1,4 +1,4 @@
-import { HowTo, HowToList, Observation, type DeviceSession, type GatewayEvent, type NextMove, type TaskEvent } from "@venom/contracts";
+import { HowTo, HowToApplied, HowToList, Observation, type DeviceSession, type GatewayEvent, type MessageEvent, type MoveRequest, type NextMove, type TaskEvent } from "@venom/contracts";
 import { encode } from "jpeg-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { howToWords } from "../src/routes/howtos.ts";
@@ -45,6 +45,34 @@ afterAll(async () => {
 
 function completedGoal(event: GatewayEvent): event is TaskEvent {
   return event.type === "task" && event.task.kind === "goal" && event.task.status === "completed";
+}
+
+function venom(kind: MessageEvent["message"]["kind"], starts: string) {
+  return (event: GatewayEvent): event is MessageEvent =>
+    event.type === "message" && event.message.speaker === "venom" && event.message.kind === kind && event.message.text.startsWith(starts);
+}
+
+function completedTask(taskId: string) {
+  return (event: GatewayEvent): event is TaskEvent => event.type === "task" && event.task.id === taskId && event.task.status === "completed";
+}
+
+async function learned(text: string): Promise<HowTo> {
+  gateway.brain.mover = movesWith([opening, typing, pressing, finished]);
+  expect((await call(gateway.base, "POST", "/v1/messages", { token: here.device_token, body: { text } })).status).toBe(202);
+  const done = (await near.until((event) => completedGoal(event) && event.task.request_text === text)) as TaskEvent;
+  const saved = await call(gateway.base, "POST", "/v1/howtos", { token: here.device_token, body: { task_id: done.task.id } });
+  expect(saved.status).toBe(201);
+  return HowTo.parse(await saved.json());
+}
+
+function recording(): MoveRequest[] {
+  const asked: MoveRequest[] = [];
+  const script = movesWith([opening, typing, pressing, finished]);
+  gateway.brain.mover = (request) => {
+    asked.push(request);
+    return script(request);
+  };
+  return asked;
 }
 
 async function listed(token: string): Promise<HowToList> {
@@ -106,5 +134,65 @@ describe("how-tos: VENOM keeps the way it did a job", () => {
     const missing = await call(gateway.base, "POST", "/v1/howtos", { token: here.device_token, body: { task_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e00" } });
     expect(missing.status).toBe(404);
     expect(((await missing.json()) as { message: string }).message).toBe(howToWords.jobGone);
+  });
+});
+
+describe("how-tos: Apply runs one, and the ring counts real runs", () => {
+  it("applies a how-to on the In use computer, hands VENOM the steps and notes, and counts it as worked", async () => {
+    const howto = await learned("Open Calculator and add 4+5.");
+    await call(gateway.base, "PUT", `/v1/howtos/${howto.id}/steps/2/note`, { token: here.device_token, body: { note: "Click the buttons one at a time." } });
+
+    expect((await call(gateway.base, "POST", `/v1/howtos/${howto.id}/apply`, { token: stranger.device_token, body: {} })).status).toBe(404);
+    expect((await call(gateway.base, "POST", "/v1/howtos/0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e00/apply", { token: here.device_token, body: {} })).status).toBe(404);
+
+    const asked = recording();
+    const moved = near.moves.length;
+    const applied = await call(gateway.base, "POST", `/v1/howtos/${howto.id}/apply`, { token: here.device_token, body: {} });
+    expect(applied.status).toBe(201);
+    const { task, howto: counted } = HowToApplied.parse(await applied.json());
+    expect(task).toMatchObject({ kind: "goal", request_text: "Open Calculator and add 4+5", target_device_id: here.device.id });
+    expect(counted).toMatchObject({ applied: 1, worked: 0 });
+
+    const told = (await near.until(venom("report", "On it, buddy. I am applying your how-to"))) as MessageEvent;
+    expect(told.message.task_id).toBe(task.id);
+    expect(told.message.text).toContain(`"Open Calculator and add 4+5" on ${here.device.name}.`);
+    await near.until(completedTask(task.id));
+    const worked = await near.until((event) => event.type === "howto" && event.howto.id === howto.id && event.howto.worked === 1);
+    expect(worked.type === "howto" && worked.howto.applied).toBe(1);
+
+    expect(asked[0]?.howto).toEqual({
+      name: "Open Calculator and add 4+5",
+      step_by_step: false,
+      steps: [
+        { number: 1, kind: "open", label: "Calculator", said: "Open the Calculator app.", note: null },
+        { number: 2, kind: "type", label: "“1+2+3”", said: "Type the sum.", note: "Click the buttons one at a time." },
+        { number: 3, kind: "key", label: "Enter", said: "Press Enter to see the total.", note: null },
+      ],
+    });
+    expect(near.moves.slice(moved).map((command) => [command.move.name, command.confirmed])).toEqual([["open", false], ["type", false], ["key", false]]);
+  });
+
+  it("goes step by step when asked: VENOM asks before every move, and a no stops the job without counting it", async () => {
+    const [howto] = (await listed(here.device_token)).howtos.filter((item) => item.name === "Open Calculator and add 4+5");
+    const id = howto?.id ?? "";
+    recording();
+    const moved = near.moves.length;
+    const applied = HowToApplied.parse(await (await call(gateway.base, "POST", `/v1/howtos/${id}/apply`, { token: here.device_token, body: { step_by_step: true } })).json());
+    await near.until(venom("report", "On it, buddy. I am applying your how-to"));
+
+    const first = (await near.until((event) => venom("question", "Quick check, buddy.")(event) && event.message.task_id === applied.task.id)) as MessageEvent;
+    expect(first.message.text).toContain("Next I would open the Calculator app on ");
+    expect(first.message.text).toContain("You asked me to go step by step.");
+    expect(near.moves.length).toBe(moved);
+    await call(gateway.base, "POST", "/v1/messages", { token: here.device_token, body: { text: "yes" } });
+
+    const second = (await near.until((event) => venom("question", "Quick check, buddy.")(event) && event.message.task_id === applied.task.id && event.message.id !== first.message.id)) as MessageEvent;
+    expect(second.message.text).toContain("Next I would type the sum on ");
+    await call(gateway.base, "POST", "/v1/messages", { token: here.device_token, body: { text: "no" } });
+
+    await near.until((event) => event.type === "task" && event.task.id === applied.task.id && event.task.status === "cancelled");
+    expect(near.moves.slice(moved).map((command) => [command.move.name, command.confirmed])).toEqual([["open", true]]);
+    const after = (await listed(here.device_token)).howtos.find((item) => item.id === id);
+    expect(after).toMatchObject({ applied: 2, worked: 1 });
   });
 });

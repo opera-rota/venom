@@ -3,7 +3,9 @@ from uuid import UUID
 import pytest
 
 from venom_contracts.models import (
+    FollowHowTo,
     GoalDone,
+    HowToStep,
     MakeMove,
     MoveChosen,
     MoveFailed,
@@ -36,7 +38,14 @@ EDITOR = ScreenMark(id=1, kind="box", name="Text editor", editable=True, passwor
 SAVE = ScreenMark(id=2, kind="button", name='Save "now"', editable=False, password=False, box=ScreenBox(x=10, y=40, width=60, height=24))
 
 
-def asked(*, engine: str = "turbo", moves: list[PastMove] | None = None, guidance: list[str] | None = None, earlier: dict[str, str] | None = None) -> MoveRequest:
+def asked(
+    *,
+    engine: str = "turbo",
+    moves: list[PastMove] | None = None,
+    guidance: list[str] | None = None,
+    earlier: dict[str, str] | None = None,
+    howto: FollowHowTo | None = None,
+) -> MoveRequest:
     return MoveRequest.model_validate(
         {
             "request_id": UUID("0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01"),
@@ -47,6 +56,7 @@ def asked(*, engine: str = "turbo", moves: list[PastMove] | None = None, guidanc
             "moves": moves or [],
             "guidance": guidance or [],
             "memories": [],
+            "howto": howto,
             "observation": Observation(
                 picture=PICTURE, width=1280, height=720, window="Untitled - Notepad", app="Notepad", marks=[EDITOR, SAVE], focused=1
             ),
@@ -198,3 +208,24 @@ def test_says_when_it_is_the_first_look() -> None:
     texts = [entry.text for entry in briefing(asked())]
     assert texts[1] == "Moves you made so far: none yet. This is your first look."
     assert len(texts) == 3
+
+
+def test_hands_the_model_the_how_to_with_the_users_notes_before_their_words() -> None:
+    howto = FollowHowTo(
+        name="Write hello",
+        step_by_step=False,
+        steps=[
+            HowToStep(number=1, kind="open", label="Notepad", said="Open Notepad", note=None),
+            HowToStep(number=2, kind="type", label="“hello”", said="Type hello", note="Type it in capital letters"),
+        ],
+    )
+    texts = [entry.text for entry in briefing(asked(howto=howto, guidance=["Add a full stop"]))]
+
+    assert texts[2] == (
+        'The how-to the user taught you for this job, "Write hello", step by step:\n'
+        "1. Open Notepad\n"
+        "2. Type hello\n"
+        "   Note from the user: Type it in capital letters"
+    )
+    assert texts[3].endswith("- Add a full stop")
+    assert all("how-to" not in text for text in [entry.text for entry in briefing(asked())])

@@ -179,6 +179,13 @@ describe("gateway client in the main process", () => {
     expect(await client.moves("not-a-task")).toMatchObject({ ok: false, reason: "That task is not part of your VENOM." });
   });
 
+  it("applies a how-to through the gateway, and refuses one it cannot read before asking", async () => {
+    const client = startClient(session.device_token);
+    expect(await client.applyHowTo("not-a-how-to", false)).toMatchObject({ ok: false, code: "invalid_request" });
+    expect(await client.applyHowTo(randomUUID(), "yes")).toMatchObject({ ok: false, code: "invalid_request" });
+    expect(await client.applyHowTo(randomUUID(), true)).toMatchObject({ ok: false, code: "not_found", reason: "That how-to is no longer kept." });
+  });
+
   it("refuses to send nothing", async () => {
     const client = startClient(session.device_token);
     expect(await client.send("   ")).toMatchObject({ ok: false, reason: "Write something before sending." });

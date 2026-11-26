@@ -1,0 +1,86 @@
+{
+  "request_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "engine": "turbo",
+  "goal": "Open Calculator and add 1+2+3",
+  "earlier": null,
+  "moves": [],
+  "guidance": [],
+  "memories": [],
+  "howto": {
+    "name": "Open Calculator and add 1+2+3",
+    "step_by_step": true,
+    "steps": [
+      {
+        "number": 1,
+        "kind": "open",
+        "label": "Calculator",
+        "said": "Open the Calculator app",
+        "note": null
+      },
+      {
+        "number": 2,
+        "kind": "type",
+        "label": "“1+2+3”",
+        "said": "Type the sum",
+        "note": "Click the buttons one at a time instead of typing"
+      },
+      {
+        "number": 3,
+        "kind": "key",
+        "label": "Enter",
+        "said": "Press Enter to see the total",
+        "note": null
+      }
+    ]
+  },
+  "observation": {
+    "picture": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP8=",
+    "width": 1280,
+    "height": 720,
+    "window": "Untitled - Notepad",
+    "app": "Notepad",
+    "marks": [
+      {
+        "id": 1,
+        "kind": "box",
+        "name": "Text editor",
+        "editable": true,
+        "password": false,
+        "box": {
+          "x": 12,
+          "y": 96,
+          "width": 1256,
+          "height": 600
+        }
+      },
+      {
+        "id": 2,
+        "kind": "menu",
+        "name": "File",
+        "editable": false,
+        "password": false,
+        "box": {
+          "x": 12,
+          "y": 40,
+          "width": 40,
+          "height": 28
+        }
+      },
+      {
+        "id": 3,
+        "kind": "button",
+        "name": "Close",
+        "editable": false,
+        "password": false,
+        "box": {
+          "x": 1232,
+          "y": 0,
+          "width": 48,
+          "height": 32
+        }
+      }
+    ],
+    "focused": 1
+  }
+}

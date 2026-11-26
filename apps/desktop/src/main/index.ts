@@ -295,6 +295,7 @@ function wire(): void {
   handle(channels.saveHowTo, (taskId) => gateway.saveHowTo(taskId));
   handle(channels.changeHowTo, (howtoId, change) => gateway.changeHowTo(howtoId, change));
   handle(channels.noteHowTo, (howtoId, number, note) => gateway.noteHowTo(howtoId, number, note));
+  handle(channels.applyHowTo, (howtoId, stepByStep) => gateway.applyHowTo(howtoId, stepByStep));
   handle(channels.forgetHowTo, (howtoId) => gateway.forgetHowTo(howtoId));
   handle(channels.history, () => gateway.history());
   handle(channels.send, (text) => gateway.send(text));

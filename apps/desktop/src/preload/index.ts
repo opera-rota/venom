@@ -42,6 +42,7 @@ const bridge: VenomBridge = {
   saveHowTo: (taskId) => ipcRenderer.invoke(channels.saveHowTo, taskId),
   changeHowTo: (howtoId, change) => ipcRenderer.invoke(channels.changeHowTo, howtoId, change),
   noteHowTo: (howtoId, number, note) => ipcRenderer.invoke(channels.noteHowTo, howtoId, number, note),
+  applyHowTo: (howtoId, stepByStep) => ipcRenderer.invoke(channels.applyHowTo, howtoId, stepByStep),
   forgetHowTo: (howtoId) => ipcRenderer.invoke(channels.forgetHowTo, howtoId),
   history: () => ipcRenderer.invoke(channels.history),
   send: (text) => ipcRenderer.invoke(channels.send, text),

@@ -1,4 +1,5 @@
 import {
+  ApplyHowTo,
   ChangeHowTo,
   CommandFrame,
   ConfirmationAnswered,
@@ -7,6 +8,7 @@ import {
   EngineList,
   GatewayEvent,
   HowTo,
+  HowToApplied,
   HowToList,
   HowToNote,
   HowToStep,
@@ -417,6 +419,20 @@ export class GatewayClient {
       return { ok: false, code: "invalid_request", reason: howToUnreadable };
     }
     return this.#howTo("PUT", `/v1/howtos/${id.data}/steps/${step.data}/note`, parsed.data);
+  }
+
+  async applyHowTo(howtoId: unknown, stepByStep: unknown): Promise<HowToResult> {
+    const id = Id.safeParse(howtoId);
+    const parsed = ApplyHowTo.safeParse({ step_by_step: stepByStep });
+    if (!id.success || !parsed.success) {
+      return { ok: false, code: "invalid_request", reason: howToGone };
+    }
+    const result = await this.#api.request("POST", `/v1/howtos/${id.data}/apply`, { schema: HowToApplied, body: parsed.data, token: this.#token });
+    if (!result.ok) {
+      this.#watch(result.code);
+      return result;
+    }
+    return { ok: true, howto: result.value.howto };
   }
 
   async forgetHowTo(howtoId: unknown): Promise<StepResult> {

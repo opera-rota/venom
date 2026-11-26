@@ -19,6 +19,9 @@
       "$ref": "#/$defs/ApiIssue"
     },
     {
+      "$ref": "#/$defs/ApplyHowTo"
+    },
+    {
       "$ref": "#/$defs/AskUser"
     },
     {
@@ -142,6 +145,9 @@
       "$ref": "#/$defs/EngineSpec"
     },
     {
+      "$ref": "#/$defs/FollowHowTo"
+    },
+    {
       "$ref": "#/$defs/ForgottenEvent"
     },
     {
@@ -155,6 +161,9 @@
     },
     {
       "$ref": "#/$defs/HowTo"
+    },
+    {
+      "$ref": "#/$defs/HowToApplied"
     },
     {
       "$ref": "#/$defs/HowToEvent"
@@ -680,6 +689,16 @@
         "path",
         "message"
       ],
+      "additionalProperties": false
+    },
+    "ApplyHowTo": {
+      "type": "object",
+      "properties": {
+        "step_by_step": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
       "additionalProperties": false
     },
     "AskUser": {
@@ -1899,6 +1918,34 @@
         "reroute"
       ]
     },
+    "FollowHowTo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "step_by_step": {
+          "type": "boolean"
+        },
+        "steps": {
+          "minItems": 1,
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HowToStep"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "step_by_step",
+        "steps"
+      ],
+      "additionalProperties": false
+    },
     "ForgottenEvent": {
       "type": "object",
       "properties": {
@@ -2185,6 +2232,22 @@
         "steps",
         "created_at",
         "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "HowToApplied": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/Task"
+        },
+        "howto": {
+          "$ref": "#/$defs/HowTo"
+        }
+      },
+      "required": [
+        "task",
+        "howto"
       ],
       "additionalProperties": false
     },
@@ -3254,6 +3317,17 @@
           "items": {
             "$ref": "#/$defs/MemoryContext"
           }
+        },
+        "howto": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FollowHowTo"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "observation": {
           "$ref": "#/$defs/Observation"

@@ -204,7 +204,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
               />
             )}
             {place === "devices" && <DevicesPlace state={devices} />}
-            {place === "memory" && <MemoryPlace state={memory} howtos={howtos} jobs={jobs} />}
+            {place === "memory" && <MemoryPlace state={memory} howtos={howtos} jobs={jobs} onApplied={() => setPlace("chat")} />}
             {place === "models" && <ModelsPlace state={power} />}
           </main>
         )}

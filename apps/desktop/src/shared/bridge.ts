@@ -127,6 +127,7 @@ export interface VenomBridge {
   saveHowTo(taskId: string): Promise<HowToResult>;
   changeHowTo(howtoId: string, change: ChangeHowTo): Promise<HowToResult>;
   noteHowTo(howtoId: string, number: number, note: string | null): Promise<HowToResult>;
+  applyHowTo(howtoId: string, stepByStep: boolean): Promise<HowToResult>;
   forgetHowTo(howtoId: string): Promise<StepResult>;
   history(): Promise<MessageHistory>;
   send(text: string): Promise<SendResult>;
@@ -180,6 +181,7 @@ export const channels = {
   saveHowTo: "venom:save-howto",
   changeHowTo: "venom:change-howto",
   noteHowTo: "venom:note-howto",
+  applyHowTo: "venom:apply-howto",
   forgetHowTo: "venom:forget-howto",
   history: "venom:history",
   send: "venom:send",

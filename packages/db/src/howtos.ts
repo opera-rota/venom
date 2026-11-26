@@ -1,5 +1,5 @@
 import type { Sql, TransactionSql } from "postgres";
-import { HowTo, howToLimits, type HowToLearned, type HowToStep } from "@venom/contracts";
+import { FollowHowTo, HowTo, howToLimits, type HowToLearned, type HowToStep } from "@venom/contracts";
 import type { DeviceRef } from "./store.ts";
 
 export interface SaveHowToInput {
@@ -33,12 +33,26 @@ export interface StepNote extends HowToTarget {
 
 export type Noted = { readonly kind: "noted"; readonly howto: HowTo } | { readonly kind: "gone" } | { readonly kind: "no_step" };
 
+export interface HowToStart extends HowToTarget {
+  readonly taskId: string;
+  readonly stepByStep: boolean;
+}
+
+export interface HowToRunRef {
+  readonly accountId: string;
+  readonly taskId: string;
+}
+
 export interface HowToStore {
   saveHowTo(input: SaveHowToInput): Promise<Saved>;
   howtos(accountId: string): Promise<HowTo[]>;
   changeHowTo(change: HowToChange): Promise<HowTo | null>;
   noteHowToStep(note: StepNote): Promise<Noted>;
   forgetHowTo(target: HowToTarget): Promise<boolean>;
+  howTo(accountId: string, howtoId: string): Promise<HowTo | null>;
+  startHowTo(start: HowToStart): Promise<HowTo | null>;
+  followedHowTo(run: HowToRunRef): Promise<FollowHowTo | null>;
+  howToWorked(run: HowToRunRef): Promise<HowTo | null>;
 }
 
 interface HowToRow {
@@ -147,6 +161,60 @@ export function howToStore(sql: Sql): HowToStore {
         }
         await audit(tx, { device, requestId, howtoId }, "howto.noted", { step: number, characters: note?.length ?? 0 });
         return { kind: "noted", howto: toHowTo(row) };
+      });
+    },
+
+    async howTo(accountId, howtoId) {
+      const [row] = await sql.unsafe<HowToRow[]>(`select ${columns} from howtos where id = $1 and account_id = $2`, [howtoId, accountId]);
+      return row === undefined ? null : toHowTo(row);
+    },
+
+    async startHowTo({ device, requestId, howtoId, taskId, stepByStep }) {
+      return sql.begin(async (tx) => {
+        const [row] = await tx.unsafe<HowToRow[]>(
+          `update howtos set applied = applied + 1, updated_at = clock_timestamp()
+           where id = $1 and account_id = $2
+           returning ${columns}`,
+          [howtoId, device.account_id],
+        );
+        if (row === undefined) {
+          return null;
+        }
+        await tx`
+          insert into howto_runs (task_id, account_id, howto_id, step_by_step)
+          values (${taskId}, ${device.account_id}, ${howtoId}, ${stepByStep})
+        `;
+        await audit(tx, { device, requestId, howtoId }, "howto.applied", { task_id: taskId, step_by_step: stepByStep });
+        return toHowTo(row);
+      });
+    },
+
+    async followedHowTo({ accountId, taskId }) {
+      const [row] = await sql<{ name: string; step_by_step: boolean; steps: unknown }[]>`
+        select h.name, r.step_by_step, h.steps
+        from howto_runs r join howtos h on h.id = r.howto_id
+        where r.task_id = ${taskId} and r.account_id = ${accountId}
+      `;
+      return row === undefined ? null : FollowHowTo.parse(row);
+    },
+
+    async howToWorked({ accountId, taskId }) {
+      return sql.begin(async (tx) => {
+        const [run] = await tx<{ howto_id: string }[]>`
+          update howto_runs set worked = true
+          where task_id = ${taskId} and account_id = ${accountId} and not worked
+          returning howto_id
+        `;
+        if (run === undefined) {
+          return null;
+        }
+        const [row] = await tx.unsafe<HowToRow[]>(
+          `update howtos set worked = least(worked + 1, applied)
+           where id = $1 and account_id = $2
+           returning ${columns}`,
+          [run.howto_id, accountId],
+        );
+        return row === undefined ? null : toHowTo(row);
       });
     },
 
