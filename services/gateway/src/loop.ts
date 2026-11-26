@@ -123,6 +123,7 @@ interface Driving {
   interrupted: boolean;
   heard: Heard | null;
   wake: (() => void) | null;
+  woken: boolean;
 }
 
 interface Turn {
@@ -222,7 +223,7 @@ export class GoalLoop {
     if (this.#driving.has(task.id)) {
       return;
     }
-    const driving: Driving = { accountId: task.account_id, taskId: task.id, targetId: target.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, interrupted: false, heard: null, wake: null };
+    const driving: Driving = { accountId: task.account_id, taskId: task.id, targetId: target.id, goal: task.request_text, abort: new AbortController(), guidance: [], listening: false, interrupted: false, heard: null, wake: null, woken: false };
     this.#driving.set(task.id, driving);
     const work = this.#drive(driving, task, target, requestId)
       .catch((error: unknown) => this.#crashed(driving, error, requestId))
@@ -762,6 +763,10 @@ export class GoalLoop {
     if (ms <= 0) {
       return Promise.resolve(false);
     }
+    if (driving.woken) {
+      driving.woken = false;
+      return Promise.resolve(true);
+    }
     return new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => done(false), ms);
       const done = (woken: boolean) => {
@@ -782,7 +787,11 @@ export class GoalLoop {
   }
 
   #wake(driving: Driving): void {
-    driving.wake?.();
+    if (driving.wake === null) {
+      driving.woken = true;
+      return;
+    }
+    driving.wake();
   }
 
   #publish(turn: Turn, task: Task, move: TaskMove, picture: Thumbnail | null): void {
