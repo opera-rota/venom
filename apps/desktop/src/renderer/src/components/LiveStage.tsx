@@ -2,10 +2,14 @@ import type { Device, TaskMove } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
 import type { LivePhase, LiveQuality } from "../live-screen.ts";
 import { moveLook } from "../move-words.ts";
-import type { RemoteControl } from "../remote.ts";
+import { restingView, zoomAt, type RemoteAction, type RemoteControl, type RemoteSpot, type View } from "../remote.ts";
 import { button, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
-import { RemoteDock, RemoteLayer, RemoteSwitch } from "./Remote.tsx";
+import { RemoteDock, RemoteLayer, RemoteLens, RemoteSwitch, ZoomBar, type Loupe } from "./Remote.tsx";
+
+type Orientation = ScreenOrientation & { readonly lock?: (orientation: "landscape") => Promise<void> };
+
+const middle: RemoteSpot = { x: 0.5, y: 0.5 };
 
 export interface LiveStageProps {
   readonly device: Device | null;
@@ -112,7 +116,14 @@ export function LiveStage({ device, phase, stream, quality, move, remote, onRetr
   const stage = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [full, setFull] = useState(false);
+  const [view, setView] = useState<View>(restingView);
+  const [spot, setSpot] = useState<RemoteSpot>(middle);
+  const [secondary, setSecondary] = useState(false);
+  const [controls, setControls] = useState(true);
+  const [hint, setHint] = useState(false);
+  const [loupe, setLoupe] = useState<Loupe | null>(null);
   const live = phase === "live" && stream !== null;
+  const steering = live && remote.on;
   const name = device?.name ?? "the computer";
   const look = move === null ? null : moveLook[move.status];
 
@@ -128,6 +139,21 @@ export function LiveStage({ device, phase, stream, quality, move, remote, onRetr
   }, [live, stream]);
 
   useEffect(() => {
+    if (!steering) {
+      setView(restingView);
+      setSpot(middle);
+      setSecondary(false);
+      setControls(true);
+      setHint(false);
+      setLoupe(null);
+      return;
+    }
+    setHint(true);
+    const timer = window.setTimeout(() => setHint(false), 4500);
+    return () => window.clearTimeout(timer);
+  }, [steering]);
+
+  useEffect(() => {
     const changed = () => setFull(document.fullscreenElement === stage.current);
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
@@ -138,7 +164,27 @@ export function LiveStage({ device, phase, stream, quality, move, remote, onRetr
       void document.exitFullscreen();
       return;
     }
-    void stage.current?.requestFullscreen().catch(() => undefined);
+    void stage.current
+      ?.requestFullscreen()
+      .then(() => (navigator.maxTouchPoints > 0 ? (screen.orientation as Orientation).lock?.("landscape") : undefined))
+      .catch(() => undefined);
+  }
+
+  function act(action: RemoteAction) {
+    if ("spot" in action) {
+      setSpot(action.spot);
+    }
+    if (action.kind === "right") {
+      setSecondary(false);
+    }
+    remote.send(action);
+  }
+
+  function zoom(factor: number) {
+    const element = video.current;
+    if (element !== null) {
+      setView((current) => zoomAt(current, factor, element.offsetWidth / 2, element.offsetHeight / 2, element.offsetWidth, element.offsetHeight));
+    }
   }
 
   const words = qualityWords(quality);
@@ -155,8 +201,25 @@ export function LiveStage({ device, phase, stream, quality, move, remote, onRetr
           playsInline
           aria-label={`The screen of ${name}, live`}
           className={`block ${full ? "max-h-full max-w-full" : "aspect-video w-full"} object-contain ${live ? "" : "invisible"}`}
+          style={steering ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: "0 0" } : undefined}
         />
-        {live && remote.on && <RemoteLayer video={video} onAction={remote.send} />}
+        {steering && stream !== null && <RemoteLayer video={video} view={view} secondary={secondary} onView={setView} onAction={act} onLoupe={setLoupe} />}
+        {steering && stream !== null && loupe !== null && <RemoteLens video={video} stream={stream} area={stage} loupe={loupe} view={view} />}
+        {steering && hint && loupe === null && (
+          <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3 sm:top-16" role="status">
+            <div className="glass-strong flex items-center gap-2.5 whitespace-nowrap rounded-full px-3 py-2 text-[11px] text-ink sm:gap-3 sm:px-3.5 sm:text-[12.5px]">
+              <span className="flex items-center gap-1.5">
+                <Icon name="expand" className="h-3.5 w-3.5 text-green-300" />
+                Pinch to zoom
+              </span>
+              <span className="h-3 w-px bg-line-subtle" />
+              <span className="flex items-center gap-1.5">
+                <Icon name="tap" className="h-3.5 w-3.5 text-green-300" />
+                Slide, lift to click
+              </span>
+            </div>
+          </div>
+        )}
         {!live && (
           <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(ellipse_at_center,rgba(31,242,92,0.07),transparent_65%)] pt-12 pb-4 sm:py-0">
             <Waiting phase={phase} name={name} onRetry={onRetry} />
@@ -192,8 +255,31 @@ export function LiveStage({ device, phase, stream, quality, move, remote, onRetr
             <Caption move={move} look={look} />
           </div>
         )}
+        {steering && (
+          <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-end gap-2 ${full ? "p-3 sm:p-5" : "p-2 sm:p-3"}`}>
+            <div className="flex items-center gap-2">
+              {full && (
+                <button
+                  type="button"
+                  onClick={() => setControls((shown) => !shown)}
+                  aria-pressed={controls}
+                  aria-label={controls ? "Hide the controls" : "Show the controls"}
+                  className="glass-strong pointer-events-auto grid h-10 w-10 place-items-center rounded-full text-ink transition-colors duration-200 ease-ui hover:text-green-300"
+                >
+                  <Icon name="keyboard" className="h-4 w-4" />
+                </button>
+              )}
+              <ZoomBar view={view} onZoom={zoom} onFit={() => setView(restingView)} />
+            </div>
+            {full && controls && (
+              <div className="pointer-events-auto w-full max-w-[620px] self-center">
+                <RemoteDock remote={remote} name={name} spot={spot} secondary={secondary} floating onSecondary={() => setSecondary((on) => !on)} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {live && <RemoteDock remote={remote} name={name} />}
+      {live && !full && <RemoteDock remote={remote} name={name} spot={spot} secondary={secondary} floating={false} onSecondary={() => setSecondary((on) => !on)} />}
       {live && !remote.on && move !== null && look !== null && (
         <div className="sm:hidden" aria-live="polite">
           <Caption move={move} look={look} />

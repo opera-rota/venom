@@ -1,7 +1,7 @@
 import type { Device, Task, TaskMove } from "@venom/contracts";
 import { describe, expect, it } from "vitest";
 import { controllerWords } from "../src/renderer/src/live-screen.ts";
-import { heldFor, pictureBox, scrollSteps, spotIn } from "../src/renderer/src/remote.ts";
+import { clampView, heldFor, panBy, pictureBox, restingView, spotIn, zoomAt } from "../src/renderer/src/remote.ts";
 
 const laptop = "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02";
 
@@ -47,11 +47,13 @@ describe("Remote: turning her touch into a spot on the computer", () => {
     expect(pictureBox({ left: 5, top: 5, width: 300, height: 200 }, 0, 0)).toEqual({ left: 5, top: 5, width: 300, height: 200 });
   });
 
-  it("turns a drag into a scroll the way a phone does, and ignores a tiny one", () => {
-    expect(scrollSteps(20)).toBeNull();
-    expect(scrollSteps(-100)).toEqual({ direction: "down", steps: 2 });
-    expect(scrollSteps(150)).toEqual({ direction: "up", steps: 3 });
-    expect(scrollSteps(-5000)).toEqual({ direction: "down", steps: 10 });
+  it("zooms in around her fingers and never lets the picture slide off the stage", () => {
+    const close = zoomAt(restingView, 2, 100, 50, 400, 200);
+    expect(close).toEqual({ scale: 2, x: -100, y: -50 });
+    expect(zoomAt(close, 10, 0, 0, 400, 200).scale).toBe(5);
+    expect(zoomAt(close, 0.1, 200, 100, 400, 200)).toEqual(restingView);
+    expect(panBy(close, 500, -500, 400, 200)).toEqual({ scale: 2, x: 0, y: -200 });
+    expect(clampView({ scale: 0.5, x: 30, y: 30 }, 400, 200)).toEqual(restingView);
   });
 
   it("offers Carry on only while VENOM's job on that computer waits for her, and not while it asks a question", () => {

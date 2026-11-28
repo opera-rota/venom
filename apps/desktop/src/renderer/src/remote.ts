@@ -59,12 +59,31 @@ export function heldFor(job: Task | null, moves: readonly TaskMove[], deviceId: 
   return job !== null && deviceId !== null && job.kind === "goal" && job.status === "awaiting_confirmation" && job.target_device_id === deviceId && moves.at(-1)?.status !== "asking";
 }
 
-export const gesture = { holdMs: 550, doubleMs: 320, slop: 14, stepPx: 48 } as const;
+export const gesture = { doubleMs: 300, slop: 10, loupe: 2.5 } as const;
 
-export function scrollSteps(dragY: number): { readonly direction: "up" | "down"; readonly steps: number } | null {
-  const steps = Math.min(10, Math.floor(Math.abs(dragY) / gesture.stepPx));
-  if (steps === 0) {
-    return null;
-  }
-  return { direction: dragY > 0 ? "up" : "down", steps };
+export interface View {
+  readonly scale: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+export const restingView: View = { scale: 1, x: 0, y: 0 };
+
+export const viewLimits = { min: 1, max: 5, step: 1.6 } as const;
+
+export function clampView(view: View, width: number, height: number): View {
+  const scale = Math.min(viewLimits.max, Math.max(viewLimits.min, view.scale));
+  const x = Math.min(0, Math.max(width * (1 - scale), view.x));
+  const y = Math.min(0, Math.max(height * (1 - scale), view.y));
+  return { scale, x: Object.is(x, -0) ? 0 : x, y: Object.is(y, -0) ? 0 : y };
+}
+
+export function zoomAt(view: View, factor: number, centerX: number, centerY: number, width: number, height: number): View {
+  const scale = Math.min(viewLimits.max, Math.max(viewLimits.min, view.scale * factor));
+  const ratio = scale / view.scale;
+  return clampView({ scale, x: centerX - (centerX - view.x) * ratio, y: centerY - (centerY - view.y) * ratio }, width, height);
+}
+
+export function panBy(view: View, dx: number, dy: number, width: number, height: number): View {
+  return clampView({ scale: view.scale, x: view.x + dx, y: view.y + dy }, width, height);
 }

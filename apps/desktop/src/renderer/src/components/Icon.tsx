@@ -54,6 +54,7 @@ const paths = {
   cloud: "M4.5 12.5a3 3 0 0 1-.4-6A4.5 4.5 0 0 1 12.7 7a2.75 2.75 0 0 1-.45 5.5z",
   calendar: "M2.5 3.5h11v10h-11zM2.5 6.5h11M5.5 2v3M10.5 2v3",
   heart: "M8 13.5S2 10 2 5.75A2.75 2.75 0 0 1 8 4.5a2.75 2.75 0 0 1 6 1.25C14 10 8 13.5 8 13.5z",
+  mouse: "M8 2.5v3M4.5 6a3.5 3.5 0 0 1 7 0v4a3.5 3.5 0 0 1-7 0z",
 } as const;
 
 export type IconName = keyof typeof paths;
