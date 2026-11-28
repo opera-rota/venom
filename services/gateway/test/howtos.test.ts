@@ -130,10 +130,18 @@ describe("how-tos: VENOM keeps the way it did a job", () => {
     expect((await call(gateway.base, "DELETE", `/v1/howtos/${id}`, { token: here.device_token })).status).toBe(404);
   });
 
-  it("refuses a job that is gone or still going, in plain words", async () => {
+  it("refuses a job that is gone, still going, or did not finish well, in plain words", async () => {
     const missing = await call(gateway.base, "POST", "/v1/howtos", { token: here.device_token, body: { task_id: "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e00" } });
     expect(missing.status).toBe(404);
     expect(((await missing.json()) as { message: string }).message).toBe(howToWords.jobGone);
+
+    gateway.brain.mover = movesWith([opening, { seen: "Calculator is open.", next: { kind: "cannot", reason: "The buttons did not answer." } }]);
+    const text = "Open Calculator and add 8+8.";
+    expect((await call(gateway.base, "POST", "/v1/messages", { token: here.device_token, body: { text } })).status).toBe(202);
+    const failed = (await near.until((event) => event.type === "task" && event.task.request_text === text && event.task.status === "failed")) as TaskEvent;
+    const refused = await call(gateway.base, "POST", "/v1/howtos", { token: here.device_token, body: { task_id: failed.task.id } });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { message: string }).message).toBe(howToWords.notWorked);
   });
 });
 

@@ -212,7 +212,7 @@ function Job({ task, moves, loaded, devices, deviceId, stopping, howto, savingHo
           {task.result}
         </button>
       )}
-      {!open && task.moves > 0 &&
+      {task.status === "completed" && task.moves > 0 &&
         (howto === null ? (
           <button type="button" disabled={savingHowTo} onClick={() => onSaveHowTo(task.id)} className={`${button.compact} self-start`}>
             <Icon name="sparkle" className="h-3.5 w-3.5 text-green-300" />

@@ -18,6 +18,7 @@ export const howToWords = {
   gone: "That how-to is no longer kept.",
   jobGone: "VENOM cannot find that job any more.",
   notFinished: "That job is still going. Save it as a how-to once it is finished.",
+  notWorked: "Only a job that finished well becomes a how-to, so I never learn a slip. Run it again, and save it once it says Done.",
   nothingLearned: "That job has no finished moves to learn from yet.",
   exists: "That job is already saved as a how-to.",
   full: "VENOM keeps up to 200 how-tos. Forget one to make room.",
@@ -39,6 +40,9 @@ export function howToRoutes(app: FastifyInstance, { store, tasks, goals, loop, p
     }
     if (!finishedStatuses.has(task.status)) {
       throw conflict(howToWords.notFinished);
+    }
+    if (task.status !== "completed") {
+      throw conflict(howToWords.notWorked);
     }
     const moves = (await goals.list(device.account_id, task_id)) ?? [];
     const steps = howToSteps(moves);

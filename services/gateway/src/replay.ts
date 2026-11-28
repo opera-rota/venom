@@ -59,6 +59,14 @@ export function replayed({ move, target }: ReplayStep, seen: Observation): Scree
   }
 }
 
+export function focusOnly(step: ReplayStep, next: ReplayStep | undefined, seen: Observation): boolean {
+  if (next === undefined || step.note !== null || next.note !== null || step.move.name !== "click" || step.move.point === null || step.move.double) {
+    return false;
+  }
+  const typed = next.move.name === "key" || (next.move.name === "type" && next.move.mark === null);
+  return typed && sameWindow(step.target, seen) && sameWindow(next.target, seen);
+}
+
 export function knownMove(step: ReplayStep, seen: Observation): MakeMove | null {
   if (step.note !== null) {
     return null;

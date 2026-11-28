@@ -1,7 +1,7 @@
 import { Observation, type ScreenMark } from "@venom/contracts";
 import type { ReplayStep } from "@venom/db";
 import { describe, expect, it } from "vitest";
-import { knownMove, replayed, targetOf } from "../src/replay.ts";
+import { focusOnly, knownMove, replayed, targetOf } from "../src/replay.ts";
 
 function mark(id: number, name: string, kind: ScreenMark["kind"] = "button", password = false): ScreenMark {
   return { id, kind, name, editable: kind === "box", password, box: { x: id * 10, y: 10, width: 8, height: 8 } };
@@ -50,6 +50,20 @@ describe("replay: known steps are made exactly, without thinking", () => {
     const box = { kind: "box" as const, name: "Search", window: "Calculator" };
     expect(replayed(step(typing, box), screen([mark(1, "Other"), mark(2, "Search", "box")]))).toEqual({ ...typing, mark: 2 });
     expect(replayed(step(typing, box), screen([mark(1, "Search", "box", true)]))).toBeNull();
+  });
+
+  it("skips a click on a nameless spot that only gave the window focus before typing in it", () => {
+    const here = { kind: null, name: null, window: "Calculator" };
+    const focus = step({ name: "click", mark: null, point: { x: 40, y: 20 }, double: false }, here);
+    const typing = step({ name: "type", text: "1+2=", mark: null, enter: false }, here);
+    expect(focusOnly(focus, typing, screen([]))).toBe(true);
+    expect(focusOnly(focus, step({ name: "key", key: "enter" }, here), screen([]))).toBe(true);
+    expect(focusOnly(focus, typing, screen([], "Notepad"))).toBe(false);
+    expect(focusOnly(focus, undefined, screen([]))).toBe(false);
+    expect(focusOnly(focus, step({ name: "type", text: "hi", mark: 2, enter: false }, here), screen([]))).toBe(false);
+    expect(focusOnly(focus, step({ name: "type", text: "1+2=", mark: null, enter: false }, here, "Type slowly."), screen([]))).toBe(false);
+    expect(focusOnly(step({ name: "click", mark: null, point: { x: 40, y: 20 }, double: true }, here), typing, screen([]))).toBe(false);
+    expect(focusOnly(step({ name: "click", mark: 3, point: null, double: false }, here), typing, screen([]))).toBe(false);
   });
 
   it("leaves a step with a note to thinking, and keeps the step's own words", () => {

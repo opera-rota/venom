@@ -6,6 +6,7 @@ export interface AttentionOptions {
   readonly everyMs?: number;
   readonly graceMs?: number;
   readonly activeMs?: number;
+  readonly handoffMs?: number;
 }
 
 export class Attention {
@@ -16,6 +17,8 @@ export class Attention {
   readonly #everyMs: number;
   readonly #graceMs: number;
   readonly #activeMs: number;
+  readonly #handoffMs: number;
+  #ownAt = Number.NEGATIVE_INFINITY;
   #task: string | null = null;
   #lastCommand = 0;
   #quietUntil = 0;
@@ -23,7 +26,7 @@ export class Attention {
   #told = false;
   #timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor({ idleSeconds, ownFocused, interrupted, now = Date.now, everyMs = 400, graceMs = 1500, activeMs = 90_000 }: AttentionOptions) {
+  constructor({ idleSeconds, ownFocused, interrupted, now = Date.now, everyMs = 400, graceMs = 1500, activeMs = 90_000, handoffMs = 5000 }: AttentionOptions) {
     this.#idleSeconds = idleSeconds;
     this.#ownFocused = ownFocused;
     this.#interrupted = interrupted;
@@ -31,6 +34,7 @@ export class Attention {
     this.#everyMs = everyMs;
     this.#graceMs = graceMs;
     this.#activeMs = activeMs;
+    this.#handoffMs = handoffMs;
   }
 
   started(taskId: string, moving: boolean): void {
@@ -41,6 +45,9 @@ export class Attention {
       this.#quietUntil = now + this.#graceMs;
     }
     this.#lastCommand = now;
+    if (this.#ownFocused()) {
+      this.#ownAt = now;
+    }
     if (moving) {
       this.#moving += 1;
     }
@@ -75,7 +82,11 @@ export class Attention {
       this.stop();
       return;
     }
-    if (this.#told || this.#moving > 0 || now < this.#quietUntil || this.#ownFocused()) {
+    if (this.#ownFocused()) {
+      this.#ownAt = now;
+      return;
+    }
+    if (this.#told || this.#moving > 0 || now < this.#quietUntil || now - this.#ownAt < this.#handoffMs) {
       return;
     }
     if (this.#idleSeconds() === 0) {

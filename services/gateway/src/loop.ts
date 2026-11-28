@@ -35,7 +35,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { LiveHub } from "./live-hub.ts";
-import { knownMove, targetOf } from "./replay.ts";
+import { focusOnly, knownMove, targetOf } from "./replay.ts";
 import type { SaidKind } from "./runner.ts";
 import { thumbnailOf } from "./thumbnail.ts";
 import {
@@ -448,6 +448,10 @@ export class GoalLoop {
   }
 
   #known(driving: Driving, turn: Turn, observation: Observation): MakeMove | null {
+    const first = turn.replay[turn.replayed];
+    if (first !== undefined && focusOnly(first, turn.replay[turn.replayed + 1], observation)) {
+      turn.replayed += 1;
+    }
     const step = turn.replay[turn.replayed];
     const known = step === undefined || driving.guidance.length > 0 ? null : knownMove(step, observation);
     if (known === null) {

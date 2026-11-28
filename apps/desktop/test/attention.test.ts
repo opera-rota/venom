@@ -18,6 +18,7 @@ function desk(): Desk {
     everyMs: 100,
     graceMs: 1500,
     activeMs: 10_000,
+    handoffMs: 5000,
   });
   return Object.assign(state, { attention });
 }
@@ -69,6 +70,21 @@ describe("noticing her hand on the mouse or keyboard while VENOM works", () => {
     state.idle = 0;
     vi.advanceTimersByTime(1000);
     expect(state.told).toEqual([]);
+    state.attention.stop();
+  });
+
+  it("gives her hand a moment to come back after she answers VENOM in its own window", () => {
+    const state = desk();
+    state.focused = true;
+    state.attention.started("job", true);
+    state.focused = false;
+    vi.advanceTimersByTime(1000);
+    state.attention.finished("job", true);
+    state.idle = 0;
+    vi.advanceTimersByTime(3000);
+    expect(state.told).toEqual([]);
+    vi.advanceTimersByTime(1500);
+    expect(state.told).toEqual(["job"]);
     state.attention.stop();
   });
 
