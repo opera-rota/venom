@@ -25,7 +25,7 @@ import {
   type Thumbnail,
   type TokenUsage,
 } from "@venom/contracts";
-import type { DeviceRef } from "@venom/db";
+import type { DeviceRef, ReplayStep } from "@venom/db";
 import type { Identity } from "@venom/identity";
 import { addUsage, nothingUsed, type Memory } from "@venom/memory";
 import { PowerError, type Availability, type Power } from "@venom/power";
@@ -35,6 +35,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { BrainError, type Brain } from "./brain.ts";
 import type { LiveHub } from "./live-hub.ts";
+import { knownMove, targetOf } from "./replay.ts";
 import type { SaidKind } from "./runner.ts";
 import { thumbnailOf } from "./thumbnail.ts";
 import {
@@ -55,6 +56,7 @@ import {
   lockedWords,
   moveQuestionWords,
   refusedMoveWords,
+  replaySeenWords,
   stepByStepWords,
   stillLockedWords,
   stopHereWords,
@@ -90,6 +92,7 @@ export interface LoopOptions {
   publishMove(accountId: string, requestId: string, move: TaskMove, picture: Thumbnail | null): void;
   publishPower(accountId: string, requestId: string, status: PowerStatus): void;
   followed(accountId: string, taskId: string): Promise<FollowHowTo | null>;
+  replay(accountId: string, taskId: string): Promise<readonly ReplayStep[]>;
   tell(task: Task, kind: SaidKind, text: string, moveId: string | null): Promise<void>;
   finished(task: Task): Promise<void>;
 }
@@ -132,6 +135,8 @@ interface Turn {
   readonly target: Device;
   readonly memories: readonly MemoryContext[];
   readonly howto: FollowHowTo | null;
+  replay: readonly ReplayStep[];
+  replayed: number;
   readonly deadline: number;
   spent: TokenUsage;
   budget: number;
@@ -313,10 +318,11 @@ export class GoalLoop {
 
   async #drive(driving: Driving, task: Task, target: Device, requestId: string): Promise<void> {
     const { memory } = this.#options;
-    const [recalled, earlier, howto] = await Promise.all([
+    const [recalled, earlier, howto, replay] = await Promise.all([
       memory.recall(task.account_id, task.request_text, requestId).catch(() => ({ memories: [], usage: nothingUsed })),
       this.#options.goals.earlier(task.account_id, task.id).catch(() => null),
       this.#options.followed(task.account_id, task.id).catch(() => null),
+      task.moves === 0 ? this.#options.replay(task.account_id, task.id).catch(() => []) : Promise.resolve([]),
     ]);
     const turn: Turn = {
       task,
@@ -324,6 +330,8 @@ export class GoalLoop {
       target,
       memories: recalled.memories.slice(0, 40),
       howto,
+      replay,
+      replayed: 0,
       deadline: Date.now() + this.#limits.totalMs,
       spent: recalled.usage,
       budget: this.#limits.moves,
@@ -366,6 +374,14 @@ export class GoalLoop {
     }
     const { observation } = looked;
     const picture = thumbnailOf(observation.picture);
+    const known = this.#known(driving, turn, observation);
+    if (known !== null) {
+      const carried = await this.#move(driving, turn, observation, picture, replaySeenWords(turn.replayed, turn.replay.length), known);
+      if (turn.failures > 0) {
+        turn.replay = [];
+      }
+      return carried;
+    }
     const engine = await this.#admit(driving, turn);
     if (engine === null) {
       return false;
@@ -431,6 +447,17 @@ export class GoalLoop {
     }
   }
 
+  #known(driving: Driving, turn: Turn, observation: Observation): MakeMove | null {
+    const step = turn.replay[turn.replayed];
+    const known = step === undefined || driving.guidance.length > 0 ? null : knownMove(step, observation);
+    if (known === null) {
+      turn.replay = [];
+      return null;
+    }
+    turn.replayed += 1;
+    return known;
+  }
+
   async #move(driving: Driving, turn: Turn, observation: Observation, picture: Thumbnail | null, seen: string, choice: MakeMove): Promise<boolean> {
     const { goals, tasks } = this.#options;
     const point = choice.move.name === "click" ? choice.move.point : null;
@@ -448,6 +475,7 @@ export class GoalLoop {
         effects: judgement.effects,
         verdict: judgement.verdict,
         detail: judgement.verdict === "refuse" ? (judgement.because[0] ?? null) : null,
+        target: targetOf(choice.move, observation),
       },
       uuidv7(),
     );

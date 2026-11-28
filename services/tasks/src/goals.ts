@@ -1,4 +1,4 @@
-import { EarlierGoal, PastMove, ScreenMove, screenLimits, TaskMove, type ConfirmDecision, type Effect, type MoveOutcome, type MoveStatus, type Task } from "@venom/contracts";
+import { EarlierGoal, PastMove, ScreenMove, screenLimits, TaskMove, type ConfirmDecision, type Effect, type MoveOutcome, type MoveStatus, type MoveTarget, type Task } from "@venom/contracts";
 import type { DeviceRef } from "@venom/db";
 import type { Sql } from "postgres";
 import { refuseTasks } from "./errors.ts";
@@ -14,6 +14,7 @@ export interface Proposal {
   readonly effects: readonly Effect[];
   readonly verdict: Verdict;
   readonly detail: string | null;
+  readonly target?: MoveTarget | null;
 }
 
 export interface MoveChange {
@@ -208,7 +209,7 @@ export function createGoals({ sql }: { readonly sql: Sql }): Goals {
       return EarlierGoal.parse({ goal: row.request_text, result: clip(row.result ?? endedWords[row.status] ?? "It ended.", resultLimit) });
     },
 
-    async propose(accountId, taskId, { intent, seen, move, effects, verdict, detail }, requestId) {
+    async propose(accountId, taskId, { intent, seen, move, effects, verdict, detail, target = null }, requestId) {
       return sql.begin(async (tx) => {
         const task = await taskRow(tx, accountId, taskId, true);
         if (task === null || task.kind !== "goal" || task.status !== "running") {
@@ -216,15 +217,15 @@ export function createGoals({ sql }: { readonly sql: Sql }): Goals {
         }
         const status: MoveStatus = verdict === "go" ? "running" : verdict === "ask" ? "asking" : "refused";
         const [row] = await tx.unsafe<MoveRow[]>(
-          `insert into moves (task_id, account_id, number, intent, seen, move, effects, status, detail, asked_at, started_at, finished_at)
+          `insert into moves (task_id, account_id, number, intent, seen, move, effects, status, detail, target, asked_at, started_at, finished_at)
            values (
-             $1, $2, (select coalesce(max(number), 0) + 1 from moves where task_id = $1), $3, $4, $5::jsonb, $6::text[], $7, $8,
+             $1, $2, (select coalesce(max(number), 0) + 1 from moves where task_id = $1), $3, $4, $5::jsonb, $6::text[], $7, $8, $9::jsonb,
              case when $7 = 'asking' then clock_timestamp() end,
              case when $7 = 'running' then clock_timestamp() end,
              case when $7 = 'refused' then clock_timestamp() end
            )
            returning ${moveColumns}`,
-          [taskId, accountId, clip(intent, screenLimits.intent), clip(seen, screenLimits.seen), sql.json(move), [...effects], status, detail === null ? null : clip(detail, screenLimits.detail)],
+          [taskId, accountId, clip(intent, screenLimits.intent), clip(seen, screenLimits.seen), sql.json(move), [...effects], status, detail === null ? null : clip(detail, screenLimits.detail), target === null ? null : sql.json(target)],
         );
         if (row === undefined) {
           throw new Error("Move insert returned no row");

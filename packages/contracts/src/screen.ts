@@ -65,6 +65,14 @@ export const ScreenMark = z
   })
   .register(contracts, { id: "ScreenMark" });
 
+export const MoveTarget = z
+  .strictObject({
+    kind: ScreenMarkKind.nullable(),
+    name: z.string().max(screenLimits.markName).nullable(),
+    window: z.string().max(screenLimits.windowTitle).nullable(),
+  })
+  .register(contracts, { id: "MoveTarget" });
+
 export const Observation = z
   .strictObject({
     picture: z.string().min(1).max(screenLimits.pictureCharacters).regex(/^[A-Za-z0-9+/]+={0,2}$/),
@@ -233,6 +241,7 @@ export type ScreenBox = z.infer<typeof ScreenBox>;
 export type ScreenMarkKind = z.infer<typeof ScreenMarkKind>;
 export type ScreenSpot = z.infer<typeof ScreenSpot>;
 export type ScreenMark = z.infer<typeof ScreenMark>;
+export type MoveTarget = z.infer<typeof MoveTarget>;
 export type Observation = z.infer<typeof Observation>;
 export type ScreenKey = z.infer<typeof ScreenKey>;
 export type ScreenClick = z.infer<typeof ScreenClick>;

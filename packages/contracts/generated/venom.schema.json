@@ -253,6 +253,9 @@
       "$ref": "#/$defs/MoveRequest"
     },
     {
+      "$ref": "#/$defs/MoveTarget"
+    },
+    {
       "$ref": "#/$defs/NextMove"
     },
     {
@@ -3357,6 +3360,49 @@
         "declined",
         "stopped"
       ]
+    },
+    "MoveTarget": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScreenMarkKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "window"
+      ],
+      "additionalProperties": false
     },
     "NextMove": {
       "type": "object",

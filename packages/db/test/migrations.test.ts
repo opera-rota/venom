@@ -49,6 +49,54 @@ describe("versioned migrations", () => {
   });
 });
 
+describe("upgrading moves made before targets were recorded", () => {
+  it("learns which button, box and window each old move used from its own words", async () => {
+    const legacy = await createTestDatabase();
+    const sql = connect(legacy.migratorUrl, { max: 1 });
+    try {
+      await sql.unsafe("alter table moves drop column target");
+      await sql`delete from schema_migrations where version >= 15`;
+      const [account] = await sql<{ id: string }[]>`insert into accounts (name, email) values ('Old owner', 'moves@venom.local') returning id`;
+      const accountId = account?.id ?? "";
+      const [device] = await sql<{ id: string }[]>`
+        insert into devices (account_id, type, name, platform, capabilities, status)
+        values (${accountId}, 'computer', 'Old computer', 'windows', '{}', 'active') returning id
+      `;
+      const [task] = await sql<{ id: string }[]>`
+        insert into tasks (account_id, origin_device_id, target_device_id, request_text, kind, status)
+        values (${accountId}, ${device?.id ?? null}, ${device?.id ?? null}, 'Add numbers', 'goal', 'completed') returning id
+      `;
+      const old = [
+        [{ name: "click", mark: 7, point: null, double: false }, "Clicked mark 7 'Plus' in 'Calculator'."],
+        [{ name: "click", mark: 2, point: null, double: true }, "Double-clicked mark 2 'Don't save' in 'Notepad'."],
+        [{ name: "click", mark: null, point: { x: 3, y: 4 }, double: false }, "Clicked the point 3,4 in 'Calculator'."],
+        [{ name: "type", text: "hi", mark: 3, enter: false }, "Typed 2 characters at the end of mark 3 'Search' and checked that it arrived."],
+        [{ name: "key", key: "enter" }, "Pressed enter in 'Calculator'."],
+        [{ name: "open", app: "Calculator", open: null }, "Opened Calculator."],
+      ] as const;
+      for (const [index, [move, detail]] of old.entries()) {
+        await sql`
+          insert into moves (task_id, account_id, number, intent, seen, move, status, detail, started_at, finished_at)
+          values (${task?.id ?? null}, ${accountId}, ${index + 1}, 'A move.', 'The screen.', ${sql.json(move)}, 'done', ${detail}, clock_timestamp(), clock_timestamp())
+        `;
+      }
+      expect((await migrate(sql)).map((migration) => migration.version)).toEqual([15]);
+      const targets = await sql<{ target: unknown }[]>`select target from moves where task_id = ${task?.id ?? null} order by number`;
+      expect(targets.map((row) => row.target)).toEqual([
+        { kind: null, name: "Plus", window: "Calculator" },
+        { kind: null, name: "Don't save", window: "Notepad" },
+        null,
+        { kind: null, name: "Search", window: null },
+        { kind: null, name: null, window: "Calculator" },
+        null,
+      ]);
+    } finally {
+      await sql.end();
+      await legacy.drop();
+    }
+  });
+});
+
 describe("upgrading a database that already holds Phase 2 data", () => {
   it("keeps old accounts, devices and messages when the identity migration runs", async () => {
     const legacy = await createTestDatabase();

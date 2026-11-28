@@ -165,6 +165,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
     publishMove: (accountId, requestId, move, picture) => hub.publishToAccount(accountId, moveEvent(requestId, move, picture)),
     publishPower: (accountId, requestId, status) => hub.publishToAccount(accountId, powerEvent(requestId, status)),
     followed: (accountId, taskId) => store.followedHowTo({ accountId, taskId }),
+    replay: (accountId, taskId) => store.howToReplay({ accountId, taskId }),
     tell: (task, kind, text, moveId) => tell(task, kind, text, moveId === null ? {} : { moveId }),
     finished,
   });

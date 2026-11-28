@@ -1,5 +1,5 @@
 import type { Sql, TransactionSql } from "postgres";
-import { FollowHowTo, HowTo, howToLimits, type HowToLearned, type HowToStep } from "@venom/contracts";
+import { Effect, FollowHowTo, HowTo, howToLimits, MoveTarget, ScreenMove, type HowToLearned, type HowToStep } from "@venom/contracts";
 import type { DeviceRef } from "./store.ts";
 
 export interface SaveHowToInput {
@@ -43,6 +43,15 @@ export interface HowToRunRef {
   readonly taskId: string;
 }
 
+export interface ReplayStep {
+  readonly number: number;
+  readonly said: string;
+  readonly note: string | null;
+  readonly move: ScreenMove;
+  readonly effects: readonly Effect[];
+  readonly target: MoveTarget | null;
+}
+
 export interface HowToStore {
   saveHowTo(input: SaveHowToInput): Promise<Saved>;
   howtos(accountId: string): Promise<HowTo[]>;
@@ -52,6 +61,7 @@ export interface HowToStore {
   howTo(accountId: string, howtoId: string): Promise<HowTo | null>;
   startHowTo(start: HowToStart): Promise<HowTo | null>;
   followedHowTo(run: HowToRunRef): Promise<FollowHowTo | null>;
+  howToReplay(run: HowToRunRef): Promise<ReplayStep[]>;
   howToWorked(run: HowToRunRef): Promise<HowTo | null>;
 }
 
@@ -196,6 +206,38 @@ export function howToStore(sql: Sql): HowToStore {
         where r.task_id = ${taskId} and r.account_id = ${accountId}
       `;
       return row === undefined ? null : FollowHowTo.parse(row);
+    },
+
+    async howToReplay({ accountId, taskId }) {
+      const [howto] = await sql<{ source: string | null; steps: unknown }[]>`
+        select h.task_id as source, h.steps
+        from howto_runs r join howtos h on h.id = r.howto_id
+        where r.task_id = ${taskId} and r.account_id = ${accountId}
+      `;
+      if (howto === undefined || howto.source === null) {
+        return [];
+      }
+      const steps = FollowHowTo.shape.steps.parse(howto.steps);
+      const moves = await sql<{ move: unknown; effects: unknown; target: unknown }[]>`
+        select move, effects, target from moves
+        where task_id = ${howto.source} and account_id = ${accountId} and status = 'done'
+        order by number
+        limit ${howToLimits.steps}
+      `;
+      if (moves.length !== steps.length) {
+        return [];
+      }
+      return steps.map((step, index) => {
+        const recorded = moves[index];
+        return {
+          number: step.number,
+          said: step.said,
+          note: step.note,
+          move: ScreenMove.parse(recorded?.move),
+          effects: Effect.array().parse(recorded?.effects),
+          target: MoveTarget.nullable().parse(recorded?.target ?? null),
+        };
+      });
     },
 
     async howToWorked({ accountId, taskId }) {

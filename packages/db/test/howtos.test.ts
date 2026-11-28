@@ -1,4 +1,4 @@
-import type { HowToStep } from "@venom/contracts";
+import type { HowToStep, MoveTarget, ScreenMove } from "@venom/contracts";
 import type { Sql } from "postgres";
 import { v7 as uuidv7 } from "uuid";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -145,5 +145,41 @@ describe("how-tos VENOM keeps", () => {
 
     expect(await store.forgetHowTo({ device, requestId: uuidv7(), howtoId })).toBe(true);
     expect(await store.followedHowTo(run)).toBeNull();
+  });
+
+  it("replays the finished moves of the job a how-to was learned from, with each step's note and target", async () => {
+    const device = await freshDevice();
+    const stranger = await freshDevice();
+    const source = await finishedGoal(device);
+    const moved = (number: number, status: string, move: ScreenMove, target: MoveTarget | null) => owner`
+      insert into moves (task_id, account_id, number, intent, seen, move, status, detail, target, started_at, finished_at)
+      values (${source}, ${device.account_id}, ${number}, 'A move.', 'The screen.', ${owner.json(move)}, ${status}, 'It ran.', ${target === null ? null : owner.json(target)}, clock_timestamp(), clock_timestamp())
+    `;
+    await moved(1, "done", { name: "open", app: "Calculator", open: null }, null);
+    await moved(2, "failed", { name: "click", mark: 4, point: null, double: false }, { kind: "button", name: "Six", window: "Calculator" });
+    await moved(3, "done", { name: "type", text: "1+2+3", mark: null, enter: false }, { kind: null, name: null, window: "Calculator" });
+    await moved(4, "done", { name: "key", key: "enter" }, { kind: null, name: null, window: "Calculator" });
+    const saved = await save(device, source);
+    const told = await save(device, null, "Told");
+    if (saved.kind !== "saved" || told.kind !== "saved") {
+      throw new Error("should be saved");
+    }
+    await store.noteHowToStep({ device, requestId: uuidv7(), howtoId: saved.howto.id, number: 2, note: "Use the buttons." });
+
+    const taskId = await finishedGoal(device);
+    await store.startHowTo({ device, requestId: uuidv7(), howtoId: saved.howto.id, taskId, stepByStep: false });
+    expect(await store.howToReplay({ accountId: stranger.account_id, taskId })).toEqual([]);
+    expect(await store.howToReplay({ accountId: device.account_id, taskId })).toEqual([
+      { number: 1, said: "Open the Calculator app.", note: null, move: { name: "open", app: "Calculator", open: null }, effects: [], target: null },
+      { number: 2, said: "Type the sum.", note: "Use the buttons.", move: { name: "type", text: "1+2+3", mark: null, enter: false }, effects: [], target: { kind: null, name: null, window: "Calculator" } },
+      { number: 3, said: "Press Enter to see the total.", note: null, move: { name: "key", key: "enter" }, effects: [], target: { kind: null, name: null, window: "Calculator" } },
+    ]);
+
+    const toldTask = await finishedGoal(device);
+    await store.startHowTo({ device, requestId: uuidv7(), howtoId: told.howto.id, taskId: toldTask, stepByStep: false });
+    expect(await store.howToReplay({ accountId: device.account_id, taskId: toldTask })).toEqual([]);
+
+    await moved(5, "done", { name: "pause", seconds: 1 }, null);
+    expect(await store.howToReplay({ accountId: device.account_id, taskId })).toEqual([]);
   });
 });

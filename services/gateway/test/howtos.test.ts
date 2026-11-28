@@ -65,9 +65,9 @@ async function learned(text: string): Promise<HowTo> {
   return HowTo.parse(await saved.json());
 }
 
-function recording(): MoveRequest[] {
+function recording(choices: readonly NextMove[]): MoveRequest[] {
   const asked: MoveRequest[] = [];
-  const script = movesWith([opening, typing, pressing, finished]);
+  const script = movesWith(choices);
   gateway.brain.mover = (request) => {
     asked.push(request);
     return script(request);
@@ -138,14 +138,14 @@ describe("how-tos: VENOM keeps the way it did a job", () => {
 });
 
 describe("how-tos: Apply runs one, and the ring counts real runs", () => {
-  it("applies a how-to on the In use computer, hands VENOM the steps and notes, and counts it as worked", async () => {
+  it("applies a how-to on the In use computer, thinks from the first noted step on, and counts it as worked", async () => {
     const howto = await learned("Open Calculator and add 4+5.");
     await call(gateway.base, "PUT", `/v1/howtos/${howto.id}/steps/2/note`, { token: here.device_token, body: { note: "Click the buttons one at a time." } });
 
     expect((await call(gateway.base, "POST", `/v1/howtos/${howto.id}/apply`, { token: stranger.device_token, body: {} })).status).toBe(404);
     expect((await call(gateway.base, "POST", "/v1/howtos/0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e00/apply", { token: here.device_token, body: {} })).status).toBe(404);
 
-    const asked = recording();
+    const asked = recording([typing, pressing, finished]);
     const moved = near.moves.length;
     const applied = await call(gateway.base, "POST", `/v1/howtos/${howto.id}/apply`, { token: here.device_token, body: {} });
     expect(applied.status).toBe(201);
@@ -160,6 +160,8 @@ describe("how-tos: Apply runs one, and the ring counts real runs", () => {
     const worked = await near.until((event) => event.type === "howto" && event.howto.id === howto.id && event.howto.worked === 1);
     expect(worked.type === "howto" && worked.howto.applied).toBe(1);
 
+    expect(asked).toHaveLength(3);
+    expect(asked[0]?.moves.map((move) => move.move.name)).toEqual(["open"]);
     expect(asked[0]?.howto).toEqual({
       name: "Open Calculator and add 4+5",
       step_by_step: false,
@@ -175,7 +177,7 @@ describe("how-tos: Apply runs one, and the ring counts real runs", () => {
   it("goes step by step when asked: VENOM asks before every move, and a no stops the job without counting it", async () => {
     const [howto] = (await listed(here.device_token)).howtos.filter((item) => item.name === "Open Calculator and add 4+5");
     const id = howto?.id ?? "";
-    recording();
+    recording([typing, pressing, finished]);
     const moved = near.moves.length;
     const applied = HowToApplied.parse(await (await call(gateway.base, "POST", `/v1/howtos/${id}/apply`, { token: here.device_token, body: { step_by_step: true } })).json());
     await near.until(venom("report", "On it, buddy. I am applying your how-to"));
@@ -194,5 +196,20 @@ describe("how-tos: Apply runs one, and the ring counts real runs", () => {
     expect(near.moves.slice(moved).map((command) => [command.move.name, command.confirmed])).toEqual([["open", true]]);
     const after = (await listed(here.device_token)).howtos.find((item) => item.id === id);
     expect(after).toMatchObject({ applied: 2, worked: 1 });
+  });
+
+  it("replays a how-to it knows by heart: every step made exactly, and only one look from the thinker at the end", async () => {
+    const howto = await learned("Open Calculator and add 6+7.");
+    const asked = recording([finished]);
+    const moved = near.moves.length;
+    const applied = HowToApplied.parse(await (await call(gateway.base, "POST", `/v1/howtos/${howto.id}/apply`, { token: here.device_token, body: {} })).json());
+    const told = (await near.until(venom("report", "On it, buddy. I am applying your how-to"))) as MessageEvent;
+    expect(told.message.text).toContain("I know your steps by heart");
+    await near.until(completedTask(applied.task.id));
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.moves.map((move) => [move.move.name, move.outcome])).toEqual([["open", "done"], ["type", "done"], ["key", "done"]]);
+    expect(near.moves.slice(moved).map((command) => [command.move.name, command.confirmed])).toEqual([["open", false], ["type", false], ["key", false]]);
+    await near.until((event) => event.type === "howto" && event.howto.id === howto.id && event.howto.worked === 1);
   });
 });
