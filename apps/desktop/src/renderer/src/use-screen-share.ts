@@ -13,6 +13,7 @@ function release(stream: MediaStream): void {
 
 export function useScreenShare(bridge: VenomBridge, devices: readonly Device[], self: Device): ScreenShare {
   const [watcherIds, setWatcherIds] = useState<readonly string[]>([]);
+  const [controllerId, setControllerId] = useState<string | null>(null);
   const current = devices.find((device) => device.id === self.id) ?? self;
   const sharing = canShare(current);
 
@@ -52,6 +53,17 @@ export function useScreenShare(bridge: VenomBridge, devices: readonly Device[], 
     };
   }, [bridge, sharing]);
 
+  useEffect(
+    () =>
+      bridge.onEvent((event) => {
+        if (event.type === "remote" && event.to_device_id === self.id) {
+          setControllerId((current) => (event.on ? event.from_device_id : current === event.from_device_id ? null : current));
+        }
+      }),
+    [bridge, self.id],
+  );
+
   const watchers = useMemo(() => devices.filter((device) => watcherIds.includes(device.id)), [devices, watcherIds]);
-  return { watchers };
+  const controllers = useMemo(() => watchers.filter((device) => device.id === controllerId), [watchers, controllerId]);
+  return { watchers, controllers };
 }

@@ -13,6 +13,7 @@ import {
   WaitAction,
 } from "./records.ts";
 import { contracts } from "./registry.ts";
+import { RemoteAction } from "./remote.ts";
 import { Observation, ScreenMove, ScreenPoint, ScreenSpot } from "./screen.ts";
 
 export const safetyLimits = {
@@ -105,8 +106,16 @@ export const StopCommand = z
   })
   .register(contracts, { id: "StopCommand" });
 
+export const RemoteCommand = z
+  .strictObject({
+    kind: z.literal("remote"),
+    from_device_id: Id,
+    action: RemoteAction,
+  })
+  .register(contracts, { id: "RemoteCommand" });
+
 export const CommandBody = z
-  .discriminatedUnion("kind", [RunStepCommand, ObserveCommand, SpotCommand, MoveCommand, StopCommand])
+  .discriminatedUnion("kind", [RunStepCommand, ObserveCommand, SpotCommand, MoveCommand, StopCommand, RemoteCommand])
   .register(contracts, { id: "CommandBody" });
 
 export const CommandPayload = z
@@ -249,6 +258,7 @@ export type ObserveCommand = z.infer<typeof ObserveCommand>;
 export type SpotCommand = z.infer<typeof SpotCommand>;
 export type MoveCommand = z.infer<typeof MoveCommand>;
 export type StopCommand = z.infer<typeof StopCommand>;
+export type RemoteCommand = z.infer<typeof RemoteCommand>;
 export type CommandBody = z.infer<typeof CommandBody>;
 export type CommandPayload = z.infer<typeof CommandPayload>;
 export type SignedCommand = z.infer<typeof SignedCommand>;

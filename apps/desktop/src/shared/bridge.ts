@@ -27,6 +27,7 @@ import type {
   MemoryList,
   MessageHistory,
   PowerStatus,
+  RemoteAction,
   ScreenSignal,
 } from "@venom/contracts";
 
@@ -148,6 +149,8 @@ export interface VenomBridge {
   openLink(url: string): Promise<void>;
   saveDocument(document: ChatDocument): Promise<SaveResult>;
   screenSignal(toDeviceId: string, sessionId: string, signal: ScreenSignal): Promise<StepResult>;
+  remoteSession(deviceId: string, on: boolean): Promise<StepResult>;
+  remote(deviceId: string, action: RemoteAction): Promise<StepResult>;
   connection(): Promise<ConnectionState>;
   onEvent(listener: (event: GatewayEvent) => void): () => void;
   onConnection(listener: (state: ConnectionState) => void): () => void;
@@ -202,6 +205,8 @@ export const channels = {
   openLink: "venom:open-link",
   saveDocument: "venom:save-document",
   screenSignal: "venom:screen-signal",
+  remoteSession: "venom:remote-session",
+  remote: "venom:remote",
   connection: "venom:connection",
   event: "venom:event",
   connectionChanged: "venom:connection-changed",

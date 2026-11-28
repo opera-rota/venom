@@ -1,0 +1,12 @@
+{
+  "command_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e90",
+  "account_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e01",
+  "device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e02",
+  "issued_at": "2026-11-28T10:00:00.000Z",
+  "expires_at": "2026-11-28T10:00:30.000Z",
+  "body": {
+    "kind": "remote",
+    "from_device_id": "0199d2a0-7c1e-7a3b-9f2d-1a2b3c4d5e03",
+    "action": { "kind": "key", "key": "enter" }
+  }
+}

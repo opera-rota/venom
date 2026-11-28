@@ -360,4 +360,28 @@ describe("the hands in VENOM's look, think, act loop", () => {
     const [report] = await answered(1);
     expect(report).toMatchObject({ outcome: "failed", detail: "The hands sent back a look VENOM could not read." });
   });
+
+  it("hands her remote touches and typing to the hands one after another, and reports nothing back", async () => {
+    let busy = 0;
+    let most = 0;
+    const { hands, calls, reports } = bench(async () => {
+      busy += 1;
+      most = Math.max(most, busy);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      busy -= 1;
+      return ok("Done.");
+    });
+    const from = randomUUID();
+    hands.receive(signed({ kind: "remote", from_device_id: from, action: { kind: "click", spot: { x: 0.25, y: 0.75 } } }).frame);
+    hands.receive(signed({ kind: "remote", from_device_id: from, action: { kind: "type", text: "hello" } }).frame);
+    hands.receive(signed({ kind: "remote", from_device_id: from, action: { kind: "key", key: "enter" } }).frame);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(calls.map((call) => call.request)).toEqual([
+      { op: "remote", action: { kind: "click", spot: { x: 0.25, y: 0.75 } } },
+      { op: "remote", action: { kind: "type", text: "hello" } },
+      { op: "remote", action: { kind: "key", key: "enter" } },
+    ]);
+    expect(calls.map((call) => call.timeoutMs)).toEqual([10_000, 25_500, 10_000]);
+    expect([most, reports.length, hands.busy]).toEqual([1, 0, false]);
+  });
 });

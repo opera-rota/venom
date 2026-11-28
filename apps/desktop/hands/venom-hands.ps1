@@ -915,6 +915,45 @@ function Invoke-Move($Request) {
     }
 }
 
+function Invoke-RemoteTouch([string]$Kind, $Action) {
+    $spot = Get-Arg $Action 'spot'
+    if ($null -eq $spot) { return New-Result $false 'I was not told where to touch.' }
+    $size = [Venom.Hands]::Screen()
+    $x = [int][Math]::Round([Math]::Min(1, [Math]::Max(0, [double](Get-Arg $spot 'x'))) * ($size[0] - 1))
+    $y = [int][Math]::Round([Math]::Min(1, [Math]::Max(0, [double](Get-Arg $spot 'y'))) * ($size[1] - 1))
+    switch ($Kind) {
+        'click' { return New-Result ([Venom.Hands]::Press($x, $y, $false, 1)) "Clicked at $x,$y." }
+        'double' { return New-Result ([Venom.Hands]::Press($x, $y, $false, 2)) "Double-clicked at $x,$y." }
+        'right' { return New-Result ([Venom.Hands]::Press($x, $y, $true, 1)) "Right-clicked at $x,$y." }
+        'scroll' {
+            $steps = [int](Get-Arg $Action 'steps')
+            if ($steps -lt 1 -or $steps -gt 10) { return New-Result $false 'I can scroll 1 to 10 steps at a time.' }
+            $notches = if ([string](Get-Arg $Action 'direction') -eq 'down') { -$steps } else { $steps }
+            return New-Result ([Venom.Hands]::Roll($x, $y, $notches)) "Scrolled $steps steps at $x,$y."
+        }
+        default { return New-Result $false 'That touch is not on the menu.' }
+    }
+}
+
+function Invoke-Remote($Request) {
+    $action = Get-Arg $Request 'action'
+    if ($null -eq $action) { return New-Result $false 'I was not told what to do.' }
+    $kind = [string](Get-Arg $action 'kind')
+    if ($kind -eq 'type' -or $kind -eq 'key') {
+        $front = [Venom.Hands]::Foreground()
+        if ($front -eq 0) { return New-Result $false 'No window is in front to type in.' }
+        if ($kind -eq 'key') {
+            $name = ([string](Get-Arg $action 'key')).ToLowerInvariant()
+            if (-not $KeyCodes.ContainsKey($name)) { return New-Result $false "The key '$name' is not on VENOM's list." }
+            return New-Result ([Venom.Hands]::Chord($front, [int[]]$KeyCodes[$name])) "Pressed $name."
+        }
+        $text = [string](Get-Arg $action 'text')
+        $typed = [Venom.Hands]::Type($front, $text, 10)
+        return New-Result ($typed -eq $text.Length) "Typed $typed of $($text.Length) characters."
+    }
+    return Invoke-RemoteTouch $kind $action
+}
+
 function Invoke-Describe($Request) {
     $window = Resolve-Window $Request
     return New-Result $true $window.Name @{ title = $window.Name; window = $window.Handle; front = ([Venom.Hands]::Foreground() -eq $window.Handle) }
@@ -933,6 +972,7 @@ function Invoke-Request([string]$Id, $Request) {
         'front' { return New-Result $true 'The window in front.' @{ window = [Venom.Hands]::Foreground() } }
         'observe' { return Invoke-Observe $Request }
         'move' { return Invoke-Move $Request }
+        'remote' { return Invoke-Remote $Request }
         default { return New-Result $false 'The hands were asked for something that is not on the menu.' }
     }
 }

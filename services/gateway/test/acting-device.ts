@@ -7,6 +7,7 @@ import {
   type DeviceAction,
   type DeviceSession,
   type MoveCommand,
+  type RemoteCommand,
   type Observation,
   type ObserveCommand,
   type RunStepCommand,
@@ -44,6 +45,7 @@ export interface ActingDevice {
   readonly looks: ObserveCommand[];
   readonly spots: SpotCommand[];
   readonly moves: MoveCommand[];
+  readonly remotes: RemoteCommand[];
   readonly closed: Promise<number>;
   until(match: (event: GatewayEvent) => boolean): Promise<GatewayEvent>;
   reported(stepId: string): Promise<Report>;
@@ -83,6 +85,7 @@ export async function actingDevice(
   const looks: ObserveCommand[] = [];
   const spots: SpotCommand[] = [];
   const moves: MoveCommand[] = [];
+  const remotes: RemoteCommand[] = [];
   const waiters = new Set<() => void>();
   let seen: Seen = { marks: [], focused: null };
   let spotted: { readonly point: ScreenPoint; readonly spot: ScreenSpot | null } | null = null;
@@ -200,6 +203,10 @@ export async function actingDevice(
       case "move":
         move(command_id, body);
         return;
+      case "remote":
+        remotes.push(body);
+        wake();
+        return;
       case "run_step":
         break;
     }
@@ -269,6 +276,7 @@ export async function actingDevice(
     looks,
     spots,
     moves,
+    remotes,
     closed,
     until: (match) => waitFor(() => events.find(match)),
     reported: (stepId) => waitFor(() => reports.find((entry) => entry.stepId === stepId)),

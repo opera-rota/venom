@@ -19,6 +19,7 @@ export interface LiveScreen<S> {
 
 export interface ScreenShare {
   readonly watchers: readonly Device[];
+  readonly controllers: readonly Device[];
 }
 
 export function canWork(device: Device): boolean {
@@ -49,6 +50,11 @@ export function awakeFor(self: Device | null, watched: boolean, working: boolean
     return "display";
   }
   return self?.in_use === true ? "system" : "none";
+}
+
+export function controllerWords(controllers: readonly Device[]): string | null {
+  const [first] = controllers;
+  return first === undefined ? null : `Controlled from ${first.name}`;
 }
 
 export function watcherWords(watchers: readonly Device[]): string | null {

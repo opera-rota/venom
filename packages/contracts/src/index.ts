@@ -11,6 +11,7 @@ export * from "./primitives.ts";
 export * from "./progress.ts";
 export * from "./prompts.ts";
 export * from "./records.ts";
+export * from "./remote.ts";
 export * from "./safety.ts";
 export * from "./screen.ts";
 export * from "./tasks.ts";

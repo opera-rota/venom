@@ -28,6 +28,7 @@ import { memoryRoutes } from "./routes/memory.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { powerRoutes } from "./routes/power.ts";
 import { safetyRoutes } from "./routes/safety.ts";
+import { remoteRoutes } from "./routes/remote.ts";
 import { screenRoutes } from "./routes/screen.ts";
 import { taskRoutes } from "./routes/tasks.ts";
 
@@ -263,6 +264,7 @@ export async function buildGateway({ store, identity, brain, power, memory, task
   safetyRoutes(app, context);
   taskRoutes(app, context);
   screenRoutes(app, context);
+  remoteRoutes(app, context);
   liveRoute(app, context);
   if (phone !== null) {
     phoneRoutes(app, phone);

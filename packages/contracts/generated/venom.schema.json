@@ -307,6 +307,36 @@
       "$ref": "#/$defs/ReasoningRequest"
     },
     {
+      "$ref": "#/$defs/RemoteClick"
+    },
+    {
+      "$ref": "#/$defs/RemoteCommand"
+    },
+    {
+      "$ref": "#/$defs/RemoteDouble"
+    },
+    {
+      "$ref": "#/$defs/RemoteEvent"
+    },
+    {
+      "$ref": "#/$defs/RemoteKey"
+    },
+    {
+      "$ref": "#/$defs/RemoteRight"
+    },
+    {
+      "$ref": "#/$defs/RemoteScroll"
+    },
+    {
+      "$ref": "#/$defs/RemoteSession"
+    },
+    {
+      "$ref": "#/$defs/RemoteSpot"
+    },
+    {
+      "$ref": "#/$defs/RemoteType"
+    },
+    {
       "$ref": "#/$defs/RequestEvent"
     },
     {
@@ -401,6 +431,9 @@
     },
     {
       "$ref": "#/$defs/SendMessageAccepted"
+    },
+    {
+      "$ref": "#/$defs/SendRemote"
     },
     {
       "$ref": "#/$defs/SendScreenSignal"
@@ -999,6 +1032,9 @@
         },
         {
           "$ref": "#/$defs/StopCommand"
+        },
+        {
+          "$ref": "#/$defs/RemoteCommand"
         }
       ],
       "discriminator": {
@@ -2043,6 +2079,9 @@
         },
         {
           "$ref": "#/$defs/ScreenSignalEvent"
+        },
+        {
+          "$ref": "#/$defs/RemoteEvent"
         }
       ],
       "discriminator": {
@@ -4053,6 +4092,251 @@
       ],
       "additionalProperties": false
     },
+    "RemoteAction": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RemoteClick"
+        },
+        {
+          "$ref": "#/$defs/RemoteDouble"
+        },
+        {
+          "$ref": "#/$defs/RemoteRight"
+        },
+        {
+          "$ref": "#/$defs/RemoteScroll"
+        },
+        {
+          "$ref": "#/$defs/RemoteKey"
+        },
+        {
+          "$ref": "#/$defs/RemoteType"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
+      }
+    },
+    "RemoteClick": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "click"
+        },
+        "spot": {
+          "$ref": "#/$defs/RemoteSpot"
+        }
+      },
+      "required": [
+        "kind",
+        "spot"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteCommand": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "remote"
+        },
+        "from_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "$ref": "#/$defs/RemoteAction"
+        }
+      },
+      "required": [
+        "kind",
+        "from_device_id",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteDouble": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "double"
+        },
+        "spot": {
+          "$ref": "#/$defs/RemoteSpot"
+        }
+      },
+      "required": [
+        "kind",
+        "spot"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "remote"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "from_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "to_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "on": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "sequence",
+        "emitted_at",
+        "from_device_id",
+        "to_device_id",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteKey": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "key"
+        },
+        "key": {
+          "$ref": "#/$defs/ScreenKey"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteRight": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "right"
+        },
+        "spot": {
+          "$ref": "#/$defs/RemoteSpot"
+        }
+      },
+      "required": [
+        "kind",
+        "spot"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteScroll": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "scroll"
+        },
+        "spot": {
+          "$ref": "#/$defs/RemoteSpot"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down"
+          ]
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "kind",
+        "spot",
+        "direction",
+        "steps"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteSession": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "on": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "device_id",
+        "on"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteSpot": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "RemoteType": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "type"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false
+    },
     "RequestEvent": {
       "type": "object",
       "properties": {
@@ -4949,6 +5233,23 @@
       },
       "required": [
         "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "SendRemote": {
+      "type": "object",
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "$ref": "#/$defs/RemoteAction"
+        }
+      },
+      "required": [
+        "device_id",
+        "action"
       ],
       "additionalProperties": false
     },

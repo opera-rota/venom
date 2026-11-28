@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { z } from "zod";
+import type { RemoteAction } from "@venom/contracts";
 
 const HelloLine = z.object({
   type: z.literal("hello"),
@@ -60,7 +61,8 @@ export type HandRequest =
   | { readonly op: "front" }
   | { readonly op: "spot"; readonly x: number; readonly y: number }
   | { readonly op: "observe"; readonly window: number | null; readonly desktop?: boolean; readonly behind?: readonly number[] }
-  | { readonly op: "move"; readonly move: HandMove };
+  | { readonly op: "move"; readonly move: HandMove }
+  | { readonly op: "remote"; readonly action: RemoteAction };
 
 export interface HandResult {
   readonly ok: boolean;

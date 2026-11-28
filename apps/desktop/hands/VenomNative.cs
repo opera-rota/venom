@@ -268,6 +268,8 @@ namespace Venom
         private const uint KeyUnicode = 0x4;
         private const uint MouseLeftDown = 0x2;
         private const uint MouseLeftUp = 0x4;
+        private const uint MouseRightDown = 0x8;
+        private const uint MouseRightUp = 0x10;
         private const uint MouseWheel = 0x800;
         private const uint ExtendedKey = 0x1;
         private const ushort ReturnKey = 0x0D;
@@ -518,6 +520,49 @@ namespace Venom
                 return false;
             }
             Native.SetCursorPos(x, y);
+            Thread.Sleep(40);
+            int direction = notches < 0 ? -1 : 1;
+            for (int step = 0; step < Math.Abs(notches); step++)
+            {
+                Input[] inputs = new Input[1];
+                inputs[0].Type = MouseType;
+                inputs[0].Data.Mouse.Flags = MouseWheel;
+                inputs[0].Data.Mouse.MouseData = unchecked((uint)(direction * 120));
+                Native.SendInput(1, inputs, Marshal.SizeOf(typeof(Input)));
+                Thread.Sleep(90);
+            }
+            return true;
+        }
+
+        public static bool Press(int x, int y, bool right, int times)
+        {
+            if (!Native.SetCursorPos(x, y))
+            {
+                return false;
+            }
+            Thread.Sleep(40);
+            for (int round = 0; round < times; round++)
+            {
+                Input[] inputs = new Input[2];
+                inputs[0].Type = MouseType;
+                inputs[0].Data.Mouse.Flags = right ? MouseRightDown : MouseLeftDown;
+                inputs[1].Type = MouseType;
+                inputs[1].Data.Mouse.Flags = right ? MouseRightUp : MouseLeftUp;
+                if (Native.SendInput(2, inputs, Marshal.SizeOf(typeof(Input))) != 2)
+                {
+                    return false;
+                }
+                Thread.Sleep(60);
+            }
+            return true;
+        }
+
+        public static bool Roll(int x, int y, int notches)
+        {
+            if (!Native.SetCursorPos(x, y))
+            {
+                return false;
+            }
             Thread.Sleep(40);
             int direction = notches < 0 ? -1 : 1;
             for (int step = 0; step < Math.Abs(notches); step++)

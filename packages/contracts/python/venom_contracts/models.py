@@ -429,6 +429,43 @@ type Connectors = Annotated[list[ConnectorService], Field(max_length=2)]
 type Picture = Annotated[str, Field(max_length=2000000, min_length=1)]
 
 
+class RemoteEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["remote"]
+    request_id: UUID
+    sequence: Annotated[int, Field(ge=0, le=9007199254740991)]
+    emitted_at: AwareDatetime
+    from_device_id: UUID
+    to_device_id: UUID
+    on: bool
+
+
+class RemoteSession(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device_id: UUID
+    on: bool
+
+
+class RemoteSpot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    x: Annotated[float, Field(ge=0.0, le=1.0)]
+    y: Annotated[float, Field(ge=0.0, le=1.0)]
+
+
+class RemoteType(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["type"]
+    text: Annotated[str, Field(max_length=2000, min_length=1)]
+
+
 type RequestState = Literal["accepted", "completed", "failed"]
 
 
@@ -1332,6 +1369,48 @@ class ReasoningRequest(BaseModel):
     max_output_tokens: Annotated[int, Field(ge=1, le=8192)]
 
 
+class RemoteClick(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["click"]
+    spot: RemoteSpot
+
+
+class RemoteDouble(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["double"]
+    spot: RemoteSpot
+
+
+class RemoteKey(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["key"]
+    key: ScreenKey
+
+
+class RemoteRight(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["right"]
+    spot: RemoteSpot
+
+
+class RemoteScroll(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["scroll"]
+    spot: RemoteSpot
+    direction: Literal["up", "down"]
+    steps: Annotated[int, Field(ge=1, le=10)]
+
+
 class RequestEvent(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1759,6 +1838,21 @@ type ReasoningEvent = Annotated[
 ]
 
 
+type RemoteAction = Annotated[
+    RemoteClick | RemoteDouble | RemoteRight | RemoteScroll | RemoteKey | RemoteType,
+    Field(discriminator="kind"),
+]
+
+
+class RemoteCommand(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["remote"]
+    from_device_id: UUID
+    action: RemoteAction
+
+
 class RunStepCommand(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1768,6 +1862,14 @@ class RunStepCommand(BaseModel):
     step_id: UUID
     action: DeviceAction
     confirmed: bool
+
+
+class SendRemote(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device_id: UUID
+    action: RemoteAction
 
 
 class Session(BaseModel):
@@ -1877,7 +1979,7 @@ type TurnEvent = Annotated[
 
 
 type CommandBody = Annotated[
-    RunStepCommand | ObserveCommand | SpotCommand | MoveCommand | StopCommand,
+    RunStepCommand | ObserveCommand | SpotCommand | MoveCommand | StopCommand | RemoteCommand,
     Field(discriminator="kind"),
 ]
 
@@ -1969,12 +2071,12 @@ class StopReceipt(BaseModel):
 
 
 type Contract = Annotated[
-    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | ApplyHowTo | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChangeHowTo | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | FollowHowTo | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | HowTo | HowToApplied | HowToEvent | HowToList | HowToNote | HowToRemovedEvent | HowToStep | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | LockReport | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | MoveTarget | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SaveHowTo | ScreenAnswer | ScreenBox | ScreenCandidate | ScreenClick | ScreenKeyPress | ScreenLeave | ScreenMark | ScreenOffer | ScreenOpen | ScreenPause | ScreenPoint | ScreenRefused | ScreenScroll | ScreenSignalEvent | ScreenSpot | ScreenType | ScreenWatch | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | SendScreenSignal | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
+    Account | AccountSettings | AnswerEvent | ApiError | ApiIssue | ApplyHowTo | AskUser | AttachChallenge | AttachConfirm | AttachProve | AttachProven | AttachStart | AvailableEngines | CallConnectorAction | Capabilities | CapabilityReport | ChangeHowTo | ChatDocument | ChooseEngine | ClickAction | CommandFrame | CommandPayload | CommandReport | ConfirmAnswer | ConfirmationAnswered | ConfirmationEvent | ConfirmRequest | Connector | ConnectorTarget | ConversationEntry | Device | DeviceInfo | DeviceKey | DeviceKeyEnrolled | DeviceList | DeviceSession | DevicesEvent | DeviceTarget | DiscardPlan | DraftStep | EarlierGoal | EmbeddingFailure | EmbeddingRequest | Embeddings | Engine | EngineList | EngineSpec | FollowHowTo | ForgottenEvent | GoalCannot | GoalDone | HaltEvent | HowTo | HowToApplied | HowToEvent | HowToList | HowToNote | HowToRemovedEvent | HowToStep | IgnoreStep | Intent | LaterEvent | LaterItem | LaterList | LaterRemovedEvent | LiveChallenge | LiveEvent | LockReport | MakeMove | MemoryContext | MemoryDraft | MemoryEvent | MemoryForgotten | MemoryItem | MemoryList | Message | MessageEvent | MessageHistory | MoveChosen | MoveCommand | MoveEvent | MoveFailed | MoveRequest | MoveTarget | NextMove | Observation | ObservationReport | ObserveCommand | OpenAppAction | PastMove | PendingAnswer | PlanDraft | PowerEvent | PowerStatus | Proficiency | Prompt | QuestionRef | ReasoningDelta | ReasoningDone | ReasoningFailed | ReasoningRequest | RemoteClick | RemoteCommand | RemoteDouble | RemoteEvent | RemoteKey | RemoteRight | RemoteScroll | RemoteSession | RemoteSpot | RemoteType | RequestEvent | RestoreStep | ResumeTask | RetryAnswer | RetryStep | RouteDecision | RunPlan | RunScriptAction | RunStepCommand | SafetySettings | SaveHowTo | ScreenAnswer | ScreenBox | ScreenCandidate | ScreenClick | ScreenKeyPress | ScreenLeave | ScreenMark | ScreenOffer | ScreenOpen | ScreenPause | ScreenPoint | ScreenRefused | ScreenScroll | ScreenSignalEvent | ScreenSpot | ScreenType | ScreenWatch | SecretWordRegistration | SecretWordRegistrationResponse | SendMessage | SendMessageAccepted | SendRemote | SendScreenSignal | Session | SignedCommand | SignupFinish | SignupStart | SignupStarted | SignupVerify | Skill | SkipStep | SpotCommand | SpotReport | Step | StepOutputChunk | StepOutputEvent | StepTemplate | StopAll | StopCommand | StopDevice | StopReceipt | StopRequest | StopSignal | StopTask | StructuredOutput | TakeScreenshotAction | Task | TaskDrill | TaskEvent | TaskList | TaskMove | TaskMoves | TaskProgress | TextOutput | TokenUsage | TurnDelta | TurnDone | TurnFailed | TurnRequest | TypeTextAction | WaitAction,
     Field(title="Contract"),
 ]
 
 
 type GatewayEvent = Annotated[
-    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent | LaterEvent | LaterRemovedEvent | HowToEvent | HowToRemovedEvent | ScreenSignalEvent,
+    MessageEvent | AnswerEvent | RequestEvent | DevicesEvent | PowerEvent | MemoryEvent | ForgottenEvent | TaskEvent | ConfirmationEvent | StepOutputEvent | MoveEvent | HaltEvent | LaterEvent | LaterRemovedEvent | HowToEvent | HowToRemovedEvent | ScreenSignalEvent | RemoteEvent,
     Field(discriminator="type"),
 ]

@@ -170,6 +170,10 @@ export function haltEvent(requestId: string, receipt: StopReceipt): GatewayEvent
   return GatewayEvent.parse({ type: "halt", ...stamp(requestId, 0), ...receipt });
 }
 
+export function remoteEvent(requestId: string, fromDeviceId: string, toDeviceId: string, on: boolean): GatewayEvent {
+  return GatewayEvent.parse({ type: "remote", ...stamp(requestId, 0), from_device_id: fromDeviceId, to_device_id: toDeviceId, on });
+}
+
 export function screenSignalEvent(requestId: string, fromDeviceId: string, sessionId: string, signal: ScreenSignal): GatewayEvent {
   return GatewayEvent.parse({ type: "screen_signal", ...stamp(requestId, 0), from_device_id: fromDeviceId, session_id: sessionId, signal });
 }

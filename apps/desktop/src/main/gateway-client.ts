@@ -23,8 +23,10 @@ import {
   MessageHistory,
   MessageText,
   PowerStatus,
+  RemoteSession,
   SafetySettings,
   SendMessageAccepted,
+  SendRemote,
   SendScreenSignal,
   StopReceipt,
   Task,
@@ -101,6 +103,7 @@ const howToGone = "That how-to is no longer kept.";
 
 const howToUnreadable = "VENOM could not read that change to the how-to.";
 const signalUnreadable = "VENOM could not read that live screen signal.";
+const remoteUnreadable = "VENOM could not read that touch.";
 
 type Frame = { readonly kind: "event"; readonly event: GatewayEvent } | { readonly kind: "command"; readonly frame: CommandFrame };
 
@@ -569,6 +572,24 @@ export class GatewayClient {
       return { ok: false, code: "invalid_request", reason: signalUnreadable };
     }
     const result = await this.#api.request("POST", "/v1/screen/signal", { body: parsed.data, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async remoteSession(deviceId: unknown, on: unknown): Promise<StepResult> {
+    const parsed = RemoteSession.safeParse({ device_id: deviceId, on });
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: remoteUnreadable };
+    }
+    const result = await this.#api.request("POST", "/v1/remote/session", { body: parsed.data, token: this.#token });
+    return result.ok ? { ok: true } : result;
+  }
+
+  async remote(deviceId: unknown, action: unknown): Promise<StepResult> {
+    const parsed = SendRemote.safeParse({ device_id: deviceId, action });
+    if (!parsed.success) {
+      return { ok: false, code: "invalid_request", reason: remoteUnreadable };
+    }
+    const result = await this.#api.request("POST", "/v1/remote/action", { body: parsed.data, token: this.#token });
     return result.ok ? { ok: true } : result;
   }
 

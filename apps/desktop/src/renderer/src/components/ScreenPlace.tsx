@@ -1,6 +1,7 @@
 import type { Device, HowTo, Task, TaskMove, TaskStatus, Thumbnail } from "@venom/contracts";
 import { useEffect, useState } from "react";
 import { deviceInUse, workers, type LiveScreen } from "../live-screen.ts";
+import type { RemoteControl } from "../remote.ts";
 import { lastedWords, sinceWords } from "../move-words.ts";
 import { isOpen } from "../tasks-state.ts";
 import type { LaterState } from "../use-later.ts";
@@ -19,6 +20,7 @@ export interface ScreenPlaceProps {
   readonly deviceId: string;
   readonly devices: readonly Device[];
   readonly live: LiveScreen<MediaStream>;
+  readonly remote: RemoteControl;
   readonly watched: boolean;
   readonly using: string | null;
   readonly stopping: boolean;
@@ -260,7 +262,7 @@ function Resting() {
   );
 }
 
-export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, watched, using, stopping, later, howto, savingHowTo, onUse, onDevices, onLoad, onStop, onSaveHowTo, onOpenLink }: ScreenPlaceProps) {
+export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, live, remote, watched, using, stopping, later, howto, savingHowTo, onUse, onDevices, onLoad, onStop, onSaveHowTo, onOpenLink }: ScreenPlaceProps) {
   const taskId = task?.id ?? null;
   const open = task !== null && isOpen(task);
   const chosen = deviceInUse(devices);
@@ -281,7 +283,7 @@ export function ScreenPlace({ task, moves, loaded, picture, deviceId, devices, l
     if (here) {
       return <Here device={chosen} watched={watched} />;
     }
-    return <LiveStage device={live.watching} phase={live.phase} stream={live.stream} quality={live.quality} move={watchingJob ? (moves.at(-1) ?? null) : null} onRetry={live.retry} />;
+    return <LiveStage device={live.watching} phase={live.phase} stream={live.stream} quality={live.quality} move={watchingJob ? (moves.at(-1) ?? null) : null} remote={remote} onRetry={live.retry} />;
   }
 
   return (

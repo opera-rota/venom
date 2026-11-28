@@ -42,6 +42,7 @@ function label(event: GatewayEvent): string {
     case "howto":
     case "howto_removed":
     case "screen_signal":
+    case "remote":
       return event.type;
   }
 }

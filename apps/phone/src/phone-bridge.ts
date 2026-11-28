@@ -138,6 +138,8 @@ export function createPhoneBridge({ origin, storage, device }: PhoneBridgeOption
     openLink: async (url) => openLink(url),
     saveDocument: async (document) => saveDocument(document),
     screenSignal: (toDeviceId, sessionId, signal) => gateway.screenSignal(toDeviceId, sessionId, signal),
+    remoteSession: (deviceId, on) => gateway.remoteSession(deviceId, on),
+    remote: (deviceId, action) => gateway.remote(deviceId, action),
     connection: async () => gateway.state,
     onEvent: (listener) => gateway.onEvent(listener),
     onConnection: (listener) => gateway.onState(listener),

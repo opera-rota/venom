@@ -32,6 +32,7 @@ const Observed = z.object({
 let hello: HandHello | null = null;
 let notepad: number | null = null;
 let chrome: number | null = null;
+let calculator: number | null = null;
 
 const page = [
   "<!doctype html>",
@@ -282,13 +283,26 @@ const checks: readonly Check[] = [
       }
       const opened = await helper.send({ op: "open_app", app: "Calculator", open: null, task });
       say(opened);
-      const calculator = windowOf(opened);
+      calculator = windowOf(opened);
       if (!opened.ok || calculator === null) {
         return "failed";
       }
       const pressed = await helper.send({ op: "click", window: calculator, title: null, on: "Seven" });
       say(pressed);
       return pressed.ok ? "passed" : "failed";
+    },
+  },
+  {
+    name: "Remote: type +2= into Calculator the way her phone does (Calculator shows 9), then press Tab",
+    run: async () => {
+      if (calculator === null) {
+        return "skipped";
+      }
+      const typed = await helper.send({ op: "remote", action: { kind: "type", text: "+2=" } });
+      say(typed);
+      const pressed = await helper.send({ op: "remote", action: { kind: "key", key: "tab" } });
+      say(pressed);
+      return typed.ok && pressed.ok ? "passed" : "failed";
     },
   },
   {

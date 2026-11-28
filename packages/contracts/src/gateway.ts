@@ -277,6 +277,16 @@ export const ScreenSignalEvent = z
   })
   .register(contracts, { id: "ScreenSignalEvent" });
 
+export const RemoteEvent = z
+  .strictObject({
+    type: z.literal("remote"),
+    ...eventFields,
+    from_device_id: Id,
+    to_device_id: Id,
+    on: z.boolean(),
+  })
+  .register(contracts, { id: "RemoteEvent" });
+
 export const GatewayEvent = z
   .discriminatedUnion("type", [
     MessageEvent,
@@ -296,6 +306,7 @@ export const GatewayEvent = z
     HowToEvent,
     HowToRemovedEvent,
     ScreenSignalEvent,
+    RemoteEvent,
   ])
   .register(contracts, { id: "GatewayEvent" });
 
@@ -332,4 +343,5 @@ export type ScreenCandidate = z.infer<typeof ScreenCandidate>;
 export type ScreenSignal = z.infer<typeof ScreenSignal>;
 export type SendScreenSignal = z.infer<typeof SendScreenSignal>;
 export type ScreenSignalEvent = z.infer<typeof ScreenSignalEvent>;
+export type RemoteEvent = z.infer<typeof RemoteEvent>;
 export type GatewayEvent = z.infer<typeof GatewayEvent>;

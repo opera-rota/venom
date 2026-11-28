@@ -29,6 +29,7 @@ export interface HeaderProps {
   readonly halt: HaltView;
   readonly waiting: number;
   readonly watchedBy: string | null;
+  readonly controlledBy: string | null;
   readonly onStop: () => void;
   readonly onAsk: (text: string) => Promise<boolean>;
   readonly onWaiting: () => void;
@@ -68,7 +69,22 @@ function Ask({ onAsk, online }: { readonly onAsk: (text: string) => Promise<bool
   );
 }
 
-function Watched({ words }: { readonly words: string | null }) {
+function Controlled({ words }: { readonly words: string }) {
+  return (
+    <div role="status" title={words} className={`flex items-center gap-2 rounded-full bg-linear-to-b from-green-400/25 to-green-500/10 px-3 py-2 text-green-200 shadow-[0_0_0_1px_rgba(77,255,124,0.65),0_0_26px_-4px_rgba(31,242,92,0.85)] ${text.detail}`}>
+      <span className="relative grid h-3.5 w-3.5 place-items-center">
+        <span className="absolute inset-0 animate-ping rounded-full bg-green-400/50" />
+        <Icon name="tap" className="relative h-3.5 w-3.5" />
+      </span>
+      <span className="hidden max-w-[240px] truncate font-semibold md:inline">{words}</span>
+    </div>
+  );
+}
+
+function Watched({ words, controlled }: { readonly words: string | null; readonly controlled: string | null }) {
+  if (controlled !== null) {
+    return <Controlled words={controlled} />;
+  }
   if (words === null) {
     return null;
   }
@@ -80,7 +96,7 @@ function Watched({ words }: { readonly words: string | null }) {
   );
 }
 
-export function Header({ connection, deviceCount, menu, halt, waiting, watchedBy, onStop, onAsk, onWaiting }: HeaderProps) {
+export function Header({ connection, deviceCount, menu, halt, waiting, watchedBy, controlledBy, onStop, onAsk, onWaiting }: HeaderProps) {
   const view = connectionView[connection];
 
   return (
@@ -96,7 +112,7 @@ export function Header({ connection, deviceCount, menu, halt, waiting, watchedBy
         <Ask onAsk={onAsk} online={connection === "online"} />
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <Watched words={watchedBy} />
+        <Watched words={watchedBy} controlled={controlledBy} />
         <div role="status" aria-live="polite" title={view.label} className={`glass flex items-center gap-2 rounded-full px-3 py-2 ${text.detail} ${view.tone}`}>
           <span className={`${mark.dot} ${view.dot}`} />
           <span className="hidden max-w-[240px] truncate lg:inline">{view.label}</span>

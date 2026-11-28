@@ -8,6 +8,7 @@ import {
   type MoveCommand,
   type ObservationReport,
   type ObserveCommand,
+  type RemoteCommand,
   type RunStepCommand,
   type ScreenMove,
   type ScreenPoint,
@@ -72,6 +73,7 @@ const unreadLook = "The hands sent back a look VENOM could not read.";
 const cannotSend = "This computer could not send back what it saw.";
 const observeMs = 60_000;
 const spotMs = 15_000;
+const remoteMs = 10_000;
 const noSeen: Seen = { marks: [], focused: null };
 
 function failure(detail: string): Sent {
@@ -214,6 +216,7 @@ export class Hands {
   readonly #looks = new Map<string, Seen>();
   readonly #spots = new Map<string, ReadSpot>();
   #looked: string | null = null;
+  #remoting: Promise<void> = Promise.resolve();
   #guard: { readonly key: string; readonly guard: CommandGuard } | null = null;
 
   constructor(options: HandsOptions) {
@@ -247,6 +250,10 @@ export class Hands {
       }
       return;
     }
+    if (body.kind === "remote") {
+      this.#remote(body);
+      return;
+    }
     if (body.kind !== "run_step") {
       this.#loop(command_id, body);
       return;
@@ -273,6 +280,19 @@ export class Hands {
       abort.abort();
     }
     return running.length;
+  }
+
+  #remote({ action }: RemoteCommand): void {
+    const worker = this.#options.worker;
+    if (worker === undefined || worker === null) {
+      this.#options.refused?.(noHands);
+      return;
+    }
+    const timeoutMs = action.kind === "type" ? 25_000 + action.text.length * 100 : remoteMs;
+    this.#remoting = this.#remoting.then(() => worker.send({ op: "remote", action }, { timeoutMs })).then(
+      () => undefined,
+      () => undefined,
+    );
   }
 
   #loop(commandId: string, command: LoopCommand): void {

@@ -2,8 +2,10 @@ import type { Device, TaskMove } from "@venom/contracts";
 import { useEffect, useRef, useState } from "react";
 import type { LivePhase, LiveQuality } from "../live-screen.ts";
 import { moveLook } from "../move-words.ts";
+import type { RemoteControl } from "../remote.ts";
 import { button, text } from "../ui.ts";
 import { Icon } from "./Icon.tsx";
+import { RemoteDock, RemoteLayer, RemoteSwitch } from "./Remote.tsx";
 
 export interface LiveStageProps {
   readonly device: Device | null;
@@ -11,6 +13,7 @@ export interface LiveStageProps {
   readonly stream: MediaStream | null;
   readonly quality: LiveQuality | null;
   readonly move: TaskMove | null;
+  readonly remote: RemoteControl;
   readonly onRetry: () => void;
 }
 
@@ -105,7 +108,7 @@ function Caption({ move, look }: { readonly move: TaskMove; readonly look: (type
   );
 }
 
-export function LiveStage({ device, phase, stream, quality, move, onRetry }: LiveStageProps) {
+export function LiveStage({ device, phase, stream, quality, move, remote, onRetry }: LiveStageProps) {
   const stage = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [full, setFull] = useState(false);
@@ -153,6 +156,7 @@ export function LiveStage({ device, phase, stream, quality, move, onRetry }: Liv
           aria-label={`The screen of ${name}, live`}
           className={`block ${full ? "max-h-full max-w-full" : "aspect-video w-full"} object-contain ${live ? "" : "invisible"}`}
         />
+        {live && remote.on && <RemoteLayer video={video} onAction={remote.send} />}
         {!live && (
           <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(ellipse_at_center,rgba(31,242,92,0.07),transparent_65%)] pt-12 pb-4 sm:py-0">
             <Waiting phase={phase} name={name} onRetry={onRetry} />
@@ -170,6 +174,7 @@ export function LiveStage({ device, phase, stream, quality, move, onRetry }: Liv
             <span className="truncate text-[11.5px] font-medium text-ink sm:text-[13px]">{name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {live && <RemoteSwitch remote={remote} />}
             {live && words !== null && <span className="hud glass-strong hidden rounded-full px-2.5 py-1.5 text-[10px] text-ink-muted tabular-nums sm:inline">{words}</span>}
             <button
               type="button"
@@ -182,13 +187,14 @@ export function LiveStage({ device, phase, stream, quality, move, onRetry }: Liv
             </button>
           </div>
         </div>
-        {live && move !== null && look !== null && (
+        {live && !remote.on && move !== null && look !== null && (
           <div className={`absolute inset-x-4 bottom-4 z-10 ${full ? "block" : "hidden sm:block"}`} aria-live="polite">
             <Caption move={move} look={look} />
           </div>
         )}
       </div>
-      {live && move !== null && look !== null && (
+      {live && <RemoteDock remote={remote} name={name} />}
+      {live && !remote.on && move !== null && look !== null && (
         <div className="sm:hidden" aria-live="polite">
           <Caption move={move} look={look} />
         </div>

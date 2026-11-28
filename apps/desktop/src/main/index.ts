@@ -338,6 +338,8 @@ function wire(): void {
   handle(channels.openLink, (url) => openLink(url));
   handle(channels.saveDocument, (document) => saveDocument(document));
   handle(channels.screenSignal, (toDeviceId, sessionId, signal) => gateway.screenSignal(toDeviceId, sessionId, signal));
+  handle(channels.remoteSession, (deviceId, on) => gateway.remoteSession(deviceId, on));
+  handle(channels.remote, (deviceId, action) => gateway.remote(deviceId, action));
 
   if (!globalShortcut.register(haltShortcut, () => {
     if (sessions.view.kind === "signed_in") {

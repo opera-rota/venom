@@ -6,7 +6,7 @@ import { createConversation, type Scheduler } from "../conversation-store.ts";
 import { isAnswering } from "../conversation.ts";
 import { isOpen, liveOutput, moveOf, movesOf, taskCount, type TasksState } from "../tasks-state.ts";
 import { unseenCount } from "../later-state.ts";
-import { awakeFor, watcherWords } from "../live-screen.ts";
+import { awakeFor, controllerWords, watcherWords } from "../live-screen.ts";
 import { useDevices } from "../use-devices.ts";
 import { savedFrom } from "../howtos-state.ts";
 import { useHowTos } from "../use-howtos.ts";
@@ -14,6 +14,8 @@ import { useLater } from "../use-later.ts";
 import { useLiveScreen } from "../use-live-screen.ts";
 import { useMemory } from "../use-memory.ts";
 import { usePower } from "../use-power.ts";
+import { heldFor } from "../remote.ts";
+import { useRemote } from "../use-remote.ts";
 import { useScreenShare } from "../use-screen-share.ts";
 import { controlKey, useTasks } from "../use-tasks.ts";
 import { Backdrop } from "./Backdrop.tsx";
@@ -115,6 +117,8 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
   const engine = power.power === null ? null : engineName(power.engines, power.power);
   const live = useLiveScreen(bridge, devices.devices, device.id, connection, place === "screen");
   const share = useScreenShare(bridge, devices.devices, device);
+  const resume = useCallback(() => void send("continue"), [send]);
+  const remote = useRemote(bridge, live, heldFor(job, job === null ? [] : movesOf(state, job.id), live.watching?.id ?? null), resume);
   const self = devices.devices.find((candidate) => candidate.id === device.id) ?? null;
   const workingHere = goalsOf(state).some((goal) => isOpen(goal) && goal.target_device_id === device.id);
   const awake = awakeFor(self, share.watchers.length > 0, workingHere);
@@ -154,6 +158,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
         deviceCount={devices.devices.length}
         waiting={waiting}
         watchedBy={watcherWords(share.watchers)}
+        controlledBy={controllerWords(share.controllers)}
         onAsk={ask}
         onWaiting={() => setPlace(signals.waiting || signals.later === 0 ? "chat" : "screen")}
         menu={{
@@ -189,6 +194,7 @@ export function Workspace({ bridge, account, device }: WorkspaceProps) {
                 deviceId={device.id}
                 devices={devices.devices}
                 live={live}
+                remote={remote}
                 watched={share.watchers.length > 0}
                 using={devices.using}
                 stopping={job !== null && controlling.has(controlKey(job.id, "stop"))}
